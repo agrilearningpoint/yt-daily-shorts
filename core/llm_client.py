@@ -194,9 +194,9 @@ class MockLLMProvider(BaseLLMProvider):
             n = int(m.group(1))
             topics = ["डिजिटल इंडिया", "इसरो मिशन", "किसान योजना", "रेलवे विस्तार", "निर्यात वृद्धि", "शिक्षा नीति"]
             return {
-                "title": f"60 सेकंड में {n} बड़ी खबरें",
+                "title": f"आज की {n} बड़ी खबरें",
                 "hook": f"साठ सेकंड में देखिए आज की {n} बड़ी खबरें!",
-                "scenes": [{"narration": f"{topics[i % 6]} पर आज बड़ा फैसला।",
+                "scenes": [{"narration": f"{topics[i % 6]} पर सरकार ने आज बड़ा फैसला लिया, जिससे देश के करोड़ों लोगों को सीधा फायदा मिलेगा।",
                             "on_screen_text": topics[i % 6], "image_query": "India",
                             "visual_keywords": "india", "src": (i % 3) + 1} for i in range(n)],
                 "outro": "रोज़ की खबरों के लिए चैनल सब्सक्राइब करें!",

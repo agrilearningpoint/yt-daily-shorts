@@ -98,9 +98,13 @@ class ScriptManagerAgent(BaseAgent):
             need = self.config.video.news_headline_count - 1
             if len(script.scenes) < need:
                 problems.append(f"only {len(script.scenes)} stories, need at least {need}")
-            long_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) > 12]
+            short_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) < 10]
+            long_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) > 18]
+            if len(short_lines) > 2:
+                problems.append(f"story lines {short_lines[:6]} are bare headlines: each must be a complete "
+                                f"12-15 word report (who did what + why it matters / effect)")
             if long_lines:
-                problems.append(f"stories {long_lines[:5]} too long: keep each narration 5-8 words")
+                problems.append(f"stories {long_lines[:5]} too long: keep each narration 12-15 words")
         if not script.title:
             problems.append("missing title")
         if len(script.hook.split()) < 4:
@@ -148,7 +152,8 @@ class ScriptManagerAgent(BaseAgent):
                               + "; ".join(last_problems) + ". Fix these and return the full JSON again.")
 
         if script is None or last_problems:
-            hard = [p for p in last_problems if not p.startswith("too ")]
+            hard = [p for p in last_problems if not p.startswith("too ")
+                    or (video_type == "news" and p.startswith("too short"))]
             if script is None or hard:
                 return AgentResult(success=False, errors=last_problems or ["no script"])
             self.logger.warning("Accepting script with soft issues: %s", last_problems)
