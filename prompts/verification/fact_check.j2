@@ -1,28 +1,26 @@
-You are an independent Senior Fact-Checker.
-Review the following generated script against the original research sources.
+FACT_CHECK
+You are a strict, independent fact-checker for a Hindi news/knowledge channel.
+Compare the SCRIPT with the RESEARCH. The research is the only ground truth.
 
-SCRIPT TITLE: {{ script.title }}
-HOOK: {{ script.hook }}
-SCENES:
-{% for s in script.scenes %}
-Scene {{ s.scene_number }}: {{ s.narration }}
-Claim Sources: {{ s.sources }}
+RESEARCH:
+{% for item in research_items %}
+- {{ item.title }}: {{ (item.summary or '')[:900] }} ({{ item.source_url }})
 {% endfor %}
 
-RESEARCH SOURCES:
-{% for src in sources %}
-- {{ src }}
+SCRIPT:
+Hook: {{ script.hook }}
+{% for s in script.scenes %}Scene {{ s.scene_number }}: {{ s.narration }}
 {% endfor %}
 
-TASK:
-1. Verify each claim. Check for dates, numbers, official names, and cause-effect claims.
-2. Flag any exaggeration, unverified rumor, or unsupported assertion.
-3. Reject any fabricated quotes.
+Check every number, date, name, and cause/effect claim. A claim NOT supported by the research is an issue.
+If issues are minor, rewrite ONLY the affected narration(s) so they are fully supported (keep similar length,
+same Hindi style). If the script is fundamentally wrong or misleading, verdict = "fail".
 
-Respond in JSON ONLY:
+Return JSON:
 {
-  "all_verified": true,
-  "confidence_score": 0.95,
-  "flagged_claims": [],
-  "corrections": []
+  "verdict": "pass" | "fixed" | "fail",
+  "confidence": 0.0-1.0,
+  "issues": ["short description of each unsupported claim"],
+  "corrected_scenes": [{"scene_number": 1, "narration": "corrected Hindi narration"}],
+  "corrected_hook": ""
 }

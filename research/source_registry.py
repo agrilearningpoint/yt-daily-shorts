@@ -22,60 +22,16 @@ class SourceDefinition:
 
 
 DEFAULT_TRUSTED_SOURCES: List[SourceDefinition] = [
-    SourceDefinition(
-        name="PIB Hindi",
-        feed_url="https://pib.gov.in/RssMain.aspx?ModId=6&LangId=2",
-        home_url="https://pib.gov.in",
-        category="national",
-        reliability_score=1.0,
-        is_government=True,
-        language="hi",
-    ),
-    SourceDefinition(
-        name="DD News Hindi",
-        feed_url="https://ddnews.gov.in/hi/feed/",
-        home_url="https://ddnews.gov.in",
-        category="national",
-        reliability_score=0.98,
-        is_government=True,
-        language="hi",
-    ),
-    SourceDefinition(
-        name="BBC Hindi",
-        feed_url="https://feeds.bbci.co.uk/hindi/rss.xml",
-        home_url="https://www.bbc.com/hindi",
-        category="international",
-        reliability_score=0.95,
-        is_government=False,
-        language="hi",
-    ),
-    SourceDefinition(
-        name="The Hindu National",
-        feed_url="https://www.thehindu.com/news/national/feeder/default.rss",
-        home_url="https://www.thehindu.com",
-        category="national",
-        reliability_score=0.92,
-        is_government=False,
-        language="en",
-    ),
-    SourceDefinition(
-        name="ISRO Updates",
-        feed_url="https://www.isro.gov.in/rss.xml",
-        home_url="https://www.isro.gov.in",
-        category="science",
-        reliability_score=1.0,
-        is_government=True,
-        language="en",
-    ),
-    SourceDefinition(
-        name="Reuters India",
-        feed_url="https://www.reutersagency.com/feed/?taxonomy=markets&post_type=best",
-        home_url="https://www.reuters.com",
-        category="business",
-        reliability_score=0.94,
-        is_government=False,
-        language="en",
-    ),
+    SourceDefinition("PIB Hindi", "https://pib.gov.in/RssMain.aspx?ModId=6&LangId=2", "https://pib.gov.in", "national", 1.0, True, "hi"),
+    SourceDefinition("PIB English", "https://pib.gov.in/RssMain.aspx?ModId=6&LangId=1", "https://pib.gov.in", "national", 1.0, True, "en"),
+    SourceDefinition("DD News Hindi", "https://ddnews.gov.in/hi/feed/", "https://ddnews.gov.in", "national", 0.97, True, "hi"),
+    SourceDefinition("BBC Hindi", "https://feeds.bbci.co.uk/hindi/rss.xml", "https://www.bbc.com/hindi", "international", 0.95, False, "hi"),
+    SourceDefinition("BBC India", "https://feeds.bbci.co.uk/news/world/asia/india/rss.xml", "https://www.bbc.com/news/world/asia/india", "international", 0.94, False, "en"),
+    SourceDefinition("The Hindu National", "https://www.thehindu.com/news/national/feeder/default.rss", "https://www.thehindu.com", "national", 0.93, False, "en"),
+    SourceDefinition("The Hindu Science", "https://www.thehindu.com/sci-tech/science/feeder/default.rss", "https://www.thehindu.com", "science", 0.92, False, "en"),
+    SourceDefinition("Indian Express India", "https://indianexpress.com/section/india/feed/", "https://indianexpress.com", "national", 0.92, False, "en"),
+    SourceDefinition("NDTV India", "https://feeds.feedburner.com/ndtvkhabar-latest", "https://ndtv.in", "national", 0.88, False, "hi"),
+    SourceDefinition("Amar Ujala", "https://www.amarujala.com/rss/breaking-news.xml", "https://www.amarujala.com", "national", 0.86, False, "hi"),
 ]
 
 
@@ -96,8 +52,9 @@ class SourceRegistry:
     def is_source_trusted(self, url: str) -> bool:
         """Verify if a URL belongs to a trusted domain."""
         trusted_domains = [
-            "pib.gov.in", "ddnews.gov.in", "isro.gov.in", "bbc.com", "thehindu.com",
-            "indianexpress.com", "reuters.com", "wikipedia.org", "nature.com"
+            "pib.gov.in", "ddnews.gov.in", "isro.gov.in", "bbc.com", "bbc.co.uk", "thehindu.com",
+            "indianexpress.com", "reuters.com", "wikipedia.org", "nature.com", "ndtv.in",
+            "ndtv.com", "amarujala.com"
         ]
         return any(domain in url.lower() for domain in trusted_domains)
 

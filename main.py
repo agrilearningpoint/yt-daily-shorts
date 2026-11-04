@@ -38,9 +38,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--video-type",
-        choices=["all", "news", "knowledge"],
+        choices=["all", "news", "knowledge", "auto"],
         default="all",
-        help="Specify which video type to generate today (default: all)",
+        help="Video type to generate (auto = news before 11:00 IST, else knowledge)",
     )
     parser.add_argument(
         "--dry-run",
@@ -52,6 +52,11 @@ def parse_args() -> argparse.Namespace:
         "--status",
         action="store_true",
         help="Display today's pipeline status and recent videos",
+    )
+    parser.add_argument(
+        "--llm-check",
+        action="store_true",
+        help="Ping every configured LLM provider/model and exit",
     )
     parser.add_argument(
         "--resume",
@@ -72,9 +77,19 @@ async def main_async() -> int:
 
     # 2. Load Configuration
     config = load_config()
-    if args.dry_run is not None:
-        config.general.dry_run = args.dry_run
-        config.youtube.dry_run = args.dry_run
+    if args.dry_run:
+        config.set_dry_run(True)
+    logger.info("Mode: dry_run=%s strict=%s", config.general.dry_run, config.general.strict_mode)
+
+    if args.llm_check:
+        from core.llm_client import health_check
+        results = await health_check(config.llm)
+        if not results:
+            print("No LLM provider keys configured.")
+            return 1
+        for label, ok, msg in results:
+            print(f"{'OK  ' if ok else 'FAIL'} {label}: {msg}")
+        return 0 if any(ok for _, ok, _ in results) else 1
 
     warnings = validate_config(config)
     for w in warnings:
@@ -107,7 +122,14 @@ async def main_async() -> int:
         return 0 if vs and vs.state.value == "completed" else 1
 
     # 5. Execute Daily Pipeline
-    results = await orchestrator.run_daily(video_type_filter=args.video_type)
+    video_type = args.video_type
+    if video_type == "auto":
+        import pytz
+        from datetime import datetime
+        hour = datetime.now(pytz.timezone(config.general.timezone)).hour
+        video_type = "news" if hour < 11 else "knowledge"
+        logger.info("Auto-selected video type: %s", video_type)
+    results = await orchestrator.run_daily(video_type_filter=video_type)
     any_failed = any(r.state.value == "failed" for r in results)
 
     return 1 if any_failed else 0

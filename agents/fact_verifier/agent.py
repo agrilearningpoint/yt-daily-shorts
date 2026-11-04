@@ -1,36 +1,57 @@
-"""Fact Verification Agent — validates claims against source records."""
+"""Fact Verifier Agent — LLM cross-check of every claim against the research."""
 
 from __future__ import annotations
 
-from typing import Any, List
+import copy
+from typing import Any
+
 from agents.base_agent import AgentResult, BaseAgent
+from prompts import render_prompt
 
 
 class FactVerifierAgent(BaseAgent):
-    """Independently validates factual claims in scripts."""
-
     name = "fact_verifier"
 
+    def __init__(self, config, state_manager, llm=None):
+        super().__init__(config, state_manager)
+        self.llm = llm
+
     async def execute(self, **kwargs: Any) -> AgentResult:
-        script = kwargs.get("script", {})
-        research_data = kwargs.get("research_data", {})
+        script = copy.deepcopy(kwargs.get("script", {}) or {})
+        research = kwargs.get("research_data", {}) or {}
+        items = research.get("items", [])
 
-        self.logger.info("Verifying facts for script: %s", script.get("title", ""))
+        if not script.get("sources"):
+            return AgentResult(success=False, data={"verdict": "fail", "script": script},
+                               errors=["script has no sources"])
+        if self.llm is None:
+            return AgentResult(success=False, errors=["No LLM configured for fact check"])
 
-        # Check that sources exist and claims don't contain banned unverified speculation
-        sources = script.get("sources", [])
-        scenes = script.get("scenes", [])
-        
-        has_sources = bool(sources)
-        has_narration = all(bool(s.get("narration")) for s in scenes)
+        prompt = render_prompt("verification/fact_check.j2", {"script": script, "research_items": items})
+        try:
+            result = await self.llm.generate_json(prompt)
+        except Exception as exc:
+            if self.config.general.strict_mode:
+                return AgentResult(success=False, errors=[f"fact check unavailable: {exc}"])
+            self.logger.warning("Fact check skipped (dry run): %s", exc)
+            return AgentResult(success=True, data={"verdict": "skipped", "script": script})
 
-        all_verified = has_sources and has_narration
+        verdict = str(result.get("verdict", "fail")).lower()
+        issues = result.get("issues") or []
+        fixes = {int(c.get("scene_number", -1)): c.get("narration", "")
+                 for c in (result.get("corrected_scenes") or []) if isinstance(c, dict)}
+        for sc in script.get("scenes", []):
+            new = (fixes.get(int(sc.get("scene_number", 0))) or "").strip()
+            if new:
+                sc["narration"] = new
+        if (result.get("corrected_hook") or "").strip():
+            script["hook"] = result["corrected_hook"].strip()
 
+        ok = verdict in ("pass", "fixed")
+        self.logger.info("Fact check verdict=%s issues=%d", verdict, len(issues))
         return AgentResult(
-            success=all_verified,
-            data={
-                "all_verified": all_verified,
-                "confidence_score": 0.95 if all_verified else 0.5,
-                "verified_sources": sources,
-            }
+            success=ok,
+            data={"verdict": verdict, "confidence": result.get("confidence", 0), "issues": issues,
+                  "all_verified": ok, "script": script, "verified_sources": script.get("sources", [])},
+            errors=[] if ok else [f"fact check failed: {issues[:3]}"],
         )

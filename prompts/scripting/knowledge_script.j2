@@ -1,55 +1,31 @@
-You are India's top Documentary and Explainer Scriptwriter for YouTube Shorts.
+You are India's best documentary-style explainer writer for Hindi YouTube Shorts.
 
-TARGET DURATION: 50 to 58 seconds (approx 135 to 155 Hindi spoken words total).
 TOPIC: {{ topic.title }}
-CATEGORY: {{ topic.category }}
+CATEGORY: {{ category }}
 
-RESEARCH BRIEF:
-{{ topic.summary }}
+RESEARCH (the ONLY facts you may use — never invent dates, numbers or quotes):
+{{ topic.summary[:2500] }}
 
-KEY FACTUAL POINTS:
-{% for pt in topic.key_points %}
-- {{ pt }}
+KEY POINTS:
+{% for pt in topic.key_points %}- {{ pt }}
 {% endfor %}
+SOURCE: {{ topic.source_url }}
 
-EDITORIAL GUIDELINES:
-1. Opening Hook (0-5 sec): Question or mind-blowing statement that breaks scroll pattern.
-2. Body (5-45 sec): 3 tightly paced scenes unraveling the story with clarity.
-3. Climax & CTA (45-55 sec): Inspiring takeaway or curiosity question for comments.
-4. Language: Natural, conversational Hindi. Avoid unnatural English mix or complex Sanskritized words.
-5. Factual integrity: Zero hallucinations.
+WRITE ONE 45–55 second Hindi Short:
+- Total spoken words (hook + all narrations): {{ min_words }}–{{ max_words }} words. Hard limit.
+- Hook (8–14 words): a surprising fact or question that stops the scroll.
+- 4 scenes: context → the surprising core fact → why it matters / impact → takeaway + comment question
+  + "ऐसे रोचक तथ्यों के लिए सब्सक्राइब करें".
+- Each narration 20–35 words, natural conversational Hindi in Devanagari, storytelling tone.
+- on_screen_text: 2–5 punchy Hindi words per scene.
+- visual_keywords: 2–4 simple ENGLISH image-search words for that scene (e.g. "konark sun temple", "ancient india sculpture").
 
-OUTPUT JSON FORMAT ONLY:
+Return JSON exactly in this shape:
 {
-  "title": "शीर्षक #shorts",
-  "hook": "पावरफुल 4 सेकंड का हुक",
+  "title": "Hindi title under 70 characters",
+  "hook": "...",
   "scenes": [
-    {
-      "scene_number": 1,
-      "narration": "दृश्य 1 का हिंदी नरेशन",
-      "visual_instructions": "Visual prompt for image/video generation (vertical 9:16, cinematic)",
-      "duration": 15.0,
-      "transition": "fade_through_black",
-      "sources": ["{{ topic.source_url }}"]
-    },
-    {
-      "scene_number": 2,
-      "narration": "दृश्य 2 का हिंदी नरेशन",
-      "visual_instructions": "Visual prompt",
-      "duration": 18.0,
-      "transition": "zoom_in",
-      "sources": ["{{ topic.source_url }}"]
-    },
-    {
-      "scene_number": 3,
-      "narration": "दृश्य 3 का हिंदी नरेशन और निष्कर्ष",
-      "visual_instructions": "Visual prompt",
-      "duration": 18.0,
-      "transition": "slide_right",
-      "sources": ["{{ topic.source_url }}"]
-    }
+    {"scene_number": 1, "on_screen_text": "...", "narration": "...", "visual_keywords": "...", "sources": ["{{ topic.source_url }}"]}
   ],
-  "total_duration": 55.0,
-  "language": "hi",
   "sources": ["{{ topic.source_url }}"]
 }

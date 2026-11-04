@@ -1,193 +1,84 @@
-# 🎬 AI-Powered YouTube Shorts Automation Platform
+# 🎬 YT Daily Shorts — Autonomous Hindi YouTube Shorts
 
 [![Tests](https://github.com/agrilearningpoint/yt-daily-shorts/actions/workflows/tests.yml/badge.svg)](https://github.com/agrilearningpoint/yt-daily-shorts/actions/workflows/tests.yml)
 [![Daily Production](https://github.com/agrilearningpoint/yt-daily-shorts/actions/workflows/daily_shorts.yml/badge.svg)](https://github.com/agrilearningpoint/yt-daily-shorts/actions/workflows/daily_shorts.yml)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Zero-Budget First](https://img.shields.io/badge/Cost-Zero%20Budget%20First-success.svg)](#zero-budget-architecture)
 
-A cloud-native, autonomous, multi-agent platform designed to research, script, produce, voice, edit, optimize, and publish **2 high-impact YouTube Shorts daily in natural Hindi** (with a configurable third video), executed on **GitHub Actions** with **100% free-tier services**.
+Researches, writes, fact-checks, voices, edits and publishes **2 Hindi YouTube Shorts every day** on
+GitHub Actions using free tiers only.
 
----
+| Video | Time (IST) | Cron (UTC) | Content |
+|---|---|---|---|
+| News | 05:30 | `0 0 * * *` | Top 3 stories of the last 24h from PIB, DD News, BBC Hindi, The Hindu, Indian Express, NDTV, Amar Ujala |
+| Knowledge | 14:30 | `0 9 * * *` | 7-day editorial calendar (105 curated topics + LLM-suggested fresh topics, never repeated) |
 
-## 📌 Primary Objective & Video Schedule
+## Pipeline
 
-The platform automatically produces and publishes two distinct 50–60 second vertical shorts (1080x1920) daily:
-
-1. **Video A: Morning News Short (05:30 AM IST / 00:00 UTC)**
-   - Researches top national, international, technology, science, economic, and policy news from the last 24 hours.
-   - Sourced from official feeds: PIB, DD News, ISRO, and verified publishers.
-   - Preserves all original source URLs in the YouTube description.
-   - Fast-paced 3–5 second hook with dynamic transitions and Hindi voiceover.
-
-2. **Video B: Daily Knowledge / Explainer Short (02:30 PM IST / 09:00 UTC)**
-   - Dynamic deep-dives following a structured **7-Day Editorial Calendar**:
-     | Day | Category | Topics & Examples |
-     | :--- | :--- | :--- |
-     | **Monday** | Indian Politics & Leaders | Dr. B.R. Ambedkar, Constitution of India, Sardar Patel |
-     | **Tuesday** | Science & Technology | Chandrayaan-3, Aditya-L1, UPI Digital Infrastructure |
-     | **Wednesday** | Medical Science & Health | Ayurveda scientific validation, Ronald Ross malaria discovery |
-     | **Thursday** | Great Personalities | Mahatma Gandhi, Bhagat Singh, Birsa Munda, Dr. APJ Abdul Kalam |
-     | **Friday** | History, Temples & Heritage | Kailasa Temple Ellora, Konark Sun Temple, Nalanda University |
-     | **Saturday** | Inventions & Discoveries | Invention of Zero (Aryabhata), Raman Effect (C.V. Raman) |
-     | **Sunday** | Economy, Society & World | Green Revolution, Amul White Revolution, 5-Trillion Economy |
-
-3. **Video C: Optional Third Short (Configurable)**
-   - Enabled when `daily_video_count: 3` in `config/settings.yaml`.
-
----
-
-## 🏛️ Multi-Agent Architecture
-
-The system operates as an assembly line of 12 decoupled, resilient Python agents coordinated by `DailyOrchestrator` with SQLite checkpointing:
-
-```mermaid
-flowchart TD
-    subgraph Research & Editorial
-        RM[1. Research Manager Agent] --> PE[2. Prompt Engineer Agent]
-        PE --> SM[3. Script Manager Agent]
-        SM --> FV[4. Fact Verifier Agent]
-        FV --> QM[5. Quality Manager Agent]
-    end
-
-    subgraph Creative & Production
-        QM --> CD[6. Creative Director Agent]
-        CD --> VP[7. Video Producer Agent]
-        VP --> SEO[8. SEO Manager Agent]
-        VP --> TD[9. Thumbnail Designer Agent]
-    end
-
-    subgraph Publishing & Feedback
-        SEO --> PUB[10. Publisher Agent]
-        TD --> PUB
-        PUB --> YT[(YouTube Shorts API v3)]
-        PUB --> TG[11. Telegram Notifier]
-        YT -.-> AM[12. Analytics Manager]
-        AM -.-> SL[13. Self-Learning Agent]
-    end
-
-    subgraph Persistence & State
-        DB[(SQLite & Checkpoints)] <---> RM
-        DB <---> SM
-        DB <---> VP
-        DB <---> PUB
-    end
+```
+research ─► prompt ─► script (LLM, validated) ─► fact-check (LLM, auto-corrects) ─► QUALITY GATE
+   ─► theme ─► per-scene Hindi TTS (word timings) ─► images (Pexels/Pixabay/Wikipedia/Commons/Openverse)
+   ─► Ken Burns scenes + xfade transitions + word-highlight captions + ducked music ─► MP4 1080x1920
+   ─► SEO (LLM) ─► YouTube upload ─► Telegram preview + daily report ─► history/analytics (cached)
 ```
 
-### Agent Responsibilities:
-* **Research Manager (`RM`)**: Aggregates multi-source RSS/APIs, filters past 24h, computes Jaccard deduplication.
-* **Prompt Engineer (`PE`)**: Synthesizes trending curiosity hooks and compiles Jinja2 prompt templates.
-* **Script Manager (`SM`)**: LLM-driven structured Hindi script writer with strict word pacing (~2.5 words/sec).
-* **Fact Verifier (`FV`)**: Cross-checks facts, dates, and statistics against trusted sources to eliminate hallucinations.
-* **Quality Manager (`QM`)**: Validates hook strength, Hindi grammar, duration bounds (45–60s), and scene pacing.
-* **Creative Director (`CD`)**: Rotates themes, typography, background gradients, and audio moods.
-* **Video Producer (`VP`)**: Generates Hindi neural voiceover (`edge-tts`), gathers imagery, compiles vertical subtitles (`SRT`), and renders 1080x1920 MP4 via `FFmpeg`.
-* **SEO Manager (`SEO`)**: Writes high-CTR titles under 100 characters, tags, and numbered source links in description.
-* **Thumbnail Designer (`TD`)**: Generates bold, contrasting mobile cover art with Hindi typography.
-* **Publisher (`PUB`)**: Secure OAuth2 uploader for YouTube Data API v3 with automatic `DRY_RUN` safety.
-* **Analytics Manager (`AM`)**: Tracks views, likes, and retention metrics.
-* **Self-Learning Agent (`SL`)**: Studies performance patterns to enhance future prompts and theme selection.
+* **Multi-LLM fallback**: Gemini → Groq → Mistral → OpenRouter (free models) → NVIDIA NIM → Ollama Cloud.
+  Any provider without a key is skipped; failures fall through automatically. Models live in `config/settings.yaml`.
+* **Strict mode (automatic on live runs)**: no mock script, silent audio, offline news or fake MP4 can ever be
+  published. Any failed gate stops that video and sends a Telegram alert.
+* **Proper Devanagari**: bundled Mukta fonts (OFL) + Pillow/raqm shaping + libass captions.
+* **Memory across runs**: `data/history.json` + SQLite are kept in the Actions cache, so topics and news never repeat
+  and past performance (views) feeds back into hooks/titles.
+* **Compliance**: every source URL + image credits in the description, AI disclosure text and
+  `containsSyntheticMedia=true`, CC/stock images only.
 
----
+## Setup (one time)
 
-## 🔒 Security & GitHub Secrets Configuration
+### 1. GitHub secrets (`Settings → Secrets and variables → Actions`)
 
-> [!IMPORTANT]
-> **Zero Secrets in Code**: All API tokens, OAuth keys, and passwords must be stored exclusively in **GitHub Actions Secrets** (`Settings -> Secrets and variables -> Actions`). Never commit `.env` or credential JSON files.
+| Secret | Needed | Notes |
+|---|---|---|
+| `GEMINI_API_KEY` / `GROQ_API_KEY` / `MISTRAL_API_KEY` / `OPENROUTER_API_KEY` / `NVIDIA_API_KEY` / `OLLAMA_API_KEY` | at least one | more = more resilient |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | recommended | video previews, reports, alerts |
+| `YOUTUBE_CLIENT_SECRET_JSON` | for upload | OAuth *Desktop app* client JSON |
+| `YOUTUBE_TOKEN_JSON` | **for upload** | create with `scripts/get_youtube_token.py` (below) |
+| `PEXELS_API_KEY`, `PIXABAY_API_KEY` | optional | better stock photos (free keys) |
 
-### Required & Optional GitHub Secrets:
+Optional **variables**: `YT_YOUTUBE_PRIVACY` (`public` default, or `unlisted`/`private`), `YT_CHANNEL_NAME`.
 
-| Secret Name | Required? | Purpose & Service |
-| :--- | :---: | :--- |
-| `GEMINI_API_KEY` | **Recommended** | Primary free LLM via [Google AI Studio](https://aistudio.google.com/) |
-| `GROQ_API_KEY` | Optional | Fallback fast LLM via [Groq Cloud](https://console.groq.com/) |
-| `TELEGRAM_BOT_TOKEN` | Optional | Telegram Bot API token from [@BotFather](https://t.me/botfather) |
-| `TELEGRAM_CHAT_ID` | Optional | Your Telegram User ID or Channel ID for status alerts |
-| `YOUTUBE_CLIENT_SECRET_JSON` | Optional* | Google OAuth Client Secret JSON string (*needed for live upload) |
-| `YOUTUBE_TOKEN_JSON` | Optional* | Google OAuth Refresh Token JSON string (*needed for live upload) |
-| `PEXELS_API_KEY` | Optional | Free stock video/photo API from [Pexels](https://www.pexels.com/api/) |
-| `PIXABAY_API_KEY` | Optional | Free stock video/photo API from [Pixabay](https://pixabay.com/api/docs/) |
-| `HF_TOKEN` | Optional | Free Hugging Face token for generative AI images |
-| `MONGODB_URI` | Optional | Remote MongoDB Atlas URI (SQLite is used by default) |
-| `CLOUDFLARE_R2_ACCESS_KEY` | Optional | S3-compatible cloud storage for raw video artifacts |
-| `CLOUDFLARE_R2_SECRET_KEY` | Optional | Cloudflare R2 Secret Key |
+### 2. Create `YOUTUBE_TOKEN_JSON` (on your own computer, once)
 
-* *When YouTube credentials are not supplied or `dry_run: true`, the system executes completely in **DRY_RUN mode**, producing valid videos locally and creating full simulation reports without consuming API quotas.*
+1. Google Cloud Console → enable **YouTube Data API v3**.
+2. OAuth consent screen → External → add yourself as test user → **Publish app** (otherwise the token expires every 7 days).
+3. Credentials → OAuth client ID → **Desktop app** → download as `client_secret.json`.
+4. `pip install google-auth-oauthlib && python scripts/get_youtube_token.py client_secret.json`
+5. Sign in with the account that owns the channel, copy the printed JSON into the `YOUTUBE_TOKEN_JSON` secret.
 
----
+> Uploads from API projects that have not passed YouTube's API audit are locked to **private** by YouTube.
+> Submit the audit form (YouTube API Services → Audit and Quota Extension) to publish publicly.
 
-## 🚀 Quick Start & Local Development
+### 3. Test
 
-### 1. Clone & Set Up Virtual Environment
+* `Actions → Daily YouTube Shorts Production → Run workflow`
+  * `llm_check = true` → pings every LLM provider/model.
+  * `dry_run = true` → full video rendered, sent to Telegram + artifact, **no upload**.
+* Scheduled runs are live (`dry_run=false`) automatically.
+
+## Local development
+
 ```bash
-git clone https://github.com/agrilearningpoint/yt-daily-shorts.git
-cd yt-daily-shorts
-python -m venv venv
-# On Windows:
-.\venv\Scripts\activate
-# On Linux/macOS:
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 2. Configure Local Settings (Optional)
-Copy `.env.example` to `.env` and fill in your keys:
-```bash
-cp .env.example .env
-```
-
-### 3. Run Pipeline in Local Dry-Run Mode
-```bash
-python main.py --video-type all --dry-run
-```
-
-Outputs will be rendered under `output/<video_id>/final_short.mp4` along with voiceover audio, subtitles, and thumbnails.
-
-### 4. Check Pipeline State
-```bash
+pip install -r requirements.txt          # + ffmpeg on PATH
+cp .env.example .env                     # add keys with YT_ prefix
+python main.py --llm-check
+python main.py --video-type news --dry-run
 python main.py --status
-```
-
-### 5. Resume a Failed Pipeline
-```bash
 python main.py --resume <video_id>
+python -m pytest tests -q
 ```
 
----
+## Customising
 
-## 🧪 Automated Testing
+* `config/settings.yaml` — voice, rate, durations, models, provider order, hashtags, categories.
+* `research/source_registry.py` — news feeds. `research/trend_discovery.py` — topic seeds per weekday.
+* `prompts/` — script, fact-check and SEO prompts.
+* `assets/music/` — drop royalty-free tracks for background music.
 
-The repository includes a comprehensive unit and integration test suite:
-
-```bash
-python -m pytest tests/ -v
-```
-
-All pipeline stages are covered by automated tests:
-* Configuration & Editorial Calendar validation
-* SQLite state management & checkpoint serialization
-* News collection, 24h date filtering, and Jaccard deduplication
-* Hindi TTS synthesis and SRT subtitle generator
-* Procedural 1080x1920 graphic card rendering
-* SEO title and numbered source description formatting
-* End-to-end multi-agent dry-run execution
-
----
-
-## ☁️ GitHub Actions Cloud Automation
-
-Production execution runs entirely on GitHub's cloud infrastructure:
-
-* **Automated Schedule**: Triggered at 00:00 UTC (5:30 AM IST) and 09:00 UTC (2:30 PM IST).
-* **Manual Dispatch**: Go to `Actions` -> `Daily YouTube Shorts Production` -> `Run workflow` with options to choose video type and Dry-Run mode.
-* **Artifacts Retention**: Rendered MP4 videos, logs, and SQLite database are automatically saved as job artifacts for 7 days.
-* **Instant Alerts**: Critical failures send immediate Telegram notifications with direct links to the failing GitHub Action run.
-
----
-
-## 📜 License & Compliance
-
-Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.
-
-* **Factual Integrity First**: All news and historical claims cite verified sources (PIB, DD News, ISRO, Wikipedia).
-* **Copyright Compliance**: Visuals utilize licensed stock media (Pexels, Pixabay), public domain resources, or procedurally generated vector cards.
+MIT licensed. Fonts: Mukta (SIL OFL, `assets/fonts/OFL.txt`).

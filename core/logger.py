@@ -37,7 +37,8 @@ _ENV_SENSITIVE_KEYS = {
     "YT_PEXELS_API_KEY", "YT_PIXABAY_API_KEY", "YT_HF_TOKEN",
     "YT_MONGODB_URI", "YT_CLOUDFLARE_R2_ACCESS_KEY",
     "YT_CLOUDFLARE_R2_SECRET_KEY", "YT_YOUTUBE_CLIENT_SECRET_JSON",
-    "YT_YOUTUBE_TOKEN_JSON",
+    "YT_YOUTUBE_TOKEN_JSON", "YT_MISTRAL_API_KEY", "YT_OPENROUTER_API_KEY",
+    "YT_NVIDIA_API_KEY", "YT_OLLAMA_API_KEY", "YT_TELEGRAM_CHAT_ID",
 }
 
 
@@ -45,6 +46,10 @@ def _mask(text: str) -> str:
     """Replace known secret patterns with ``***``."""
     for pat in _SENSITIVE_PATTERNS:
         text = pat.sub("***REDACTED***", text)
+    for key in _ENV_SENSITIVE_KEYS:
+        val = os.environ.get(key, "")
+        if len(val) >= 8 and val in text:
+            text = text.replace(val, "***REDACTED***")
     return text
 
 
@@ -87,8 +92,13 @@ def setup_logger(
 
     logger = logging.getLogger(name)
     logger.setLevel(level)
+    # Configure the ROOT logger so every module logger (agents.*, video.*, core.*) is visible.
+    root = logging.getLogger()
+    root.setLevel(level)
+    for noisy in ("urllib3", "googleapiclient", "PIL", "asyncio", "httpx"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
-    if logger.handlers:
+    if root.handlers and any(getattr(h, "_yt", False) for h in root.handlers):
         return logger  # already initialised
 
     fmt = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
@@ -98,7 +108,8 @@ def setup_logger(
     console = logging.StreamHandler(sys.stdout)
     console.setLevel(level)
     console.setFormatter(_MaskingFormatter(fmt, datefmt=datefmt))
-    logger.addHandler(console)
+    console._yt = True
+    root.addHandler(console)
 
     # File ------------------------------------------------------------------
     file_handler = RotatingFileHandler(
@@ -109,7 +120,8 @@ def setup_logger(
     )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(_MaskingFormatter(fmt, datefmt=datefmt))
-    logger.addHandler(file_handler)
+    file_handler._yt = True
+    root.addHandler(file_handler)
 
     return logger
 

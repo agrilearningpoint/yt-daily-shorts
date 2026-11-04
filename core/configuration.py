@@ -1,16 +1,10 @@
 """Application configuration with environment-variable overrides.
 
-The hierarchy (highest priority first):
+Priority (highest first):
 
-1. Environment variables prefixed with ``YT_``.
+1. Environment variables prefixed with ``YT_`` (GitHub Actions secrets).
 2. ``config/settings.local.yaml`` (gitignored).
 3. ``config/settings.yaml`` (committed defaults).
-
-Usage::
-
-    from core.configuration import load_config
-    cfg = load_config()
-    print(cfg.general.timezone)
 """
 
 from __future__ import annotations
@@ -18,41 +12,64 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import yaml
 from dotenv import load_dotenv
 
 
-# ---------------------------------------------------------------------------
-# Config dataclasses
-# ---------------------------------------------------------------------------
-
 @dataclass
 class GeneralConfig:
     project_name: str = "yt-daily-shorts"
+    channel_name: str = "Daily Hindi Shorts"
     timezone: str = "Asia/Kolkata"
     daily_video_count: int = 2
     max_video_count: int = 3
     dry_run: bool = True
+    # strict_mode: never publish placeholder content (mock LLM, silent audio,
+    # fake MP4). Automatically ON for live (non dry-run) runs.
+    strict_mode: bool = False
     debug: bool = False
 
 
 @dataclass
 class LLMConfig:
-    provider: str = "gemini"
+    # Providers are tried in this order; any provider without a key is skipped.
+    provider_order: List[str] = field(default_factory=lambda: [
+        "gemini", "groq", "mistral", "openrouter", "nvidia", "ollama",
+    ])
+    models: Dict[str, List[str]] = field(default_factory=dict)
     gemini_api_key: str = ""
     groq_api_key: str = ""
-    model_name: str = "gemini-2.0-flash"
+    mistral_api_key: str = ""
+    openrouter_api_key: str = ""
+    nvidia_api_key: str = ""
+    ollama_api_key: str = ""
     temperature: float = 0.7
-    max_tokens: int = 8192
+    max_tokens: int = 4096
+    timeout_sec: int = 90
+    allow_mock: bool = False  # only tests / offline dev
+
+    def keys(self) -> Dict[str, str]:
+        return {
+            "gemini": self.gemini_api_key,
+            "groq": self.groq_api_key,
+            "mistral": self.mistral_api_key,
+            "openrouter": self.openrouter_api_key,
+            "nvidia": self.nvidia_api_key,
+            "ollama": self.ollama_api_key,
+        }
+
+    def has_any_key(self) -> bool:
+        return any(v for v in self.keys().values())
 
 
 @dataclass
 class TTSConfig:
     provider: str = "edge-tts"
-    voice: str = "hi-IN-SwaraNeural"
-    rate: str = "+0%"
+    voice: str = "hi-IN-MadhurNeural"
+    fallback_voice: str = "hi-IN-SwaraNeural"
+    rate: str = "+8%"
     pitch: str = "+0Hz"
 
 
@@ -61,18 +78,24 @@ class VideoConfig:
     width: int = 1080
     height: int = 1920
     fps: int = 30
-    target_duration: int = 55
-    max_duration: int = 60
+    target_duration: int = 52
+    min_duration: int = 25
+    max_duration: int = 59
     output_format: str = "mp4"
     quality: str = "high"
+    background_music: bool = True
+    music_volume: float = 0.10
 
 
 @dataclass
 class YouTubeConfig:
     client_secret_json: str = ""
     token_json: str = ""
-    default_privacy: str = "private"
-    category_id: str = "22"
+    default_privacy: str = "public"
+    category_id: str = "27"
+    news_category_id: str = "25"
+    knowledge_category_id: str = "27"
+    contains_synthetic_media: bool = True
     dry_run: bool = True
 
 
@@ -80,6 +103,7 @@ class YouTubeConfig:
 class TelegramConfig:
     bot_token: str = ""
     chat_id: str = ""
+    send_video: bool = True
     authorized_user_ids: List[str] = field(default_factory=list)
 
 
@@ -87,6 +111,7 @@ class TelegramConfig:
 class DatabaseConfig:
     provider: str = "sqlite"
     sqlite_path: str = "data/yt_shorts.db"
+    history_path: str = "data/history.json"
     mongodb_uri: str = ""
 
 
@@ -95,7 +120,11 @@ class MediaConfig:
     pexels_api_key: str = ""
     pixabay_api_key: str = ""
     hf_token: str = ""
+    use_openverse: bool = True
+    use_wikimedia: bool = True
     cache_dir: str = "data/media_cache"
+    r2_access_key: str = ""
+    r2_secret_key: str = ""
 
 
 @dataclass
@@ -103,8 +132,7 @@ class SEOConfig:
     max_title_length: int = 100
     max_description_length: int = 5000
     default_hashtags: List[str] = field(default_factory=lambda: [
-        "#shorts", "#hindi", "#news", "#facts",
-        "#india", "#knowledge", "#dailynews",
+        "#shorts", "#hindi", "#facts", "#india", "#knowledge",
     ])
 
 
@@ -119,13 +147,11 @@ class EditorialCalendar:
     sunday: str = "Economy, Society and World Affairs"
 
     def get_today_category(self, day_name: str) -> str:
-        """Return the editorial category for a given day name."""
         return getattr(self, day_name.lower(), "General Knowledge")
 
 
 @dataclass
 class AppConfig:
-    """Top-level application configuration container."""
     general: GeneralConfig = field(default_factory=GeneralConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     tts: TTSConfig = field(default_factory=TTSConfig)
@@ -137,142 +163,119 @@ class AppConfig:
     seo: SEOConfig = field(default_factory=SEOConfig)
     editorial_calendar: EditorialCalendar = field(default_factory=EditorialCalendar)
 
+    def set_dry_run(self, value: bool) -> None:
+        self.general.dry_run = value
+        self.youtube.dry_run = value
+        if not value:
+            self.general.strict_mode = True
 
-# ---------------------------------------------------------------------------
-# Loaders
-# ---------------------------------------------------------------------------
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_SETTINGS = _PROJECT_ROOT / "config" / "settings.yaml"
 _LOCAL_SETTINGS = _PROJECT_ROOT / "config" / "settings.local.yaml"
 
-_ENV_MAP: Dict[str, tuple[str, str]] = {
-    # env var → (section, field)
-    "YT_GEMINI_API_KEY":       ("llm", "gemini_api_key"),
-    "YT_GROQ_API_KEY":         ("llm", "groq_api_key"),
-    "YT_LLM_PROVIDER":        ("llm", "provider"),
-    "YT_LLM_MODEL":           ("llm", "model_name"),
-    "YT_TTS_PROVIDER":        ("tts", "provider"),
-    "YT_TTS_VOICE":           ("tts", "voice"),
-    "YT_TELEGRAM_BOT_TOKEN":  ("telegram", "bot_token"),
-    "YT_TELEGRAM_CHAT_ID":    ("telegram", "chat_id"),
+_ENV_MAP: Dict[str, tuple] = {
+    "YT_GEMINI_API_KEY": ("llm", "gemini_api_key"),
+    "YT_GROQ_API_KEY": ("llm", "groq_api_key"),
+    "YT_MISTRAL_API_KEY": ("llm", "mistral_api_key"),
+    "YT_OPENROUTER_API_KEY": ("llm", "openrouter_api_key"),
+    "YT_NVIDIA_API_KEY": ("llm", "nvidia_api_key"),
+    "YT_OLLAMA_API_KEY": ("llm", "ollama_api_key"),
+    "YT_TTS_VOICE": ("tts", "voice"),
+    "YT_TELEGRAM_BOT_TOKEN": ("telegram", "bot_token"),
+    "YT_TELEGRAM_CHAT_ID": ("telegram", "chat_id"),
     "YT_YOUTUBE_CLIENT_SECRET_JSON": ("youtube", "client_secret_json"),
-    "YT_YOUTUBE_TOKEN_JSON":  ("youtube", "token_json"),
-    "YT_PEXELS_API_KEY":      ("media", "pexels_api_key"),
-    "YT_PIXABAY_API_KEY":     ("media", "pixabay_api_key"),
-    "YT_HF_TOKEN":            ("media", "hf_token"),
-    "YT_MONGODB_URI":         ("database", "mongodb_uri"),
+    "YT_YOUTUBE_TOKEN_JSON": ("youtube", "token_json"),
+    "YT_YOUTUBE_PRIVACY": ("youtube", "default_privacy"),
+    "YT_PEXELS_API_KEY": ("media", "pexels_api_key"),
+    "YT_PIXABAY_API_KEY": ("media", "pixabay_api_key"),
+    "YT_HF_TOKEN": ("media", "hf_token"),
+    "YT_MONGODB_URI": ("database", "mongodb_uri"),
     "YT_CLOUDFLARE_R2_ACCESS_KEY": ("media", "r2_access_key"),
     "YT_CLOUDFLARE_R2_SECRET_KEY": ("media", "r2_secret_key"),
-    "YT_DRY_RUN":             ("general", "dry_run"),
-    "YT_DEBUG":                ("general", "debug"),
-    "YT_TIMEZONE":             ("general", "timezone"),
-    "YT_SQLITE_PATH":         ("database", "sqlite_path"),
+    "YT_DRY_RUN": ("general", "dry_run"),
+    "YT_STRICT_MODE": ("general", "strict_mode"),
+    "YT_DEBUG": ("general", "debug"),
+    "YT_TIMEZONE": ("general", "timezone"),
+    "YT_CHANNEL_NAME": ("general", "channel_name"),
+    "YT_DAILY_VIDEO_COUNT": ("general", "daily_video_count"),
+    "YT_SQLITE_PATH": ("database", "sqlite_path"),
 }
 
 
 def _load_yaml(path: Path) -> Dict[str, Any]:
-    """Read a YAML file; return empty dict if missing."""
     if not path.exists():
         return {}
     with open(path, encoding="utf-8") as fh:
         return yaml.safe_load(fh) or {}
 
 
-def _apply_yaml(cfg: AppConfig, data: Dict[str, Any]) -> None:
-    """Overlay *data* from a YAML file onto *cfg*."""
-    section_map = {
-        "general": cfg.general,
-        "llm": cfg.llm,
-        "tts": cfg.tts,
-        "video": cfg.video,
-        "youtube": cfg.youtube,
-        "telegram": cfg.telegram,
-        "database": cfg.database,
-        "media": cfg.media,
-        "seo": cfg.seo,
-        "editorial_calendar": cfg.editorial_calendar,
+def _sections(cfg: AppConfig) -> Dict[str, Any]:
+    return {
+        "general": cfg.general, "llm": cfg.llm, "tts": cfg.tts, "video": cfg.video,
+        "youtube": cfg.youtube, "telegram": cfg.telegram, "database": cfg.database,
+        "media": cfg.media, "seo": cfg.seo, "editorial_calendar": cfg.editorial_calendar,
     }
+
+
+def _coerce(current: Any, value: Any) -> Any:
+    if isinstance(current, bool):
+        return value if isinstance(value, bool) else str(value).strip().lower() in ("true", "1", "yes", "on")
+    if isinstance(current, int) and not isinstance(current, bool):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return current
+    if isinstance(current, float):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return current
+    return value
+
+
+def _apply_yaml(cfg: AppConfig, data: Dict[str, Any]) -> None:
+    sections = _sections(cfg)
     for section_key, section_data in data.items():
-        target = section_map.get(section_key)
+        target = sections.get(section_key)
         if target is None or not isinstance(section_data, dict):
             continue
-        for field_key, value in section_data.items():
-            if hasattr(target, field_key):
-                current = getattr(target, field_key)
-                # Coerce booleans from YAML string "true"/"false"
-                if isinstance(current, bool) and isinstance(value, str):
-                    value = value.lower() in ("true", "1", "yes")
-                setattr(target, field_key, value)
+        for key, value in section_data.items():
+            if hasattr(target, key):
+                setattr(target, key, _coerce(getattr(target, key), value))
 
 
 def _apply_env(cfg: AppConfig) -> None:
-    """Override config fields from environment variables."""
-    section_map = {
-        "general": cfg.general,
-        "llm": cfg.llm,
-        "tts": cfg.tts,
-        "video": cfg.video,
-        "youtube": cfg.youtube,
-        "telegram": cfg.telegram,
-        "database": cfg.database,
-        "media": cfg.media,
-        "seo": cfg.seo,
-    }
-    for env_key, (section, field_name) in _ENV_MAP.items():
+    sections = _sections(cfg)
+    for env_key, (section, name) in _ENV_MAP.items():
         value = os.environ.get(env_key)
-        if value is None:
+        if value is None or value == "":
             continue
-        target = section_map.get(section)
-        if target is None:
-            continue
-        if not hasattr(target, field_name):
-            continue
-        current = getattr(target, field_name)
-        if isinstance(current, bool):
-            setattr(target, field_name, value.lower() in ("true", "1", "yes"))
-        elif isinstance(current, int):
-            try:
-                setattr(target, field_name, int(value))
-            except ValueError:
-                pass
-        elif isinstance(current, float):
-            try:
-                setattr(target, field_name, float(value))
-            except ValueError:
-                pass
-        else:
-            setattr(target, field_name, value)
+        target = sections[section]
+        setattr(target, name, _coerce(getattr(target, name), value.strip()))
+    # Keep the two dry-run flags in lock-step.
+    cfg.youtube.dry_run = cfg.general.dry_run
+    if not cfg.general.dry_run:
+        cfg.general.strict_mode = True
 
 
 def validate_config(cfg: AppConfig) -> List[str]:
-    """Return a list of configuration warnings (not errors for optional keys)."""
     warnings: List[str] = []
-    if not cfg.llm.gemini_api_key and not cfg.llm.groq_api_key:
-        warnings.append("No LLM API key configured (GEMINI or GROQ). LLM features will fail.")
+    if not cfg.llm.has_any_key():
+        warnings.append("No LLM API key configured. Live runs will fail (strict mode).")
     if not cfg.telegram.bot_token:
         warnings.append("Telegram bot token not set. Notifications disabled.")
-    if cfg.video.width != 1080 or cfg.video.height != 1920:
-        warnings.append(f"Non-standard resolution {cfg.video.width}x{cfg.video.height}.")
+    if not cfg.general.dry_run and not cfg.youtube.token_json:
+        warnings.append("YOUTUBE_TOKEN_JSON missing: uploads cannot happen. Run scripts/get_youtube_token.py once.")
+    if not cfg.media.pexels_api_key and not cfg.media.pixabay_api_key:
+        warnings.append("No Pexels/Pixabay key: using Wikimedia/Openverse + designed cards for visuals.")
     return warnings
 
 
 def load_config() -> AppConfig:
-    """Build the application configuration.
-
-    Loads defaults → settings.yaml → settings.local.yaml → env vars.
-    """
-    load_dotenv()  # load .env if present
-
+    load_dotenv()
     cfg = AppConfig()
-
-    # Layer 1: committed defaults
     _apply_yaml(cfg, _load_yaml(_DEFAULT_SETTINGS))
-
-    # Layer 2: local overrides (gitignored)
     _apply_yaml(cfg, _load_yaml(_LOCAL_SETTINGS))
-
-    # Layer 3: environment variables (highest priority)
     _apply_env(cfg)
-
     return cfg

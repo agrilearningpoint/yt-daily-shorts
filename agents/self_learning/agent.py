@@ -1,29 +1,32 @@
-"""Self-Learning Agent — analyzes retention and suggests prompt improvements."""
+"""Self-Learning Agent — turns past performance into style guidance for new scripts."""
 
 from __future__ import annotations
 
 from typing import Any, Dict, List
+
 from agents.base_agent import AgentResult, BaseAgent
 
 
 class SelfLearningAgent(BaseAgent):
-    """Studies historical performance and recommends high-retention topics & hooks."""
-
     name = "self_learning"
 
-    async def execute(self, **kwargs: Any) -> AgentResult:
-        metrics = kwargs.get("metrics", [])
-        
-        recommendations = [
-            "Use fast-paced question hooks with immediate visual switch under 3.5 seconds.",
-            "Prioritize science missions and national infrastructure breakthroughs for higher completion rate.",
-            "Maintain bold contrasting yellow subtitles for mobile legibility."
-        ]
+    def __init__(self, config, state_manager, history=None):
+        super().__init__(config, state_manager)
+        self.history = history
 
-        return AgentResult(
-            success=True,
-            data={
-                "insights": "High contrast thumbnails with bold question text show +28% CTR.",
-                "recommendations": recommendations
-            }
-        )
+    async def execute(self, **kwargs: Any) -> AgentResult:
+        video_type = kwargs.get("video_type", "news")
+        vids: List[Dict[str, Any]] = [v for v in (self.history.videos() if self.history else [])
+                                      if v.get("video_type") == video_type and v.get("views") is not None]
+        if len(vids) < 5:
+            return AgentResult(success=True, data={"style_notes": "", "insights": "Not enough data yet."})
+        ranked = sorted(vids, key=lambda v: v.get("views", 0), reverse=True)
+        top = ranked[:3]
+        bottom = ranked[-3:]
+        notes = ("PAST PERFORMANCE (learn from it, do not copy): best-performing titles/hooks on this channel: "
+                 + " | ".join(f"\"{v.get('title', '')}\" ({v.get('views', 0)} views)" for v in top)
+                 + ". Weakest: " + " | ".join(f"\"{v.get('title', '')}\"" for v in bottom)
+                 + ". Write a hook and title in the style of the best performers.")
+        avg = sum(v.get("views", 0) for v in vids) / len(vids)
+        return AgentResult(success=True, data={"style_notes": notes,
+                                               "insights": f"Avg views ({video_type}, {len(vids)} videos): {avg:.0f}. Top: {top[0].get('title', '')}"})

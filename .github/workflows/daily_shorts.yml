@@ -9,32 +9,71 @@ on:
   workflow_dispatch:
     inputs:
       video_type:
-        description: 'Which video type to generate'
+        description: 'Which video to generate'
         required: true
-        default: 'all'
+        default: 'news'
         type: choice
-        options:
-          - all
-          - news
-          - knowledge
+        options: [news, knowledge, all]
       dry_run:
-        description: 'Run in DRY_RUN mode (skip actual YouTube upload)'
+        description: 'DRY RUN (render + Telegram preview, no YouTube upload)'
         required: true
         default: true
+        type: boolean
+      llm_check:
+        description: 'Only test LLM providers (no video)'
+        required: false
+        default: false
         type: boolean
 
 concurrency:
   group: daily-shorts-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  actions: write   # needed to save the state cache
+
 jobs:
   produce-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
+    env:
+      TZ: Asia/Kolkata
+      PYTHONUNBUFFERED: '1'
+      YT_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      YT_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      YT_MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+      YT_OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      YT_NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      YT_OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+      YT_TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      YT_TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      YT_YOUTUBE_CLIENT_SECRET_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRET_JSON }}
+      YT_YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+      YT_PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      YT_PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      YT_HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      # Optional repository variables (Settings -> Secrets and variables -> Variables)
+      YT_YOUTUBE_PRIVACY: ${{ vars.YT_YOUTUBE_PRIVACY }}
+      YT_CHANNEL_NAME: ${{ vars.YT_CHANNEL_NAME }}
 
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve run mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            if [ "${{ github.event.schedule }}" = "0 0 * * *" ]; then TYPE=news; else TYPE=knowledge; fi
+            DRY=false
+          else
+            TYPE="${{ github.event.inputs.video_type }}"
+            DRY="${{ github.event.inputs.dry_run }}"
+          fi
+          echo "type=$TYPE" >> "$GITHUB_OUTPUT"
+          echo "dry=$DRY" >> "$GITHUB_OUTPUT"
+          echo "Video type: $TYPE | dry run: $DRY"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -42,56 +81,68 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install System Dependencies (FFmpeg & Fonts)
+      - name: Install system dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-deva
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-noto-core > /dev/null
+          ffmpeg -version | head -1
 
-      - name: Install Python Dependencies
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Execute Daily Shorts Automation Pipeline
-        env:
-          YT_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          YT_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          YT_TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          YT_TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          YT_YOUTUBE_CLIENT_SECRET_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRET_JSON }}
-          YT_YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
-          YT_PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          YT_PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-          YT_HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          YT_MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          YT_CLOUDFLARE_R2_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY }}
-          YT_CLOUDFLARE_R2_SECRET_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_KEY }}
-          YT_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-        run: |
-          python main.py --video-type ${{ github.event.inputs.video_type || 'all' }}
+      - name: LLM provider check
+        if: github.event.inputs.llm_check == 'true'
+        run: python main.py --llm-check
 
-      - name: Upload Video Artifacts and Production Logs
-        if: always()
+      - name: Restore pipeline state (history + DB)
+        if: github.event.inputs.llm_check != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/history.json
+            data/yt_shorts.db
+          key: yt-state-${{ github.run_id }}
+          restore-keys: yt-state-
+
+      - name: Produce & publish
+        if: github.event.inputs.llm_check != 'true'
+        env:
+          YT_DRY_RUN: ${{ steps.mode.outputs.dry }}
+        run: python main.py --video-type ${{ steps.mode.outputs.type }}
+
+      - name: Save pipeline state
+        if: always() && github.event.inputs.llm_check != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/history.json
+            data/yt_shorts.db
+          key: yt-state-${{ github.run_id }}
+
+      - name: Upload artifacts
+        if: always() && github.event.inputs.llm_check != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: daily-shorts-artifacts-${{ github.run_number }}
+          name: shorts-${{ steps.mode.outputs.type }}-${{ github.run_number }}
           path: |
-            output/
+            output/*/final_short.mp4
+            output/*/thumbnail.jpg
+            output/*/subtitles.srt
+            output/*/timings.json
             data/logs/
-            data/yt_shorts.db
           retention-days: 7
+          if-no-files-found: ignore
 
-      - name: Send Telegram Failure Alert
+      - name: Telegram alert on workflow crash
         if: failure()
-        env:
-          YT_TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          YT_TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python -c "
+          python - <<'PY'
           import os, requests
-          token = os.environ.get('YT_TELEGRAM_BOT_TOKEN')
-          chat_id = os.environ.get('YT_TELEGRAM_CHAT_ID')
-          if token and chat_id:
-              text = '🚨 *YouTube Shorts Production Workflow FAILED!*\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
-              requests.post(f'https://api.telegram.org/bot{token}/sendMessage', json={'chat_id': chat_id, 'text': text, 'parse_mode': 'Markdown'})
-          "
+          t, c = os.environ.get("YT_TELEGRAM_BOT_TOKEN"), os.environ.get("YT_TELEGRAM_CHAT_ID")
+          if t and c:
+              url = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              requests.post(f"https://api.telegram.org/bot{t}/sendMessage",
+                            json={"chat_id": c, "text": f"🚨 YT Shorts workflow FAILED\n{url}"}, timeout=15)
+          PY

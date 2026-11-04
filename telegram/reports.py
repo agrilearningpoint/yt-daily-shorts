@@ -1,61 +1,47 @@
-"""Telegram daily production reports and alert formatting."""
+"""Telegram report formatting (HTML)."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List
+
+import pytz
+
+from telegram.bot import esc
+
+
+def _now_ist() -> str:
+    return datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%d %b %Y, %I:%M %p IST")
 
 
 class TelegramReportBuilder:
-    """Formats Markdown reports for Telegram broadcasts."""
-
     @staticmethod
-    def build_daily_summary(
-        completed_videos: List[Dict[str, Any]],
-        failed_count: int = 0,
-        dry_run: bool = False
-    ) -> str:
-        now_str = datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC")
-        mode_badge = "🧪 *DRY-RUN MODE*" if dry_run else "🚀 *PRODUCTION MODE*"
-
-        report = f"""🎬 *YouTube Shorts Daily Report*
-📅 {now_str}
-⚙️ {mode_badge}
-
-━━━━━━━━━━━━━━━━━━━━━
-"""
+    def build_daily_summary(completed_videos: List[Dict[str, Any]], failed_count: int = 0,
+                            dry_run: bool = False, failures: List[str] = None, insights: str = "") -> str:
+        mode = "🧪 <b>DRY-RUN</b> (upload skipped)" if dry_run else "🚀 <b>LIVE</b>"
+        out = [f"🎬 <b>YT Shorts Report</b>", f"📅 {_now_ist()}", f"⚙️ {mode}", "━━━━━━━━━━━━"]
         if not completed_videos and failed_count == 0:
-            report += "ℹ️ No video jobs executed today."
-            return report
-
-        for idx, vid in enumerate(completed_videos, 1):
-            v_type = vid.get("video_type", "Short").upper()
-            title = vid.get("title", "Untitled")
-            yt_url = vid.get("youtube_url", "")
-            duration = vid.get("duration", 55)
-            sources = vid.get("sources", [])
-
-            report += f"*{idx}. [{v_type}]* {title}\n"
-            report += f"⏱ Duration: {duration:.1f}s\n"
-            if yt_url:
-                report += f"🔗 Watch: {yt_url}\n"
-            if sources:
-                report += f"📚 Sources: {len(sources)} verified links\n"
-            report += "\n"
-
-        if failed_count > 0:
-            report += f"⚠️ *Failures Encountered:* {failed_count} video(s) failed.\n"
+            out.append("ℹ️ No video jobs executed.")
+            return "\n".join(out)
+        for i, v in enumerate(completed_videos, 1):
+            out.append(f"<b>{i}. [{esc(str(v.get('video_type', '')).upper())}]</b> {esc(v.get('title', ''))}")
+            out.append(f"⏱ {float(v.get('duration', 0) or 0):.1f}s | 🧠 {esc(v.get('llm', ''))}")
+            if v.get("youtube_url"):
+                out.append(f"🔗 {esc(v['youtube_url'])}")
+            if v.get("sources"):
+                out.append(f"📚 {len(v['sources'])} sources")
+            out.append("")
+        if failed_count:
+            out.append(f"⚠️ <b>{failed_count} failed</b>")
+            for f in (failures or [])[:5]:
+                out.append(f"• {esc(f[:300])}")
         else:
-            report += "✅ All daily shorts rendered and processed successfully!\n"
-
-        return report.strip()
+            out.append("✅ All videos processed successfully.")
+        if insights:
+            out.append(f"\n📈 {esc(insights)}")
+        return "\n".join(out).strip()
 
     @staticmethod
     def build_failure_alert(stage: str, video_id: str, error_msg: str) -> str:
-        return f"""🚨 *PIPELINE FAILURE ALERT*
-Stage: `{stage}`
-Video ID: `{video_id}`
-Error: `{error_msg}`
-
-Please inspect GitHub Actions run logs.
-"""
+        return (f"🚨 <b>PIPELINE FAILURE</b>\nStage: <code>{esc(stage)}</code>\nVideo: <code>{esc(video_id)}</code>\n"
+                f"Error: <code>{esc(error_msg[:800])}</code>\n\nNothing was published for this video.")

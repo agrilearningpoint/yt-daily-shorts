@@ -1,13 +1,23 @@
-"""Dynamic topic and trend discovery for the 7-day editorial calendar."""
+"""Knowledge-topic discovery for the 7-day editorial calendar.
+
+* Rotates through curated seeds per weekday, never repeating a used topic
+  (history persisted across runs).
+* When a weekday's seeds are exhausted, the LLM proposes a fresh topic.
+* Enriches the topic from Wikipedia (search API -> intro extract + lead image).
+"""
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional
+
 import requests
 
 logger = logging.getLogger("research.trend")
+
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+_UA = {"User-Agent": "YTDailyShortsBot/2.0 (https://github.com/agrilearningpoint/yt-daily-shorts)"}
 
 
 @dataclass
@@ -16,107 +26,121 @@ class TopicDetails:
     summary: str
     source_url: str
     category: str
-    key_points: List[str]
+    key_points: List[str] = field(default_factory=list)
+    image_url: str = ""
+    seed: str = ""
 
 
-# Curated high-impact topics for 7-day calendar rotation as seeds
 EDITORIAL_SEEDS: Dict[str, List[str]] = {
     "monday": [
-        "Dr. B. R. Ambedkar and Constitution of India",
-        "Sardar Vallabhbhai Patel and Integration of India",
-        "Lal Bahadur Shastri and Jai Jawan Jai Kisan",
-        "Netaji Subhash Chandra Bose and Azad Hind Fauj",
-        "Atal Bihari Vajpayee and Golden Quadrilateral"
+        "B. R. Ambedkar", "Vallabhbhai Patel", "Lal Bahadur Shastri", "Subhas Chandra Bose",
+        "Atal Bihari Vajpayee", "Constitution of India", "Jawaharlal Nehru", "Indira Gandhi",
+        "Rajendra Prasad", "Sarojini Naidu", "Election Commission of India", "Panchayati raj in India",
+        "Rajya Sabha", "Fundamental rights in India", "Goods and Services Tax (India)",
     ],
     "tuesday": [
-        "Chandrayaan-3 and India's Moon Landing",
-        "Aditya-L1 India's Solar Mission",
-        "India's UPI and Digital Public Infrastructure",
-        "Param Supercomputers and India's AI Mission",
-        "Gaganyaan India's Manned Spaceflight Mission"
+        "Chandrayaan-3", "Aditya-L1", "Unified Payments Interface", "Gaganyaan", "Mangalyaan",
+        "PSLV", "Param (supercomputer)", "NavIC", "Aadhaar", "BrahMos", "Agni-V",
+        "Indian Space Research Organisation", "Tejas (aircraft)", "INS Vikrant (2013)", "Vande Bharat Express",
     ],
     "wednesday": [
-        "Ayurveda and Modern Medical Validation",
-        "Discovery of Malaria transmission in India by Ronald Ross",
-        "India's Indigenous Covid Vaccine Covaxin",
-        "Sushruta - Ancient Indian Father of Surgery",
-        "Eradication of Polio in India"
+        "Sushruta", "Ronald Ross", "Covaxin", "Polio eradication", "Ayurveda", "Charaka",
+        "Yoga", "Har Gobind Khorana", "Yellapragada Subbarao", "Anandi Gopal Joshi",
+        "Jagadish Chandra Bose", "Tuberculosis in India", "All India Institute of Medical Sciences, New Delhi",
+        "Ayushman Bharat Yojana", "Smallpox",
     ],
     "thursday": [
-        "Mahatma Gandhi and Non-Violent Satyagraha",
-        "Bhagat Singh and the Revolutionary Spirit",
-        "Birsa Munda and Tribal Freedom Struggle",
-        "A. P. J. Abdul Kalam - The Missile Man of India",
-        "Rani Lakshmibai and 1857 Revolt"
+        "Mahatma Gandhi", "Bhagat Singh", "Birsa Munda", "A. P. J. Abdul Kalam", "Rani of Jhansi",
+        "Swami Vivekananda", "Rabindranath Tagore", "Chhatrapati Shivaji Maharaj", "Maharana Pratap",
+        "Savitribai Phule", "Chandra Shekhar Azad", "Ashoka", "Chanakya", "Kalpana Chawla", "Milkha Singh",
     ],
     "friday": [
-        "Kailasa Temple Ellora - Monolithic Wonder",
-        "Konark Sun Temple Architectural Marvel",
-        "Nalanda University - Ancient Global Seat of Learning",
-        "Brihadisvara Temple Thanjavur Living Chola Architecture",
-        "Ajanta and Ellora Caves Heritage"
+        "Kailasa temple, Ellora", "Konark Sun Temple", "Nalanda mahavihara", "Brihadisvara Temple, Thanjavur",
+        "Ajanta Caves", "Taj Mahal", "Hampi", "Khajuraho Group of Monuments", "Qutb Minar",
+        "Kashi Vishwanath Temple", "Sanchi Stupa", "Red Fort", "Meenakshi Temple", "Rani ki vav",
+        "Indus Valley Civilisation",
     ],
     "saturday": [
-        "Invention of Zero by Ancient Indian Mathematician Aryabhata",
-        "Raman Effect - Sir C. V. Raman Nobel Prize",
-        "Jagadish Chandra Bose and Discovery of Plant Response and Radio Waves",
-        "Bose-Einstein Condensate - Satyendra Nath Bose",
-        "Srinivasa Ramanujan - The Mathematical Genius"
+        "0 (number)", "Raman scattering", "Aryabhata", "Satyendra Nath Bose", "Srinivasa Ramanujan",
+        "Homi J. Bhabha", "Vikram Sarabhai", "Chess", "Wootz steel", "Iron pillar of Delhi",
+        "Snakes and ladders", "Shampoo", "Buttons", "Brahmagupta", "Baudhayana sutras",
     ],
     "sunday": [
-        "India's Green Revolution and Food Security",
-        "White Revolution - Dr. Verghese Kurien and Amul",
-        "India's Transition to 5 Trillion Dollar Economy",
-        "India's Renewable Energy Push and Solar Alliance",
-        "Make in India and Semiconductor Manufacturing Hub"
-    ]
+        "Green Revolution in India", "Operation Flood", "Make in India", "International Solar Alliance",
+        "Economy of India", "Reserve Bank of India", "Bombay Stock Exchange", "Digital India",
+        "Indian Railways", "Pradhan Mantri Jan Dhan Yojana", "Startup India", "Swachh Bharat Mission",
+        "1991 Indian economic crisis", "White Revolution", "Amul",
+    ],
 }
 
 
-class TrendDiscovery:
-    """Discovers verified topics from Wikipedia API and editorial rotation."""
+def normalize_day(value: str) -> str:
+    """Accept 'Monday', 'monday', or a category string and return a weekday key."""
+    v = (value or "").strip().lower()
+    for d in WEEKDAYS:
+        if v.startswith(d):
+            return d
+    return ""
 
-    def __init__(self, timeout: int = 10):
+
+class TrendDiscovery:
+    def __init__(self, timeout: int = 12):
         self.timeout = timeout
 
-    def discover_calendar_topic(self, day_name: str, seed_index: int = 0) -> TopicDetails:
-        day_key = day_name.lower().strip()
-        candidates = EDITORIAL_SEEDS.get(day_key, EDITORIAL_SEEDS["tuesday"])
-        chosen_topic = candidates[seed_index % len(candidates)]
-        
-        # Enrich via Wikipedia API
-        return self.fetch_wikipedia_summary(chosen_topic, category=day_key)
+    # ------------------------------------------------------------------
+    def pick_seed(self, day_name: str, used: List[str]) -> Optional[str]:
+        day = normalize_day(day_name) or "tuesday"
+        used_l = {u.lower() for u in used}
+        for seed in EDITORIAL_SEEDS.get(day, []):
+            if seed.lower() not in used_l:
+                return seed
+        return None
 
-    def fetch_wikipedia_summary(self, query: str, category: str = "general") -> TopicDetails:
-        """Fetch summary and official link from Wikipedia REST API."""
-        encoded_query = query.replace(" ", "_")
-        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{encoded_query}"
-        headers = {"User-Agent": "YTDailyShortsBot/1.0 (educational-automation)"}
+    def discover_calendar_topic(self, day_name: str, used: Optional[List[str]] = None,
+                                seed_override: Optional[str] = None) -> TopicDetails:
+        day = normalize_day(day_name) or "tuesday"
+        seed = seed_override or self.pick_seed(day, used or []) or EDITORIAL_SEEDS[day][0]
+        details = self.fetch_wikipedia(seed, category=day)
+        details.seed = seed
+        return details
 
+    # ------------------------------------------------------------------
+    def _search_title(self, query: str) -> Optional[str]:
         try:
-            resp = requests.get(url, headers=headers, timeout=self.timeout)
-            if resp.status_code == 200:
-                data = resp.json()
-                title = data.get("title", query)
-                extract = data.get("extract", "")
-                page_url = data.get("content_urls", {}).get("desktop", {}).get("page", f"https://en.wikipedia.org/wiki/{encoded_query}")
-                
-                # Split extract into key points
-                sentences = [s.strip() for s in extract.split(". ") if len(s.strip()) > 15]
+            r = requests.get("https://en.wikipedia.org/w/api.php", headers=_UA, timeout=self.timeout, params={
+                "action": "query", "list": "search", "srsearch": query, "srlimit": 1, "format": "json"})
+            hits = r.json().get("query", {}).get("search", [])
+            return hits[0]["title"] if hits else None
+        except Exception as exc:
+            logger.warning("Wikipedia search failed for %s: %s", query, exc)
+            return None
+
+    def fetch_wikipedia(self, query: str, category: str = "general") -> TopicDetails:
+        title = self._search_title(query) or query
+        try:
+            r = requests.get("https://en.wikipedia.org/w/api.php", headers=_UA, timeout=self.timeout, params={
+                "action": "query", "prop": "extracts|pageimages|info", "titles": title, "redirects": 1,
+                "exintro": 1, "explaintext": 1, "piprop": "original", "inprop": "url", "format": "json"})
+            pages = r.json().get("query", {}).get("pages", {})
+            page = next(iter(pages.values())) if pages else {}
+            extract = (page.get("extract") or "").strip()
+            if extract:
+                sentences = [s.strip() for s in extract.replace("\n", " ").split(". ") if len(s.strip()) > 20]
                 return TopicDetails(
-                    title=title,
-                    summary=extract,
-                    source_url=page_url,
+                    title=page.get("title", title),
+                    summary=extract[:3000],
+                    source_url=page.get("fullurl") or f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}",
                     category=category,
-                    key_points=sentences[:4]
+                    key_points=sentences[:8],
+                    image_url=(page.get("original") or {}).get("source", ""),
                 )
         except Exception as exc:
-            logger.warning("Wikipedia fetch failed for '%s': %s", query, exc)
+            logger.warning("Wikipedia fetch failed for '%s': %s", title, exc)
 
         return TopicDetails(
-            title=query,
-            summary=f"{query} is a historically and culturally significant subject in India.",
-            source_url="https://en.wikipedia.org",
-            category=category,
-            key_points=[f"{query} has a deep legacy and major impact."]
-        )
+            title=query, summary="", source_url=f"https://en.wikipedia.org/wiki/{query.replace(' ', '_')}",
+            category=category, key_points=[])
+
+    # Back-compat
+    def fetch_wikipedia_summary(self, query: str, category: str = "general") -> TopicDetails:
+        return self.fetch_wikipedia(query, category)

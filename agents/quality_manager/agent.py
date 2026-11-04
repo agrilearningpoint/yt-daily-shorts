@@ -1,44 +1,42 @@
-"""Quality Manager Agent — assesses hook, Hindi duration, and repetition."""
+"""Quality Manager Agent — hard gate before rendering/publishing."""
 
 from __future__ import annotations
 
+import re
 from typing import Any
+
 from agents.base_agent import AgentResult, BaseAgent
+
+_BANNED = ("lorem", "placeholder", "TODO", "दृश्य 1 का", "हिंदी नरेशन")
 
 
 class QualityManagerAgent(BaseAgent):
-    """Enforces quality thresholds for duration, hook strength, and grammar."""
-
     name = "quality_manager"
 
     async def execute(self, **kwargs: Any) -> AgentResult:
-        script = kwargs.get("script", {})
+        script = kwargs.get("script", {}) or {}
+        verification = kwargs.get("verification", {}) or {}
         hook = script.get("hook", "")
         scenes = script.get("scenes", [])
-        total_duration = script.get("total_duration", 55.0)
+        words = len(hook.split()) + sum(len(s.get("narration", "").split()) for s in scenes)
+        est = words / 2.5
+        v = self.config.video
+        text = hook + " ".join(s.get("narration", "") for s in scenes)
 
-        checks = []
-
-        # 1. Hook check
-        hook_passed = len(hook.split()) >= 4
-        checks.append({"name": "hook_length", "passed": hook_passed, "score": 1.0 if hook_passed else 0.5})
-
-        # 2. Duration check (45 - 60 sec)
-        duration_passed = 40.0 <= total_duration <= 60.0
-        checks.append({"name": "duration_bounds", "passed": duration_passed, "score": 1.0 if duration_passed else 0.7})
-
-        # 3. Scene count (at least 2 scenes)
-        scene_passed = len(scenes) >= 2
-        checks.append({"name": "scene_density", "passed": scene_passed, "score": 1.0 if scene_passed else 0.5})
-
-        overall_score = sum(c["score"] for c in checks) / len(checks)
-        approved = overall_score >= 0.7
-
+        checks = [
+            {"name": "hook_length", "passed": 4 <= len(hook.split()) <= 22},
+            {"name": "duration_bounds", "passed": v.min_duration <= est <= v.max_duration + 6},
+            {"name": "scene_count", "passed": 2 <= len(scenes) <= 6},
+            {"name": "hindi_script", "passed": len(re.findall(r"[\u0900-\u097F]", text)) > len(text) * 0.4},
+            {"name": "no_placeholders", "passed": not any(b.lower() in text.lower() for b in _BANNED)},
+            {"name": "has_sources", "passed": bool(script.get("sources"))},
+            {"name": "fact_check", "passed": verification.get("verdict") in ("pass", "fixed", "skipped")},
+        ]
+        failed = [c["name"] for c in checks if not c["passed"]]
+        approved = not failed
         return AgentResult(
             success=approved,
-            data={
-                "overall_score": round(overall_score, 2),
-                "approved": approved,
-                "checks": checks
-            }
+            data={"approved": approved, "estimated_duration": round(est, 1), "checks": checks,
+                  "overall_score": round(1 - len(failed) / len(checks), 2)},
+            errors=[f"quality gate failed: {failed}"] if failed else [],
         )

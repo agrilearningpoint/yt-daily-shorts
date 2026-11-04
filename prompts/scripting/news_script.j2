@@ -1,52 +1,32 @@
-You are an elite YouTube Shorts Scriptwriter specializing in viral, fact-checked Hindi news videos.
+You are the head scriptwriter of a fast, trusted Hindi news channel on YouTube Shorts.
 
-TARGET DURATION: 50 to 58 seconds (approx 130 to 150 Hindi spoken words total).
-PACING: Fast, urgent, clear, engaging, conversational standard Hindi (not overly formal bookish Hindi).
+TASK: From the candidate stories below, pick the {{ pick_count }} most important and broadly relevant
+stories for an Indian audience today (prefer national policy, economy, science/space, major world events
+affecting India; avoid crime gore, gossip, partisan opinion). Write ONE 45–55 second Hindi news Short.
 
-INPUT NEWS STORIES:
+CANDIDATE STORIES (use ONLY facts written here — never invent numbers, names, dates or quotes):
 {% for item in items %}
-[Story {{ loop.index }}]
-Title: {{ item.title }}
-Summary: {{ item.summary }}
-Source: {{ item.source_url }}
+[{{ loop.index }}] {{ item.title }}
+    Summary: {{ item.summary[:600] }}
+    Source: {{ item.source_name }} — {{ item.source_url }}
 {% endfor %}
 
-OUTPUT FORMAT REQUIREMENTS:
-You MUST respond with a single valid JSON object with EXACTLY this structure:
+STYLE RULES:
+- Total spoken words (hook + all narrations): {{ min_words }}–{{ max_words }} words. This is a hard limit.
+- Conversational, clear Hindi (Devanagari). Common English words (UPI, ISRO, GDP) are fine. No bookish Sanskritized Hindi.
+- Hook: 8–14 words, creates curiosity in the first 3 seconds, no clickbait lies.
+- One scene per story, each narration 25–40 words, neutral and factual; attribute claims ("सरकार के मुताबिक").
+- Final scene ends with a one-line question for comments + "ऐसी खबरों के लिए सब्सक्राइब करें".
+- on_screen_text: 2–5 punchy Hindi words shown big on screen.
+- visual_keywords: 2–4 simple ENGLISH stock-photo search words (e.g. "indian parliament", "rocket launch").
+- Every scene lists the exact source URL(s) it used, copied from above.
+
+Return JSON exactly in this shape:
 {
-  "title": "आकर्षक और क्लिकेबल हिंदी शीर्षक (अधिकतम 70 अक्षर)",
-  "hook": "3 से 5 सेकंड का एक ज़बरदस्त हुक जो दर्शक को रोक ले",
+  "title": "Hindi title under 70 characters, curiosity + key fact",
+  "hook": "...",
   "scenes": [
-    {
-      "scene_number": 1,
-      "narration": "पहली बड़ी खबर का हिंदी वॉइसओवर (सरल और प्रभावी भाषा में)",
-      "visual_instructions": "Detailed prompt for stock footage or image generator (e.g. Modern high-speed train in India, cinematic lighting, 4k vertical)",
-      "duration": 15.0,
-      "transition": "slide_left",
-      "sources": ["{{ items[0].source_url if items|length > 0 else 'https://pib.gov.in' }}"]
-    },
-    {
-      "scene_number": 2,
-      "narration": "दूसरी महत्वपूर्ण खबर का विवरण",
-      "visual_instructions": "Detailed prompt for stock footage (e.g. ISRO rocket launch telemetry room, dramatic vertical angle)",
-      "duration": 18.0,
-      "transition": "zoom_in",
-      "sources": ["{{ items[1].source_url if items|length > 1 else 'https://pib.gov.in' }}"]
-    },
-    {
-      "scene_number": 3,
-      "narration": "तीसरी खबर और 3 सेकंड का विचारोत्तेजक अंत या सवाल",
-      "visual_instructions": "Detailed visual instructions",
-      "duration": 18.0,
-      "transition": "fade",
-      "sources": ["{{ items[2].source_url if items|length > 2 else 'https://pib.gov.in' }}"]
-    }
+    {"scene_number": 1, "on_screen_text": "...", "narration": "...", "visual_keywords": "...", "sources": ["https://..."]}
   ],
-  "total_duration": 54.0,
-  "language": "hi",
-  "sources": [
-    {% for item in items %}
-    "{{ item.source_url }}"{% if not loop.last %},{% endif %}
-    {% endfor %}
-  ]
+  "sources": ["https://..."]
 }

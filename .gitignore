@@ -78,3 +78,7 @@ desktop.ini
 *.temp
 .mypy_cache/
 .ruff_cache/
+
+# allow bundled royalty-free music
+!assets/music/*.mp3
+!assets/music/*.m4a

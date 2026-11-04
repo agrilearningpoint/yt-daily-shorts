@@ -1,25 +1,43 @@
 # ============================================================
 # YT Daily Shorts — Default Settings
-# ============================================================
-# Override any value via environment variables (YT_ prefix)
-# or by creating config/settings.local.yaml (gitignored).
+# Override via env vars (YT_ prefix) or config/settings.local.yaml.
 # ============================================================
 
 general:
   project_name: "yt-daily-shorts"
+  channel_name: "Daily Hindi Shorts"   # override with repo variable YT_CHANNEL_NAME
   timezone: "Asia/Kolkata"
   daily_video_count: 2
   max_video_count: 3
-  dry_run: true
+  dry_run: true          # GitHub scheduled runs set YT_DRY_RUN=false
+  strict_mode: false     # forced ON automatically when dry_run is false
   debug: false
+
+llm:
+  # Tried in order. Providers without a key are skipped; a failing
+  # provider/model falls through to the next one.
+  provider_order: ["gemini", "groq", "mistral", "openrouter", "nvidia", "ollama"]
+  models:
+    gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-2.5-flash"]
+    groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"]
+    mistral: ["mistral-medium-latest", "mistral-small-latest"]
+    openrouter: ["auto-free"]   # picks currently available ':free' models
+    nvidia: ["meta/llama-3.3-70b-instruct", "openai/gpt-oss-120b"]
+    ollama: ["gpt-oss:120b", "gpt-oss:20b"]
+  temperature: 0.7
+  max_tokens: 4096
+  timeout_sec: 90
 
 video:
   width: 1080
   height: 1920
   fps: 30
-  target_duration: 55
-  max_duration: 60
+  target_duration: 52
+  min_duration: 25
+  max_duration: 59
   output_format: "mp4"
+  background_music: true
+  music_volume: 0.10
 
 editorial_calendar:
   monday: "Indian Politics and Political Leaders"
@@ -32,8 +50,9 @@ editorial_calendar:
 
 tts:
   provider: "edge-tts"
-  voice: "hi-IN-SwaraNeural"
-  rate: "+0%"
+  voice: "hi-IN-MadhurNeural"
+  fallback_voice: "hi-IN-SwaraNeural"
+  rate: "+8%"
   pitch: "+0Hz"
 
 seo:
@@ -42,12 +61,15 @@ seo:
   default_hashtags:
     - "#shorts"
     - "#hindi"
-    - "#news"
-    - "#facts"
     - "#india"
+    - "#facts"
     - "#knowledge"
-    - "#dailynews"
 
 youtube:
-  default_privacy: "private"
-  category_id: "22"
+  default_privacy: "public"     # override with repo variable YT_YOUTUBE_PRIVACY
+  news_category_id: "25"        # News & Politics
+  knowledge_category_id: "27"   # Education
+  contains_synthetic_media: true
+
+telegram:
+  send_video: true
