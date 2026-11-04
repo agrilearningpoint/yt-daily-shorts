@@ -11,21 +11,26 @@ KEY POINTS:
 {% endfor %}
 SOURCE: {{ topic.source_url }}
 
-WRITE ONE 45–55 second Hindi Short:
+WRITE ONE 50–58 second Hindi Short that tells the COMPLETE story, so a viewer who knew nothing understands
+it fully by the end (what it is, where/when, how it happened, the surprising part, why it matters today):
 - Total spoken words (hook + all narrations): {{ min_words }}–{{ max_words }} words. Hard limit.
-- Hook (8–14 words): a surprising fact or question that stops the scroll.
-- 4 scenes: context → the surprising core fact → why it matters / impact → takeaway + comment question
-  + "ऐसे रोचक तथ्यों के लिए सब्सक्राइब करें".
-- Each narration 20–35 words, natural conversational Hindi in Devanagari, storytelling tone.
-- on_screen_text: 2–5 punchy Hindi words per scene.
-- visual_keywords: 2–4 simple ENGLISH image-search words for that scene (e.g. "konark sun temple", "ancient india sculpture").
+- Hook (8–12 words): a surprising fact or question that stops the scroll.
+- 6–7 scenes, in story order: 1) background/what it is  2) where & when  3) how it happened / how it works
+  4) the most surprising detail  5) a second fascinating fact  6) why it matters today
+  7) one-line takeaway + a comment question + "ऐसे रोचक तथ्यों के लिए सब्सक्राइब करें".
+- Each narration 15–22 words, natural conversational Hindi in Devanagari, storytelling tone, every
+  scene adds NEW information (no repetition, no filler). Use concrete names, numbers and dates from the research.
+- on_screen_text: 2–4 punchy Hindi words per scene (shown as a small title chip, not subtitles).
+- image_query: English Wikipedia article title whose photo best shows THIS scene (the place, person,
+  object, monument or event), e.g. "Konark Sun Temple", "Narasimhadeva I".
+- visual_keywords: 2–4 simple ENGLISH image-search words for that scene (backup).
 
 Return JSON exactly in this shape:
 {
   "title": "Hindi title under 70 characters",
   "hook": "...",
   "scenes": [
-    {"scene_number": 1, "on_screen_text": "...", "narration": "...", "visual_keywords": "...", "sources": ["{{ topic.source_url }}"]}
+    {"scene_number": 1, "on_screen_text": "...", "narration": "...", "image_query": "...", "visual_keywords": "...", "sources": ["{{ topic.source_url }}"]}
   ],
   "sources": ["{{ topic.source_url }}"]
 }

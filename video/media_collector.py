@@ -6,6 +6,7 @@ If nothing usable is found the scene composer draws a designed text card.
 from __future__ import annotations
 
 import hashlib
+import re
 import io
 import logging
 from dataclasses import dataclass
@@ -132,14 +133,45 @@ class MediaCollector:
             logger.debug("Wikipedia entity image failed for %s: %s", entity, exc)
         return None
 
+    # Government sources whose photos are free to reuse with credit (GODL-India / public domain).
+    # Private publishers' photos (agency/Getty/PTI) are NOT used: they cause copyright claims.
+    SAFE_ARTICLE_DOMAINS = ("pib.gov.in", "ddnews.gov.in", "isro.gov.in", "mygov.in", "pmindia.gov.in",
+                            "mea.gov.in", "india.gov.in", "nasa.gov")
+
+    def article_image(self, article_url: str, dest: Path) -> Optional[MediaAsset]:
+        """The story's own photo (og:image), only from copyright-safe government sources."""
+        try:
+            host = re.sub(r"^https?://", "", article_url or "").split("/")[0].lower()
+            if not any(host == d or host.endswith("." + d) for d in self.SAFE_ARTICLE_DOMAINS):
+                return None
+            r = requests.get(article_url, headers=_UA, timeout=self.timeout)
+            m = (re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', r.text, re.I)
+                 or re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', r.text, re.I))
+            url = m.group(1) if m else ""
+            if not url:  # PIB pages: first large content image
+                m2 = re.search(r'<img[^>]+src=["\']([^"\']+(?:\.jpe?g|\.png))["\']', r.text, re.I)
+                url = m2.group(1) if m2 else ""
+            if url and not url.startswith("http"):
+                url = "https://" + host + "/" + url.lstrip("/")
+            if url and self._download(url, dest):
+                return MediaAsset(str(dest), "article", f"Image: {host}", article_url)
+        except Exception as exc:
+            logger.debug("article image failed %s: %s", article_url, exc)
+        return None
+
     # ------------------------------------------------------------------
     def find_image(self, keywords: str, dest_path: str, preferred_url: str = "",
-                   entity: str = "") -> Optional[MediaAsset]:
+                   entity: str = "", article_url: str = "") -> Optional[MediaAsset]:
         dest = Path(dest_path)
         dest.parent.mkdir(parents=True, exist_ok=True)
         query = " ".join((keywords or "india").split()[:5])
         if preferred_url and self._download(preferred_url, dest):
             return MediaAsset(str(dest), "wikipedia", "Image: Wikipedia / Wikimedia Commons", preferred_url)
+        if article_url:
+            asset = self.article_image(article_url, dest)
+            if asset:
+                logger.info("Scene image from the story's own page %s", article_url)
+                return asset
         if entity and self.use_wikimedia:
             asset = self._wikipedia_entity(entity, dest)
             if asset:
@@ -174,7 +206,7 @@ class MediaCollector:
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futs = [pool.submit(self.find_image, r.get("keywords", ""), r["dest"], r.get("preferred", ""),
-                                r.get("entity", "")) for r in requests_]
+                                r.get("entity", ""), r.get("article", "")) for r in requests_]
             return [f.result() for f in futs]
 
     # Back-compat ------------------------------------------------------------

@@ -76,8 +76,10 @@ class VideoProducerAgent(BaseAgent):
             kw = s.get("visual_keywords", "")
             if not is_news and topic_kw and topic_kw.lower().split()[0] not in kw.lower():
                 kw = f"{topic_kw} {kw}"
+            art = (s.get("sources") or [""])[0] if is_news else ""
             beats.append({"kind": "item", "text": s["narration"], "chip": s.get("on_screen_text", ""),
-                          "entity": s.get("image_query", ""), "keywords": kw, "preferred": "", "n": i + 1})
+                          "entity": s.get("image_query", ""), "keywords": kw, "preferred": "", "n": i + 1,
+                          "article": art})
         if outro:
             beats.append({"kind": "outro", "text": outro, "chip": "", "entity": "", "keywords": "", "preferred": ""})
 
@@ -89,11 +91,12 @@ class VideoProducerAgent(BaseAgent):
         total_audio = sum(voice.durations)
         tempo = 1.0
         if total_audio > vcfg.max_duration:
-            tempo = min(total_audio / vcfg.max_duration, 1.3)
+            tempo = min(total_audio / vcfg.max_duration, 1.25)
             self.logger.warning("Voice %.1fs > %ss — tempo %.3f", total_audio, vcfg.max_duration, tempo)
 
         # ---- 2. one photo per beat (parallel) ---------------------------------
         reqs = [{"keywords": b["keywords"], "entity": b["entity"], "preferred": b["preferred"],
+                 "article": b.get("article", ""),
                  "dest": str(out_dir / f"src_{i:03d}.jpg")} for i, b in enumerate(beats) if b["kind"] != "outro"]
         assets_list = self.media.find_many(reqs)
         assets = {}

@@ -8,7 +8,7 @@ from agents.base_agent import AgentResult, BaseAgent
 from prompts import render_prompt
 
 # Natural Hindi narration speed (words/second)
-WORDS_PER_SEC = {"news": 2.8, "knowledge": 2.6}
+WORDS_PER_SEC = {"news": 2.5, "knowledge": 2.4}  # measured on Gemini TTS Hindi
 
 
 class PromptEngineerAgent(BaseAgent):
@@ -18,9 +18,9 @@ class PromptEngineerAgent(BaseAgent):
         v = self.config.video
         if video_type == "news":
             n = self.config.video.news_headline_count
-            return n * 5 + 12, n * 8 + 18
+            return n * 9 + 10, n * 11 + 14
         wps = WORDS_PER_SEC["knowledge"]
-        return int(v.target_duration * 0.85 * wps), int(v.max_duration * 0.95 * wps)
+        return int(v.target_duration * 0.95 * wps), int(v.max_duration * 1.15 * wps)
 
     async def execute(self, **kwargs: Any) -> AgentResult:
         video_type = kwargs.get("video_type", "news")

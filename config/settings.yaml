@@ -44,7 +44,7 @@ video:
   output_format: "mp4"
   background_music: true
   music_volume: 0.10
-  news_headline_count: 26     # 25+ headlines in a 60s news Short
+  news_headline_count: 15     # 15 complete stories (what + why) in a ~60s news Short
   show_headline_chips: true   # short 2-4 word title chip per story (NOT subtitles)
   sound_effects: true         # whoosh/pop on every cut
 

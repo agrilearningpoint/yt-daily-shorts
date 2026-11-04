@@ -8,7 +8,7 @@ GitHub Actions using free tiers only.
 
 | Video | Time (IST) | Cron (UTC) | Content |
 |---|---|---|---|
-| News | 05:30 | `0 0 * * *` | **"60 सेकंड में 26 बड़ी खबरें"** — 25+ fast headlines of the last 24h, each with its own photo (PIB, BBC Hindi, The Hindu, NDTV, Amar Ujala…) |
+| News | 05:30 | `0 0 * * *` | **"60 सेकंड में 15 बड़ी खबरें"** — 25+ fast headlines of the last 24h, each with its own photo (PIB, BBC Hindi, The Hindu, NDTV, Amar Ujala…) |
 | Knowledge | 14:30 | `0 9 * * *` | 7-day editorial calendar (105 curated topics + LLM-suggested fresh topics, never repeated) |
 
 ## Pipeline

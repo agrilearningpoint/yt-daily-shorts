@@ -92,7 +92,7 @@ class VideoConfig:
     quality: str = "high"
     background_music: bool = True
     music_volume: float = 0.10
-    news_headline_count: int = 26
+    news_headline_count: int = 15
     show_headline_chips: bool = True
     sound_effects: bool = True
 
