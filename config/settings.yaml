@@ -63,7 +63,7 @@ tts:
   gemini_models: ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"]
   gemini_voice: "auto"        # auto = Hindi news voice from Google's voice library, else Charon
   gemini_fallback_voice: "Charon"
-  news_style: "energetic, confident Hindi TV news anchor, fast crisp delivery, natural breathing"
+  news_style: "energetic, confident Hindi TV news anchor reading a rapid headline bulletin, brisk fast pace, crisp delivery, natural breathing, very short pause between headlines"
   knowledge_style: "warm, curious Hindi storyteller, natural conversational pace, expressive"
   provider: "edge-tts"
   voice: "hi-IN-MadhurNeural"

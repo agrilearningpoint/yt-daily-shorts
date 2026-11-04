@@ -153,7 +153,7 @@ class ScriptManagerAgent(BaseAgent):
                 return AgentResult(success=False, errors=last_problems or ["no script"])
             self.logger.warning("Accepting script with soft issues: %s", last_problems)
 
-        script.total_duration = round(script.word_count() / (3.3 if video_type == "news" else 2.6), 1)
+        script.total_duration = round(script.word_count() / (2.8 if video_type == "news" else 2.6), 1)
         return AgentResult(success=True,
                            data={"script": script.to_dict(), "llm": getattr(self.llm, "last_used", "")},
                            metadata={"video_type": video_type})

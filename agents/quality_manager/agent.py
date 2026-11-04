@@ -21,7 +21,7 @@ class QualityManagerAgent(BaseAgent):
         words = len(hook.split()) + sum(len(s.get("narration", "").split()) for s in scenes)
         is_news = script.get("video_type") == "news"
         words += len(script.get("outro", "").split())
-        est = words / (3.3 if is_news else 2.6)
+        est = words / (2.8 if is_news else 2.6)
         v = self.config.video
         min_scenes = v.news_headline_count - 1 if is_news else 2
         max_scenes = 40 if is_news else 6

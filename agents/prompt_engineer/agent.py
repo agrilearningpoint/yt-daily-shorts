@@ -8,7 +8,7 @@ from agents.base_agent import AgentResult, BaseAgent
 from prompts import render_prompt
 
 # Natural Hindi narration speed (words/second)
-WORDS_PER_SEC = {"news": 3.3, "knowledge": 2.6}
+WORDS_PER_SEC = {"news": 2.8, "knowledge": 2.6}
 
 
 class PromptEngineerAgent(BaseAgent):

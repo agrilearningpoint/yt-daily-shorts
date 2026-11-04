@@ -89,7 +89,7 @@ class VideoProducerAgent(BaseAgent):
         total_audio = sum(voice.durations)
         tempo = 1.0
         if total_audio > vcfg.max_duration:
-            tempo = min(total_audio / vcfg.max_duration, 1.22)
+            tempo = min(total_audio / vcfg.max_duration, 1.3)
             self.logger.warning("Voice %.1fs > %ss — tempo %.3f", total_audio, vcfg.max_duration, tempo)
 
         # ---- 2. one photo per beat (parallel) ---------------------------------
