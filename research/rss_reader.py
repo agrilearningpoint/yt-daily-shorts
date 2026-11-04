@@ -9,7 +9,11 @@ from typing import List, Optional
 
 import feedparser
 import requests
-from dateutil import parser as date_parser
+
+try:
+    from dateutil import parser as date_parser
+except ImportError:
+    date_parser = None
 
 logger = logging.getLogger("research.rss")
 
