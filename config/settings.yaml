@@ -17,15 +17,21 @@ llm:
   # Tried in order. Providers without a key are skipped; a failing
   # provider/model falls through to the next one.
   provider_order: ["gemini", "groq", "openrouter", "mistral", "nvidia", "ollama"]
+  # "auto" = ask the provider's /models API at run time and pick the best
+  # current free model, so retired models never break the pipeline.
+  # Ids listed before "auto" are preferred while the provider still lists them.
+  # Verified free on official pages (Nov 2026): Gemini 3.8/3.6 Flash, 3.5/3.1
+  # Flash-Lite, 2.5 Flash; Groq gpt-oss-120b/20b; NVIDIA "Free Endpoint" models;
+  # OpenRouter ":free" models; Mistral Free mode (low limits).
   models:
-    gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-2.5-flash"]
-    groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
-    mistral: ["mistral-medium-latest", "mistral-small-latest"]
-    openrouter: ["auto-free"]   # picks currently available ':free' models
-    nvidia: []   # old NIM models returned 410 Gone (Nov 2026); add a current model id to enable
-    ollama: []   # Ollama Cloud needs paid credits (HTTP 402); add models after subscribing
+    gemini: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "auto"]
+    groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "auto"]
+    openrouter: ["auto"]
+    mistral: ["mistral-small-latest", "auto"]
+    nvidia: ["auto"]
+    ollama: []   # Ollama Cloud returned HTTP 402 (paid credits needed); set ["auto"] after subscribing
   temperature: 0.7
-  max_tokens: 4096
+  max_tokens: 12000
   timeout_sec: 90
 
 video:
@@ -34,10 +40,13 @@ video:
   fps: 30
   target_duration: 52
   min_duration: 25
-  max_duration: 59
+  max_duration: 58
   output_format: "mp4"
   background_music: true
   music_volume: 0.10
+  news_headline_count: 26     # 25+ headlines in a 60s news Short
+  show_headline_chips: true   # short 2-4 word title chip per story (NOT subtitles)
+  sound_effects: true         # whoosh/pop on every cut
 
 editorial_calendar:
   monday: "Indian Politics and Political Leaders"
@@ -49,6 +58,13 @@ editorial_calendar:
   sunday: "Economy, Society and World Affairs"
 
 tts:
+  # Human-like voice first (Gemini TTS, free tier), Microsoft edge-tts as fallback.
+  provider_order: ["gemini", "edge"]
+  gemini_models: ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"]
+  gemini_voice: "auto"        # auto = Hindi news voice from Google's voice library, else Charon
+  gemini_fallback_voice: "Charon"
+  news_style: "energetic, confident Hindi TV news anchor, fast crisp delivery, natural breathing"
+  knowledge_style: "warm, curious Hindi storyteller, natural conversational pace, expressive"
   provider: "edge-tts"
   voice: "hi-IN-MadhurNeural"
   fallback_voice: "hi-IN-SwaraNeural"

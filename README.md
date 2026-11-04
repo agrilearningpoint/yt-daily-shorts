@@ -8,20 +8,25 @@ GitHub Actions using free tiers only.
 
 | Video | Time (IST) | Cron (UTC) | Content |
 |---|---|---|---|
-| News | 05:30 | `0 0 * * *` | Top 3 stories of the last 24h from PIB, DD News, BBC Hindi, The Hindu, Indian Express, NDTV, Amar Ujala |
+| News | 05:30 | `0 0 * * *` | **"60 सेकंड में 26 बड़ी खबरें"** — 25+ fast headlines of the last 24h, each with its own photo (PIB, BBC Hindi, The Hindu, NDTV, Amar Ujala…) |
 | Knowledge | 14:30 | `0 9 * * *` | 7-day editorial calendar (105 curated topics + LLM-suggested fresh topics, never repeated) |
 
 ## Pipeline
 
 ```
 research ─► prompt ─► script (LLM, validated) ─► fact-check (LLM, auto-corrects) ─► QUALITY GATE
-   ─► theme ─► per-scene Hindi TTS (word timings) ─► images (Pexels/Pixabay/Wikipedia/Commons/Openverse)
-   ─► Ken Burns scenes + xfade transitions + word-highlight captions + ducked music ─► MP4 1080x1920
+   ─► theme ─► human-like Hindi voice (Gemini TTS, edge-tts fallback) split per beat by real pauses
+   ─► one photo per beat (Wikipedia entity image / Commons / Openverse / Pexels / Pixabay)
+   ─► motion graphics: Ken Burns + white-flash cuts + sliding headline chip + counter + progress bar
+   ─► synthesized whoosh/pop SFX + ducked music (no subtitles) ─► MP4 1080x1920
    ─► SEO (LLM) ─► YouTube upload ─► Telegram preview + daily report ─► history/analytics (cached)
 ```
 
-* **Multi-LLM fallback**: Gemini → Groq → Mistral → OpenRouter (free models) → NVIDIA NIM → Ollama Cloud.
-  Any provider without a key is skipped; failures fall through automatically. Models live in `config/settings.yaml`.
+* **Multi-LLM fallback + auto models**: Gemini → Groq → OpenRouter (free) → Mistral → NVIDIA NIM (→ Ollama).
+  `"auto"` asks each provider's `/models` API at run time and picks the best current free model, so a retired
+  model never breaks the pipeline; dead models (404/410/402) are skipped for the rest of the run.
+* **Human-like voice**: Gemini 3.8 Flash TTS (free tier, Hindi, style-directed "TV news anchor"), voice picked
+  automatically from Google's Hindi voice library; Microsoft edge-tts only as fallback.
 * **Strict mode (automatic on live runs)**: no mock script, silent audio, offline news or fake MP4 can ever be
   published. Any failed gate stops that video and sends a Telegram alert.
 * **Proper Devanagari**: bundled Mukta fonts (OFL) + Pillow/raqm shaping + libass captions.

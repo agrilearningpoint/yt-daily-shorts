@@ -45,3 +45,9 @@ def test_extract_json_tolerant():
 
 def test_config_validation():
     assert isinstance(validate_config(AppConfig()), list)
+
+
+def test_version_ranking_prefers_newest_flash():
+    from core.llm_client import _version_key
+    ids = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3-flash-preview"]
+    assert sorted(ids, key=_version_key)[0] == "gemini-3.8-flash"

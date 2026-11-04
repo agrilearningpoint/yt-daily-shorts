@@ -7,27 +7,34 @@ from typing import Any
 from agents.base_agent import AgentResult, BaseAgent
 from prompts import render_prompt
 
-# Hindi edge-tts at +8% speaks roughly 2.5 words/second.
-WORDS_PER_SEC = 2.5
+# Natural Hindi narration speed (words/second)
+WORDS_PER_SEC = {"news": 3.3, "knowledge": 2.6}
 
 
 class PromptEngineerAgent(BaseAgent):
     name = "prompt_engineer"
 
-    def word_bounds(self) -> tuple:
+    def word_bounds(self, video_type: str = "knowledge") -> tuple:
         v = self.config.video
-        return int(v.target_duration * 0.85 * WORDS_PER_SEC), int(v.max_duration * 0.92 * WORDS_PER_SEC)
+        if video_type == "news":
+            n = self.config.video.news_headline_count
+            return n * 5 + 12, n * 8 + 18
+        wps = WORDS_PER_SEC["knowledge"]
+        return int(v.target_duration * 0.85 * wps), int(v.max_duration * 0.95 * wps)
 
     async def execute(self, **kwargs: Any) -> AgentResult:
         video_type = kwargs.get("video_type", "news")
         research_data = kwargs.get("research_data", {}) or {}
         category = kwargs.get("topic_category", "")
         items = research_data.get("items", [])
-        min_w, max_w = self.word_bounds()
+        min_w, max_w = self.word_bounds(video_type)
 
         if video_type == "news":
+            n = self.config.video.news_headline_count
+            if len(items) < n:
+                return AgentResult(success=False, errors=[f"only {len(items)} candidate stories, need {n}"])
             prompt = render_prompt("scripting/news_script.j2", {
-                "items": items, "pick_count": 3, "min_words": min_w, "max_words": max_w})
+                "items": items, "count": n, "seconds": 60, "min_words": min_w, "max_words": max_w})
         else:
             if not items:
                 return AgentResult(success=False, errors=["No research topic available"])

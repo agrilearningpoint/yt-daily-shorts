@@ -184,7 +184,10 @@ class DailyOrchestrator:
             if self.config.telegram.send_video:
                 self.notifier.send_video(production.get("video_path", ""), caption, thumb.get("thumbnail_path"))
             self._summary_cache[vid] = {"duration": production.get("duration", 0), "sources": script.get("sources", []),
-                                        "llm": llm_used, "quality": quality.get("overall_score")}
+                                        "llm": llm_used, "quality": quality.get("overall_score"),
+                                        "voice": production.get("voice_provider", ""),
+                                        "items": len(script.get("scenes", [])),
+                                        "images": production.get("images_found", 0)}
             logger.info("✅ %s done: %s", vid, yt_url)
 
         except Exception as exc:

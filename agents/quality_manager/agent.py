@@ -19,14 +19,18 @@ class QualityManagerAgent(BaseAgent):
         hook = script.get("hook", "")
         scenes = script.get("scenes", [])
         words = len(hook.split()) + sum(len(s.get("narration", "").split()) for s in scenes)
-        est = words / 2.5
+        is_news = script.get("video_type") == "news"
+        words += len(script.get("outro", "").split())
+        est = words / (3.3 if is_news else 2.6)
         v = self.config.video
+        min_scenes = v.news_headline_count - 1 if is_news else 2
+        max_scenes = 40 if is_news else 6
         text = hook + " ".join(s.get("narration", "") for s in scenes)
 
         checks = [
-            {"name": "hook_length", "passed": 4 <= len(hook.split()) <= 22},
-            {"name": "duration_bounds", "passed": v.min_duration <= est <= v.max_duration + 6},
-            {"name": "scene_count", "passed": 2 <= len(scenes) <= 6},
+            {"name": "hook_length", "passed": 3 <= len(hook.split()) <= 22},
+            {"name": "duration_bounds", "passed": v.min_duration <= est <= v.max_duration * 1.3},
+            {"name": "scene_count", "passed": min_scenes <= len(scenes) <= max_scenes},
             {"name": "hindi_script", "passed": len(re.findall(r"[\u0900-\u097F]", text)) > len(text) * 0.4},
             {"name": "no_placeholders", "passed": not any(b.lower() in text.lower() for b in _BANNED)},
             {"name": "has_sources", "passed": bool(script.get("sources"))},

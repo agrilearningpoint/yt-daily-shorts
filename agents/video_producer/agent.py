@@ -1,4 +1,9 @@
-"""Video Producer Agent — voice, visuals, word-synced captions and final render."""
+"""Video Producer Agent — human-like voice, one photo per beat, motion graphics, render.
+
+News:      hook card -> 25+ fast headline beats (photo + chip + counter) -> subscribe card
+Knowledge: hook -> 4 story scenes -> (outro inside last scene)
+No subtitles are burned in.
+"""
 
 from __future__ import annotations
 
@@ -11,9 +16,8 @@ import pytz
 from agents.base_agent import AgentResult, BaseAgent
 from video.media_collector import MediaCollector
 from video.renderer import SceneClip, VideoRenderer
-from video.scene_composer import SceneComposer
-from video.subtitle_generator import SubtitleGenerator
-from video.tts import TTSEngine
+from video.scene_composer import SceneComposer, compose_chip, compose_frame, compose_title_card
+from video.tts import GeminiTTS, TTSEngine, probe_duration
 
 HINDI_MONTHS = ["जनवरी", "फरवरी", "मार्च", "अप्रैल", "मई", "जून", "जुलाई", "अगस्त", "सितंबर", "अक्टूबर", "नवंबर", "दिसंबर"]
 CATEGORY_BADGES = {
@@ -28,12 +32,15 @@ class VideoProducerAgent(BaseAgent):
 
     def __init__(self, config, state_manager):
         super().__init__(config, state_manager)
-        self.tts = TTSEngine(voice=config.tts.voice, rate=config.tts.rate, pitch=config.tts.pitch,
-                             fallback_voice=config.tts.fallback_voice, strict=config.general.strict_mode)
+        t = config.tts
+        gemini = None
+        if config.llm.gemini_api_key and "gemini" in t.provider_order:
+            gemini = GeminiTTS(config.llm.gemini_api_key, t.gemini_models, t.gemini_voice, t.gemini_fallback_voice)
+        self.tts = TTSEngine(voice=t.voice, rate=t.rate, pitch=t.pitch, fallback_voice=t.fallback_voice,
+                             strict=config.general.strict_mode, provider_order=t.provider_order, gemini=gemini)
         self.media = MediaCollector(pexels_key=config.media.pexels_api_key, pixabay_key=config.media.pixabay_api_key,
                                     cache_dir=config.media.cache_dir, use_wikimedia=config.media.use_wikimedia,
                                     use_openverse=config.media.use_openverse)
-        self.subs = SubtitleGenerator()
         self.renderer = VideoRenderer(config.video.width, config.video.height, config.video.fps)
 
     def _date_label(self) -> str:
@@ -46,85 +53,100 @@ class VideoProducerAgent(BaseAgent):
         research: Dict[str, Any] = kwargs.get("research_data", {}) or {}
         video_id = kwargs.get("video_id", "daily_short")
         video_type = script.get("video_type", "news")
+        is_news = video_type == "news"
         out_dir = Path("output") / video_id
         out_dir.mkdir(parents=True, exist_ok=True)
+        vcfg = self.config.video
 
         scenes: List[Dict[str, Any]] = script.get("scenes", [])
         hook = script.get("hook", "").strip()
+        outro = script.get("outro", "").strip()
 
-        # 1. Voice, one segment per beat (hook + scenes) -----------------------
-        texts = ([hook] if hook else []) + [s["narration"] for s in scenes]
-        segments = await self.tts.synthesize_segments(texts, str(out_dir))
-        voice_path = self.tts.concat_audio(segments, str(out_dir / "voiceover.m4a"))
-        self.tts.dump_timings(segments, str(out_dir / "timings.json"))
-        total_audio = sum(s.duration for s in segments)
-
-        # Keep the Short inside the limit: speed up slightly if needed (max 15%).
-        tempo = 1.0
-        max_d = float(self.config.video.max_duration)
-        if total_audio > max_d:
-            tempo = min(total_audio / max_d, 1.15)
-            self.logger.warning("Audio %.1fs > %.0fs, applying tempo %.3f", total_audio, max_d, tempo)
-
-        # 2. Absolute word timings -> captions ---------------------------------
-        words = []
-        t0 = 0.0
-        for seg in segments:
-            for w in seg.words:
-                words.append({"word": w.word, "start": (t0 + w.start) / tempo, "end": (t0 + w.end) / tempo})
-            t0 += seg.duration
-        captions = self.subs.generate_ass(words, str(out_dir / "captions.ass"),
-                                          highlight_color=theme.get("caption_highlight", "#FFD60A"))
-        srt = self.subs.generate_srt_from_words(words, str(out_dir / "subtitles.srt"))
-
-        # 3. Visuals ----------------------------------------------------------
-        composer = SceneComposer(theme, channel_name=self.config.general.channel_name)
+        # ---- beats -----------------------------------------------------------
         items = research.get("items", [])
-        lead_image = items[0].get("image_url", "") if (video_type == "knowledge" and items) else ""
-        topic_kw = (items[0].get("seed") or items[0].get("title", "")) if (video_type == "knowledge" and items) else ""
-        badge = "आज की बड़ी खबरें" if video_type == "news" else CATEGORY_BADGES.get(research.get("day_name", ""), "रोचक जानकारी")
-        date_label = self._date_label()
-
-        beats = []
+        lead_image = items[0].get("image_url", "") if (not is_news and items) else ""
+        topic_kw = (items[0].get("seed") or items[0].get("title", "")) if (not is_news and items) else ""
+        beats: List[Dict[str, Any]] = []
         if hook:
-            beats.append({"headline": scenes[0].get("on_screen_text", "") if video_type == "knowledge" else script.get("title", "")[:60],
+            beats.append({"kind": "hook", "text": hook, "chip": "",
+                          "entity": scenes[0].get("image_query", "") if scenes else topic_kw,
                           "keywords": scenes[0].get("visual_keywords", "") if scenes else topic_kw,
                           "preferred": lead_image})
         for i, s in enumerate(scenes):
             kw = s.get("visual_keywords", "")
-            if video_type == "knowledge" and topic_kw and topic_kw.lower().split()[0] not in kw.lower():
+            if not is_news and topic_kw and topic_kw.lower().split()[0] not in kw.lower():
                 kw = f"{topic_kw} {kw}"
-            beats.append({"headline": s.get("on_screen_text", ""), "keywords": kw,
-                          "preferred": lead_image if (i == 0 and not hook) else ""})
+            beats.append({"kind": "item", "text": s["narration"], "chip": s.get("on_screen_text", ""),
+                          "entity": s.get("image_query", ""), "keywords": kw, "preferred": "", "n": i + 1})
+        if outro:
+            beats.append({"kind": "outro", "text": outro, "chip": "", "entity": "", "keywords": "", "preferred": ""})
 
+        # ---- 1. voice (human-like, one pass) ----------------------------------
+        style = self.config.tts.news_style if is_news else self.config.tts.knowledge_style
+        texts = [b["text"] for b in beats]
+        voice = await self.tts.voice_beats(texts, str(out_dir), style=style)
+        self.tts.dump_timings(texts, voice.durations, voice.provider, str(out_dir / "timings.json"))
+        total_audio = sum(voice.durations)
+        tempo = 1.0
+        if total_audio > vcfg.max_duration:
+            tempo = min(total_audio / vcfg.max_duration, 1.22)
+            self.logger.warning("Voice %.1fs > %ss — tempo %.3f", total_audio, vcfg.max_duration, tempo)
+
+        # ---- 2. one photo per beat (parallel) ---------------------------------
+        reqs = [{"keywords": b["keywords"], "entity": b["entity"], "preferred": b["preferred"],
+                 "dest": str(out_dir / f"src_{i:03d}.jpg")} for i, b in enumerate(beats) if b["kind"] != "outro"]
+        assets_list = self.media.find_many(reqs)
+        assets = {}
+        j = 0
+        for i, b in enumerate(beats):
+            if b["kind"] != "outro":
+                assets[i] = assets_list[j]
+                j += 1
+
+        # ---- 3. motion-graphics layers --------------------------------------
+        composer = SceneComposer(theme, channel_name=self.config.general.channel_name)
+        badge = "आज की बड़ी खबरें" if is_news else CATEGORY_BADGES.get(research.get("day_name", ""), "रोचक जानकारी")
+        date_label = self._date_label()
+        n_items = sum(1 for b in beats if b["kind"] == "item")
         clips: List[SceneClip] = []
         credits: List[str] = []
         first_image = None
-        for i, (beat, seg) in enumerate(zip(beats, segments)):
-            asset = self.media.find_image(beat["keywords"], str(out_dir / f"src_{i:02d}.jpg"), beat["preferred"])
+        for i, (b, dur) in enumerate(zip(beats, voice.durations)):
+            asset = assets.get(i)
             if asset:
                 credits.append(asset.credit + (f" — {asset.page_url}" if asset.page_url else ""))
                 first_image = first_image or asset.path
-            bg = composer.compose_background(asset.path if asset else None, str(out_dir / f"bg_{i:02d}.jpg"),
-                                             seed=i, card_text="" if asset else beat["headline"])
-            ov = composer.compose_overlay(str(out_dir / f"ov_{i:02d}.png"),
-                                          headline=beat["headline"] if asset else "",
-                                          badge=badge, index=i, total=len(beats), date_label=date_label)
-            clips.append(SceneClip(bg, ov, seg.duration))
+            bg = str(out_dir / f"bg_{i:03d}.jpg")
+            chip = None
+            if b["kind"] == "hook":
+                big = script.get("title", "")[:60] if is_news else (scenes[0].get("on_screen_text", "") if scenes else "")
+                compose_title_card(composer, bg, big or hook[:40], date_label, asset.path if asset else None, seed=i)
+            elif b["kind"] == "outro":
+                compose_title_card(composer, bg, "सब्सक्राइब करें", self.config.general.channel_name,
+                                   first_image, seed=i)
+            else:
+                composer.compose_background(asset.path if asset else None, bg, seed=i,
+                                            card_text="" if asset else b["chip"])
+                if vcfg.show_headline_chips and b["chip"] and asset:
+                    chip = compose_chip(composer, str(out_dir / f"chip_{i:03d}.png"), b["chip"])
+            counter = f"{b['n']:02d}/{n_items}" if (is_news and b["kind"] == "item") else ""
+            frame = compose_frame(composer, str(out_dir / f"ov_{i:03d}.png"),
+                                  badge if b["kind"] != "outro" else "", i, len(beats), counter,
+                                  date_label if not is_news else "")
+            clips.append(SceneClip(bg, frame, dur, chip=chip))
 
-        # 4. Render -------------------------------------------------------------
+        # ---- 4. render ---------------------------------------------------------
         final_path = str(out_dir / "final_short.mp4")
-        self.renderer.render(clips, voice_path, captions, final_path, transition=theme.get("transition", "fade"),
-                             music=self.config.video.background_music, music_volume=self.config.video.music_volume,
-                             tempo=tempo)
+        self.renderer.render(clips, voice.audio_path, final_path, music=vcfg.background_music,
+                             music_volume=vcfg.music_volume, tempo=tempo, sfx=vcfg.sound_effects)
 
-        from video.tts import probe_duration
         duration = probe_duration(final_path)
         ok = Path(final_path).exists() and Path(final_path).stat().st_size > 200_000 and duration >= 10
         return AgentResult(
             success=ok,
-            data={"video_path": final_path, "audio_path": voice_path, "subtitle_path": srt,
-                  "captions_path": captions, "duration": round(duration, 1), "first_image": first_image,
-                  "media_credits": list(dict.fromkeys(credits))},
+            data={"video_path": final_path, "audio_path": voice.audio_path, "duration": round(duration, 1),
+                  "first_image": first_image, "media_credits": list(dict.fromkeys(credits)),
+                  "voice_provider": voice.provider, "beats": len(beats),
+                  "images_found": sum(1 for a in assets.values() if a)},
             errors=[] if ok else ["rendered video missing or too small"],
         )

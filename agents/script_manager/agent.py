@@ -21,6 +21,7 @@ class Scene:
     narration: str = ""
     on_screen_text: str = ""
     visual_keywords: str = ""
+    image_query: str = ""
     sources: List[str] = field(default_factory=list)
 
 
@@ -33,20 +34,27 @@ class Script:
     language: str = "hi"
     video_type: str = ""
     sources: List[str] = field(default_factory=list)
+    outro: str = ""
 
     def word_count(self) -> int:
-        return len(self.hook.split()) + sum(len(s.narration.split()) for s in self.scenes)
+        return (len(self.hook.split()) + sum(len(s.narration.split()) for s in self.scenes)
+                + len(self.outro.split()))
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "title": self.title, "hook": self.hook, "scenes": [vars(s) for s in self.scenes],
             "total_duration": self.total_duration, "language": self.language,
             "video_type": self.video_type, "sources": self.sources, "word_count": self.word_count(),
+            "outro": self.outro,
         }
 
 
-def parse_script(data: Dict[str, Any], video_type: str, fallback_sources: List[str]) -> Script:
-    sources = [s for s in (data.get("sources") or fallback_sources) if isinstance(s, str) and s.startswith("http")]
+def parse_script(data: Dict[str, Any], video_type: str, fallback_sources: List[str],
+                 items: List[Dict[str, Any]] = None) -> Script:
+    items = items or []
+    sources = [s for s in (data.get("sources") or []) if isinstance(s, str) and s.startswith("http")]
+    if not sources and video_type != "news":
+        sources = [s for s in fallback_sources if isinstance(s, str) and s.startswith("http")]
     scenes = []
     for idx, sc in enumerate(data.get("scenes") or [], 1):
         if not isinstance(sc, dict):
@@ -54,17 +62,27 @@ def parse_script(data: Dict[str, Any], video_type: str, fallback_sources: List[s
         narration = str(sc.get("narration", "")).strip()
         if not narration:
             continue
-        sc_sources = [s for s in (sc.get("sources") or sources) if isinstance(s, str) and s.startswith("http")]
+        sc_sources = [s for s in (sc.get("sources") or []) if isinstance(s, str) and s.startswith("http")]
+        src = sc.get("src")
+        try:
+            if src is not None and 1 <= int(str(src).strip("[] ")) <= len(items):
+                sc_sources = [items[int(str(src).strip("[] ")) - 1].get("source_url", "")] + sc_sources
+        except ValueError:
+            pass
+        if not sc_sources and video_type != "news":
+            sc_sources = list(sources)
         scenes.append(Scene(
             scene_number=idx,
             narration=narration,
             on_screen_text=str(sc.get("on_screen_text", "")).strip()[:40],
             visual_keywords=str(sc.get("visual_keywords") or sc.get("visual_instructions") or "").strip()[:80],
-            sources=sc_sources,
+            image_query=str(sc.get("image_query", "")).strip()[:80],
+            sources=[u for u in dict.fromkeys(sc_sources) if u],
         ))
     all_sources = list(dict.fromkeys(sources + [u for s in scenes for u in s.sources]))
     return Script(title=str(data.get("title", "")).strip(), hook=str(data.get("hook", "")).strip(),
-                  scenes=scenes, video_type=video_type, sources=all_sources)
+                  scenes=scenes, video_type=video_type, sources=all_sources,
+                  outro=str(data.get("outro", "")).strip())
 
 
 class ScriptManagerAgent(BaseAgent):
@@ -76,6 +94,13 @@ class ScriptManagerAgent(BaseAgent):
 
     def validate(self, script: Script, min_w: int, max_w: int) -> List[str]:
         problems = []
+        if script.video_type == "news":
+            need = self.config.video.news_headline_count - 1
+            if len(script.scenes) < need:
+                problems.append(f"only {len(script.scenes)} stories, need at least {need}")
+            long_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) > 12]
+            if long_lines:
+                problems.append(f"stories {long_lines[:5]} too long: keep each narration 5-8 words")
         if not script.title:
             problems.append("missing title")
         if len(script.hook.split()) < 4:
@@ -114,7 +139,7 @@ class ScriptManagerAgent(BaseAgent):
             except Exception as exc:
                 self.logger.error("Script generation failed: %s", exc)
                 return AgentResult(success=False, errors=[str(exc)])
-            script = parse_script(data, video_type, fallback_sources)
+            script = parse_script(data, video_type, fallback_sources, research_data.get("items", []))
             last_problems = self.validate(script, min_w, max_w)
             if not last_problems:
                 break
@@ -128,7 +153,7 @@ class ScriptManagerAgent(BaseAgent):
                 return AgentResult(success=False, errors=last_problems or ["no script"])
             self.logger.warning("Accepting script with soft issues: %s", last_problems)
 
-        script.total_duration = round(script.word_count() / 2.5, 1)
+        script.total_duration = round(script.word_count() / (3.3 if video_type == "news" else 2.6), 1)
         return AgentResult(success=True,
                            data={"script": script.to_dict(), "llm": getattr(self.llm, "last_used", "")},
                            metadata={"video_type": video_type})

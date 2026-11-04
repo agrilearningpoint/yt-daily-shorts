@@ -115,13 +115,36 @@ class MediaCollector:
             logger.warning("Openverse error: %s", exc)
         return None
 
+    def _wikipedia_entity(self, entity: str, dest: Path) -> Optional[MediaAsset]:
+        """Lead image of the entity's English Wikipedia article (free-licensed, very relevant)."""
+        try:
+            r = requests.get("https://en.wikipedia.org/w/api.php", headers=_UA, timeout=self.timeout, params={
+                "action": "query", "format": "json", "generator": "search", "gsrsearch": entity, "gsrlimit": 1,
+                "prop": "pageimages|info", "piprop": "original", "inprop": "url", "redirects": 1})
+            for page in r.json().get("query", {}).get("pages", {}).values():
+                src = (page.get("original") or {}).get("source", "")
+                if src.lower().endswith((".svg", ".gif")):
+                    continue
+                if src and self._download(src, dest):
+                    return MediaAsset(str(dest), "wikipedia", f"{page.get('title', entity)} — Wikipedia/Wikimedia Commons",
+                                      page.get("fullurl", ""))
+        except Exception as exc:
+            logger.debug("Wikipedia entity image failed for %s: %s", entity, exc)
+        return None
+
     # ------------------------------------------------------------------
-    def find_image(self, keywords: str, dest_path: str, preferred_url: str = "") -> Optional[MediaAsset]:
+    def find_image(self, keywords: str, dest_path: str, preferred_url: str = "",
+                   entity: str = "") -> Optional[MediaAsset]:
         dest = Path(dest_path)
         dest.parent.mkdir(parents=True, exist_ok=True)
         query = " ".join((keywords or "india").split()[:5])
         if preferred_url and self._download(preferred_url, dest):
             return MediaAsset(str(dest), "wikipedia", "Image: Wikipedia / Wikimedia Commons", preferred_url)
+        if entity and self.use_wikimedia:
+            asset = self._wikipedia_entity(entity, dest)
+            if asset:
+                logger.info("Scene image via wikipedia entity '%s'", entity)
+                return asset
         providers = []
         if self.pexels_key:
             providers.append(self._pexels)
@@ -145,6 +168,14 @@ class MediaCollector:
                     return asset
         logger.info("No image found for '%s' — designed card will be used", query)
         return None
+
+    def find_many(self, requests_: List[dict], workers: int = 6) -> List[Optional[MediaAsset]]:
+        """Parallel find_image for many beats. Each dict: keywords, dest, preferred, entity."""
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = [pool.submit(self.find_image, r.get("keywords", ""), r["dest"], r.get("preferred", ""),
+                                r.get("entity", "")) for r in requests_]
+            return [f.result() for f in futs]
 
     # Back-compat ------------------------------------------------------------
     def get_scene_visual(self, scene_number: int, query: str, output_path: str, video_type: str = "news") -> str:

@@ -189,6 +189,18 @@ class MockLLMProvider(BaseLLMProvider):
     async def generate_json(self, prompt: str, system_prompt: Optional[str] = None) -> Dict[str, Any]:
         if "FACT_CHECK" in prompt:
             return {"verdict": "pass", "confidence": 0.9, "issues": [], "corrected_scenes": []}
+        m = re.search(r"(\d+) बड़ी खबरें", prompt)
+        if m and "candidate number" in prompt:
+            n = int(m.group(1))
+            topics = ["डिजिटल इंडिया", "इसरो मिशन", "किसान योजना", "रेलवे विस्तार", "निर्यात वृद्धि", "शिक्षा नीति"]
+            return {
+                "title": f"60 सेकंड में {n} बड़ी खबरें",
+                "hook": f"साठ सेकंड में देखिए आज की {n} बड़ी खबरें!",
+                "scenes": [{"narration": f"{topics[i % 6]} पर आज बड़ा फैसला।",
+                            "on_screen_text": topics[i % 6], "image_query": "India",
+                            "visual_keywords": "india", "src": (i % 3) + 1} for i in range(n)],
+                "outro": "रोज़ की खबरों के लिए चैनल सब्सक्राइब करें!",
+            }
         if "SEO_METADATA" in prompt:
             return {"title": "भारत की बड़ी उपलब्धि | 60 सेकंड में", "tags": ["india", "hindi news"],
                     "description_hook": "जानिए आज की सबसे अहम बात।"}
@@ -226,6 +238,59 @@ def _openrouter_free_models(api_key: str, limit: int = 4) -> List[str]:
         return []
 
 
+# ---------------------------------------------------------------------------
+# Auto model discovery: asks each provider which models exist RIGHT NOW, so a
+# retired model never breaks the pipeline. Preferred ids from settings come
+# first (if still listed), then the best discovered ones.
+# ---------------------------------------------------------------------------
+
+_EXCLUDE = ("tts", "audio", "image", "embed", "whisper", "guard", "safety", "transcribe", "live",
+            "robotics", "vision", "ocr", "rerank", "parse", "moderation", "translate", "orpheus",
+            "omni", "lyria", "veo", "imagen", "computer-use", "deep-research", "antigravity", "argon",
+            "nano-banana", "calibration", "reward", "nemoguard", "-pro")
+_PREFER = {
+    "gemini": ("flash",),
+    "groq": ("gpt-oss-120b", "qwen", "gpt-oss-20b", "llama"),
+    "mistral": ("mistral-medium-latest", "mistral-small-latest", "mistral-large-latest", "ministral-14b-latest"),
+    "nvidia": ("nemotron-3-ultra", "nemotron-3.5-super", "deepseek-v4", "gpt-oss", "mistral-large", "nemotron"),
+    "ollama": ("gpt-oss", "qwen", "deepseek"),
+}
+
+
+def _version_key(model_id: str) -> tuple:
+    nums = re.findall(r"(\d+(?:\.\d+)?)", model_id)
+    ver = float(nums[0]) if nums else 0.0
+    lite = 1 if "lite" in model_id else 0
+    preview = 1 if ("preview" in model_id or "exp" in model_id) else 0
+    return (-ver, lite, preview, model_id)
+
+
+def discover_models(provider: str, api_key: str, limit: int = 4, timeout: int = 20) -> List[str]:
+    """Return currently-available chat model ids for *provider* (best first)."""
+    try:
+        if provider == "gemini":
+            r = requests.get("https://generativelanguage.googleapis.com/v1beta/models",
+                             headers={"x-goog-api-key": api_key}, params={"pageSize": 200}, timeout=timeout)
+            ids = [m["name"].split("/", 1)[-1] for m in r.json().get("models", [])
+                   if "generateContent" in m.get("supportedGenerationMethods", [])]
+            ids = [i for i in ids if ("flash" in i or "gemma" in i) and not any(x in i for x in _EXCLUDE)]
+            flash = sorted([i for i in ids if "flash" in i and "latest" not in i], key=_version_key)
+            return (flash + [i for i in ids if "gemma" in i])[:limit]
+        if provider == "openrouter":
+            return _openrouter_free_models(api_key, limit)
+        base = OpenAICompatProvider.BASE_URLS[provider]
+        r = requests.get(f"{base}/models", headers={"Authorization": f"Bearer {api_key}"}, timeout=timeout)
+        ids = [m.get("id", "") for m in r.json().get("data", []) if m.get("id")]
+        ids = [i for i in ids if not any(x in i.lower() for x in _EXCLUDE)]
+        ranked: List[str] = []
+        for pat in _PREFER.get(provider, ()):
+            ranked += sorted([i for i in ids if pat in i and i not in ranked], key=_version_key)
+        return ranked[:limit]
+    except Exception as exc:  # pragma: no cover - network
+        logger.warning("Model discovery failed for %s: %s", provider, exc)
+        return []
+
+
 class FallbackLLM(BaseLLMProvider):
     """Tries each (provider, model) in order until one succeeds."""
 
@@ -236,6 +301,7 @@ class FallbackLLM(BaseLLMProvider):
         self.allow_mock = allow_mock
         self.last_used: str = ""
         self.errors: List[str] = []
+        self.dead: set = set()
 
     @property
     def is_mock(self) -> bool:
@@ -245,6 +311,8 @@ class FallbackLLM(BaseLLMProvider):
         self.errors = []
         for cand in self.candidates:
             label = f"{cand.name}/{getattr(cand, 'model_name', '')}"
+            if label in self.dead:
+                continue
             for attempt in range(2):
                 try:
                     result = await getattr(cand, method)(prompt, system_prompt)
@@ -257,7 +325,9 @@ class FallbackLLM(BaseLLMProvider):
                     msg = str(exc)
                     self.errors.append(f"{label}: {msg[:200]}")
                     logger.warning("LLM %s failed (attempt %d): %s", label, attempt + 1, msg[:200])
-                    transient = any(c in msg for c in ("HTTP 429", "HTTP 500", "HTTP 502", "HTTP 503", "HTTP 504", "timed out", "invalid JSON"))
+                    if any(c in msg for c in ("HTTP 404", "HTTP 410", "HTTP 402", "HTTP 401", "HTTP 403")):
+                        self.dead.add(label)  # model retired / no access: skip for the rest of the run
+                    transient = any(c in msg for c in ("HTTP 500", "HTTP 502", "HTTP 504", "timed out", "invalid JSON"))
                     if transient and attempt == 0:
                         await asyncio.sleep(4)
                         continue
@@ -283,11 +353,21 @@ def build_llm(llm_cfg, allow_mock: bool = False) -> FallbackLLM:
         key = keys.get(provider, "")
         if not key:
             continue
-        models = list((llm_cfg.models or {}).get(provider) or [])
-        if provider == "openrouter" and (not models or "auto-free" in models):
-            models = [m for m in models if m != "auto-free"] + _openrouter_free_models(key)
+        configured = list((llm_cfg.models or {}).get(provider) or ["auto"])
+        preferred = [m for m in configured if m not in ("auto", "auto-free")]
+        models = list(preferred)
+        if any(m in ("auto", "auto-free") for m in configured):
+            discovered = discover_models(provider, key)
+            if discovered and preferred and provider != "openrouter":
+                # keep preferred ids only if the provider still lists them
+                still = [m for m in preferred if m in discovered]
+                models = still + [m for m in discovered if m not in still]
+            else:
+                models = preferred + [m for m in discovered if m not in preferred]
+        models = list(dict.fromkeys(models))[:5]
         if not models:
             continue
+        logger.info("LLM %s models: %s", provider, models)
         for model in models:
             kwargs = dict(temperature=llm_cfg.temperature, max_tokens=llm_cfg.max_tokens,
                           timeout=llm_cfg.timeout_sec)

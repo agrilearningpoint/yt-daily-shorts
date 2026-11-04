@@ -46,3 +46,19 @@ def test_scene_composer_layers(tmp_path: Path):
     ov = comp.compose_overlay(str(tmp_path / "ov.png"), "बड़ा फैसला", "आज की बड़ी खबरें", 0, 3, "4 नवंबर 2026")
     assert Image.open(bg).size[0] > 1080
     assert Image.open(ov).size == (1080, 1920)
+
+
+def test_split_by_pauses_snaps_to_silence():
+    from video.tts import split_by_pauses
+    texts = ["एक दो तीन", "चार पांच छह", "सात आठ नौ"]
+    durs = split_by_pauses(texts, 9.0, [(2.8, 3.2), (6.1, 6.5)])
+    assert abs(sum(durs) - 9.0) < 0.01
+    assert abs(durs[0] - 3.0) < 0.15 and abs(durs[1] - 3.3) < 0.15
+
+
+def test_frame_and_chip_layers(tmp_path: Path):
+    from video.scene_composer import compose_chip, compose_frame, compose_title_card
+    comp = SceneComposer({"primary_color": "#E63946"}, channel_name="Test")
+    assert Image.open(compose_frame(comp, str(tmp_path / "f.png"), "आज की बड़ी खबरें", 3, 28, "03/26")).size == (1080, 1920)
+    assert Image.open(compose_chip(comp, str(tmp_path / "c.png"), "इसरो का नया मिशन")).width < 1080
+    compose_title_card(comp, str(tmp_path / "t.jpg"), "60 सेकंड में 26 खबरें", "4 नवंबर 2026")

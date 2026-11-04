@@ -215,3 +215,92 @@ class SceneComposer:
         bg.save(out_path, "JPEG", quality=92)
         Path(bg_path).unlink(missing_ok=True)
         return out_path
+
+
+# ---------------------------------------------------------------------------
+# Motion-graphics layers (v3): static frame + sliding headline chip + cards
+# ---------------------------------------------------------------------------
+
+def compose_frame(composer: "SceneComposer", out_path: str, badge: str, index: int, total: int,
+                  counter: str = "", date_label: str = "") -> str:
+    """Transparent 1080x1920 frame: top progress bar, badge, counter pill, watermark."""
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    # progress bar (continuous, not segmented: works for 28 beats)
+    d.rounded_rectangle([60, 92, W - 60, 102], radius=5, fill=(255, 255, 255, 80))
+    if total > 0:
+        x1 = 60 + (W - 120) * (index + 1) / total
+        d.rounded_rectangle([60, 92, x1, 102], radius=5, fill=composer.primary + (255,))
+    bf = font(46, "Bold")
+    if badge:
+        tw = d.textlength(badge, font=bf)
+        d.rounded_rectangle([60, 140, 60 + tw + 60, 218], radius=39, fill=composer.primary + (255,))
+        d.text((90, 142), badge, font=bf, fill=(10, 10, 10, 255))
+    if counter:
+        cf = font(64)
+        cw = d.textlength(counter, font=cf)
+        d.rounded_rectangle([W - 60 - cw - 56, 132, W - 60, 228], radius=24, fill=(0, 0, 0, 170),
+                            outline=composer.primary + (255,), width=4)
+        d.text((W - 60 - cw - 28, 132), counter, font=cf, fill=(255, 255, 255, 255))
+    elif date_label:
+        df = font(40, "Medium")
+        dw = d.textlength(date_label, font=df)
+        d.text((W - 60 - dw, 153), date_label, font=df, fill=(255, 255, 255, 230),
+               stroke_width=2, stroke_fill=(0, 0, 0, 180))
+    if composer.channel_name:
+        wf = font(38, "Medium")
+        ww = d.textlength(composer.channel_name, font=wf)
+        d.text(((W - ww) / 2, H - 230), composer.channel_name, font=wf, fill=(255, 255, 255, 150))
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    img.save(out_path, "PNG")
+    return out_path
+
+
+def compose_chip(composer: "SceneComposer", out_path: str, text: str, size: int = 92) -> str:
+    """Headline chip (RGBA, cropped to content) that the renderer slides in."""
+    f = font(size)
+    probe = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+    lines = wrap_text(probe, text.strip(), f, W - 200, 2)
+    line_h = int(size * 1.32)
+    width = int(max(probe.textlength(ln, font=f) for ln in lines)) + 90
+    height = line_h * len(lines) + 50
+    img = Image.new("RGBA", (width + 24, height + 24), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle([12, 18, width + 12, height + 18], radius=26, fill=(0, 0, 0, 120))  # shadow
+    d.rounded_rectangle([0, 0, width, height], radius=26, fill=(255, 255, 255, 245))
+    d.rectangle([0, 18, 14, height - 18], fill=composer.primary + (255,))
+    y = 18
+    for ln in lines:
+        d.text((48, y - int(size * 0.12)), ln, font=f, fill=(12, 12, 20, 255))
+        y += line_h
+    img.save(out_path, "PNG")
+    return out_path
+
+
+def compose_title_card(composer: "SceneComposer", out_path: str, big: str, small: str = "",
+                       image_path: Optional[str] = None, seed: int = 0) -> str:
+    """Hook / outro background: photo or gradient + huge title text (rendered into the bg)."""
+    bg_path = composer.compose_background(image_path, out_path, seed=seed)
+    img = Image.open(bg_path).convert("RGBA")
+    bw, bh = img.size
+    shade = Image.new("RGBA", img.size, (0, 0, 0, 120))
+    img = Image.alpha_composite(img, shade)
+    d = ImageDraw.Draw(img)
+    f = font(150)
+    lines = wrap_text(d, big, f, int(bw * 0.82), 3)
+    y = int(bh * 0.40) - len(lines) * 90
+    for i, ln in enumerate(lines):
+        tw = d.textlength(ln, font=f)
+        fill = composer.primary + (255,) if i == 0 else (255, 255, 255, 255)
+        d.text(((bw - tw) / 2, y), ln, font=f, fill=fill, stroke_width=6, stroke_fill=(0, 0, 0, 255))
+        y += 180
+    if small:
+        sf = font(70, "Bold")
+        for ln in wrap_text(d, small, sf, int(bw * 0.8), 2):
+            tw = d.textlength(ln, font=sf)
+            d.rounded_rectangle([(bw - tw) / 2 - 30, y + 30, (bw + tw) / 2 + 30, y + 130], radius=20,
+                                fill=composer.primary + (255,))
+            d.text(((bw - tw) / 2, y + 28), ln, font=sf, fill=(10, 10, 10, 255))
+            y += 120
+    img.convert("RGB").save(out_path, "JPEG", quality=92)
+    return out_path

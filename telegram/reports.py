@@ -25,7 +25,8 @@ class TelegramReportBuilder:
             return "\n".join(out)
         for i, v in enumerate(completed_videos, 1):
             out.append(f"<b>{i}. [{esc(str(v.get('video_type', '')).upper())}]</b> {esc(v.get('title', ''))}")
-            out.append(f"⏱ {float(v.get('duration', 0) or 0):.1f}s | 🧠 {esc(v.get('llm', ''))}")
+            out.append(f"⏱ {float(v.get('duration', 0) or 0):.1f}s | 📰 {v.get('items', 0)} items | 🖼 {v.get('images', 0)} photos")
+            out.append(f"🧠 {esc(v.get('llm', ''))} | 🎙 {esc(v.get('voice', ''))}")
             if v.get("youtube_url"):
                 out.append(f"🔗 {esc(v['youtube_url'])}")
             if v.get("sources"):

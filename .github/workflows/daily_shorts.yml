@@ -129,7 +129,7 @@ jobs:
           path: |
             output/*/final_short.mp4
             output/*/thumbnail.jpg
-            output/*/subtitles.srt
+            output/*/voiceover.m4a
             output/*/timings.json
             data/logs/
           retention-days: 7

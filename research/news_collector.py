@@ -32,9 +32,9 @@ class ProcessedNewsItem:
     importance_score: float
 
 
-def _fallback_items() -> List[ProcessedNewsItem]:
+def _fallback_items(n: int = 3) -> List[ProcessedNewsItem]:
     now = datetime.now(timezone.utc).isoformat()
-    return [
+    base = [
         ProcessedNewsItem("भारत के डिजिटल इंफ्रास्ट्रक्चर और UPI का वैश्विक विस्तार",
                           "UPI को कई नए देशों में स्वीकृति मिली है।", "https://pib.gov.in", "PIB Hindi", now, 1.0, 0.95),
         ProcessedNewsItem("इसरो के नए उपग्रह मिशन की तैयारी",
@@ -42,6 +42,14 @@ def _fallback_items() -> List[ProcessedNewsItem]:
         ProcessedNewsItem("भारतीय निर्यात में वृद्धि",
                           "वाणिज्य मंत्रालय के आंकड़ों में निर्यात में तेजी।", "https://pib.gov.in", "PIB Hindi", now, 1.0, 0.88),
     ]
+    out = list(base)
+    i = 0
+    while len(out) < n:
+        b = base[i % len(base)]
+        out.append(ProcessedNewsItem(f"{b.title} ({len(out) + 1})", b.summary, b.source_url + f"#s{len(out)}",
+                                     b.source_name, now, b.reliability_score, b.importance_score - 0.01 * len(out)))
+        i += 1
+    return out
 
 
 class NewsCollector:
@@ -112,6 +120,6 @@ class NewsCollector:
             if not self.allow_offline_fallback:
                 raise RuntimeError("No news could be collected from any feed (strict mode).")
             logger.warning("No feeds reachable — using OFFLINE sample news (dry-run only)")
-            processed = _fallback_items()
+            processed = _fallback_items(target_count)
 
         return processed[:target_count]
