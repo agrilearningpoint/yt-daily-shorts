@@ -1,0 +1,53 @@
+# ============================================================
+# YT Daily Shorts — Default Settings
+# ============================================================
+# Override any value via environment variables (YT_ prefix)
+# or by creating config/settings.local.yaml (gitignored).
+# ============================================================
+
+general:
+  project_name: "yt-daily-shorts"
+  timezone: "Asia/Kolkata"
+  daily_video_count: 2
+  max_video_count: 3
+  dry_run: true
+  debug: false
+
+video:
+  width: 1080
+  height: 1920
+  fps: 30
+  target_duration: 55
+  max_duration: 60
+  output_format: "mp4"
+
+editorial_calendar:
+  monday: "Indian Politics and Political Leaders"
+  tuesday: "Science and Technology"
+  wednesday: "Medical Science and Scientific Research"
+  thursday: "Great Personalities and Biographies"
+  friday: "Indian History, Monuments, Temples and Heritage"
+  saturday: "Interesting Facts, Inventions and Discoveries"
+  sunday: "Economy, Society and World Affairs"
+
+tts:
+  provider: "edge-tts"
+  voice: "hi-IN-SwaraNeural"
+  rate: "+0%"
+  pitch: "+0Hz"
+
+seo:
+  max_title_length: 100
+  max_description_length: 5000
+  default_hashtags:
+    - "#shorts"
+    - "#hindi"
+    - "#news"
+    - "#facts"
+    - "#india"
+    - "#knowledge"
+    - "#dailynews"
+
+youtube:
+  default_privacy: "private"
+  category_id: "22"

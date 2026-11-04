@@ -1,0 +1,28 @@
+You are an independent Senior Fact-Checker.
+Review the following generated script against the original research sources.
+
+SCRIPT TITLE: {{ script.title }}
+HOOK: {{ script.hook }}
+SCENES:
+{% for s in script.scenes %}
+Scene {{ s.scene_number }}: {{ s.narration }}
+Claim Sources: {{ s.sources }}
+{% endfor %}
+
+RESEARCH SOURCES:
+{% for src in sources %}
+- {{ src }}
+{% endfor %}
+
+TASK:
+1. Verify each claim. Check for dates, numbers, official names, and cause-effect claims.
+2. Flag any exaggeration, unverified rumor, or unsupported assertion.
+3. Reject any fabricated quotes.
+
+Respond in JSON ONLY:
+{
+  "all_verified": true,
+  "confidence_score": 0.95,
+  "flagged_claims": [],
+  "corrections": []
+}

@@ -1,0 +1,80 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyc
+
+# === Environment ===
+.env
+.env.*
+!.env.example
+
+# === Media (large files) ===
+*.mp4
+*.mp3
+*.wav
+*.avi
+*.mkv
+*.webm
+*.flac
+*.ogg
+
+# === Data & Output ===
+data/
+output/
+*.db
+*.sqlite3
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+
+# === Distribution / Build ===
+dist/
+build/
+*.egg-info/
+*.egg
+sdist/
+
+# === OAuth & Secrets ===
+client_secret*.json
+token*.json
+credentials*.json
+*.pem
+*.key
+
+# === Logs ===
+*.log
+logs/
+
+# === Testing ===
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# === Virtual Environments ===
+venv/
+.venv/
+env/
+ENV/
+
+# === OS Files ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Misc ===
+*.bak
+*.tmp
+*.temp
+.mypy_cache/
+.ruff_cache/
