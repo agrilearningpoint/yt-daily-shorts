@@ -90,9 +90,10 @@ class VideoProducerAgent(BaseAgent):
         self.tts.dump_timings(texts, voice.durations, voice.provider, str(out_dir / "timings.json"))
         total_audio = sum(voice.durations)
         tempo = 1.0
-        if total_audio > vcfg.max_duration:
-            tempo = min(total_audio / vcfg.max_duration, 1.25)
-            self.logger.warning("Voice %.1fs > %ss — tempo %.3f", total_audio, vcfg.max_duration, tempo)
+        max_d = vcfg.news_max_duration if is_news else vcfg.max_duration
+        if total_audio > max_d:
+            tempo = min(total_audio / max_d, 1.25)
+            self.logger.warning("Voice %.1fs > %ss — tempo %.3f", total_audio, max_d, tempo)
 
         # ---- 2. one photo per beat (parallel) ---------------------------------
         reqs = [{"keywords": b["keywords"], "entity": b["entity"], "preferred": b["preferred"],

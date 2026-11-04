@@ -88,6 +88,7 @@ class VideoConfig:
     target_duration: int = 52
     min_duration: int = 25
     max_duration: int = 59
+    news_max_duration: int = 90
     output_format: str = "mp4"
     quality: str = "high"
     background_music: bool = True

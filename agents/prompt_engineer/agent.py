@@ -18,7 +18,7 @@ class PromptEngineerAgent(BaseAgent):
         v = self.config.video
         if video_type == "news":
             n = self.config.video.news_headline_count
-            return n * 9 + 10, n * 11 + 14
+            return n * 12 + 10, n * 15 + 14
         wps = WORDS_PER_SEC["knowledge"]
         return int(v.target_duration * 0.95 * wps), int(v.max_duration * 1.15 * wps)
 
@@ -34,7 +34,7 @@ class PromptEngineerAgent(BaseAgent):
             if len(items) < n:
                 return AgentResult(success=False, errors=[f"only {len(items)} candidate stories, need {n}"])
             prompt = render_prompt("scripting/news_script.j2", {
-                "items": items, "count": n, "seconds": 60, "min_words": min_w, "max_words": max_w})
+                "items": items, "count": n, "seconds": self.config.video.news_max_duration, "min_words": min_w, "max_words": max_w})
         else:
             if not items:
                 return AgentResult(success=False, errors=["No research topic available"])

@@ -41,6 +41,7 @@ video:
   target_duration: 52
   min_duration: 25
   max_duration: 58
+  news_max_duration: 90       # 15 complete stories need ~85s (Shorts allow up to 3 min)
   output_format: "mp4"
   background_music: true
   music_volume: 0.10

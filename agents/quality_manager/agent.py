@@ -29,7 +29,7 @@ class QualityManagerAgent(BaseAgent):
 
         checks = [
             {"name": "hook_length", "passed": 3 <= len(hook.split()) <= 22},
-            {"name": "duration_bounds", "passed": v.min_duration <= est <= v.max_duration * 1.3},
+            {"name": "duration_bounds", "passed": v.min_duration <= est <= (v.news_max_duration if is_news else v.max_duration) * 1.3},
             {"name": "scene_count", "passed": min_scenes <= len(scenes) <= max_scenes},
             {"name": "hindi_script", "passed": len(re.findall(r"[\u0900-\u097F]", text)) > len(text) * 0.4},
             {"name": "no_placeholders", "passed": not any(b.lower() in text.lower() for b in _BANNED)},

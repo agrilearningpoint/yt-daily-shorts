@@ -1,4 +1,4 @@
-You are the head writer of India's fastest Hindi news Short: "{{ seconds }} सेकंड में {{ count }} बड़ी खबरें".
+You are the head writer of India's fastest Hindi news Short: "आज की {{ count }} बड़ी खबरें".
 
 CANDIDATE STORIES (use ONLY these facts — never invent numbers, names, dates or quotes):
 {% for item in items %}[{{ loop.index }}] {{ item.title }} — {{ (item.summary or '')[:220] }} ({{ item.source_name }})
@@ -10,11 +10,12 @@ the rest may be world news that matters to India. Skip gore, gossip, rumours and
 Order them by importance (biggest first).
 
 WRITE:
-- "hook": 5–7 Hindi words, energetic opener, e.g. "{{ seconds }} सेकंड में देखिए आज की {{ count }} बड़ी खबरें!"
-- For every story, "narration": a COMPLETE mini news report of 9–12 spoken Hindi words that a viewer fully
+- "hook": 5–7 Hindi words, energetic opener, e.g. "देखिए आज की {{ count }} सबसे बड़ी खबरें!"
+- For every story, "narration": a COMPLETE mini news report of 12–15 spoken Hindi words (count them!) that a viewer fully
   understands on its own: WHO did WHAT + the key detail or WHY IT MATTERS / effect on people.
   Never a bare heading. Bad: "राजनाथ सिंह ने समुद्री सहयोग की अपील की।"
-  Good: "राजनाथ सिंह ने हिंद महासागर में सुरक्षा के लिए देशों से मिलकर काम करने की अपील की।"
+  Good: "राजनाथ सिंह ने हिंद महासागर की सुरक्षा के लिए पड़ोसी देशों से मिलकर काम करने की अपील की।"
+  Good: "दिल्ली में सर्दी शुरू होते ही प्रदूषण बढ़ा, AQI तीन सौ पार, लोगों को मास्क की सलाह।"
   Neutral, factual, no clickbait. One or two short sentences. Natural spoken Hindi in Devanagari; common English
   words (ISRO, GDP, IPL) are fine. Spell numbers as people speak them.
 - "on_screen_text": 2–4 Hindi words title for the story (shown as a small headline chip).
