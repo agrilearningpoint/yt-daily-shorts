@@ -16,14 +16,14 @@ general:
 llm:
   # Tried in order. Providers without a key are skipped; a failing
   # provider/model falls through to the next one.
-  provider_order: ["gemini", "groq", "mistral", "openrouter", "nvidia", "ollama"]
+  provider_order: ["gemini", "groq", "openrouter", "mistral", "nvidia", "ollama"]
   models:
     gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-2.5-flash"]
-    groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"]
+    groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
     mistral: ["mistral-medium-latest", "mistral-small-latest"]
     openrouter: ["auto-free"]   # picks currently available ':free' models
-    nvidia: ["meta/llama-3.3-70b-instruct", "openai/gpt-oss-120b"]
-    ollama: ["gpt-oss:120b", "gpt-oss:20b"]
+    nvidia: []   # old NIM models returned 410 Gone (Nov 2026); add a current model id to enable
+    ollama: []   # Ollama Cloud needs paid credits (HTTP 402); add models after subscribing
   temperature: 0.7
   max_tokens: 4096
   timeout_sec: 90

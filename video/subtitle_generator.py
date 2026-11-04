@@ -58,7 +58,7 @@ class SubtitleGenerator:
 
     def generate_ass(self, words: Sequence[Dict[str, Any]], output_path: str,
                      highlight_color: str = "#FFD60A", font_name: str = "Mukta ExtraBold",
-                     width: int = 1080, height: int = 1920, font_size: int = 96,
+                     width: int = 1080, height: int = 1920, font_size: int = 104,
                      margin_v: int = 560) -> str:
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
