@@ -1,0 +1,16 @@
+name: cf_check
+on: workflow_dispatch
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cloudflare Workers AI image test
+        env:
+          T: ${{ secrets.CF_API_TOKEN }}
+          A: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          code=$(curl -s -o r.json -w "%{http_code}" -X POST -H "Authorization: Bearer $T" \
+            "https://api.cloudflare.com/client/v4/accounts/$A/ai/run/@cf/black-forest-labs/flux-1-schnell" \
+            -d '{"prompt":"Indian railway station platform at dawn, photo","steps":4}')
+          echo "HTTP $code"; jq -r '.success, (.result.image|length), (.errors|tostring)' r.json
+          test "$code" = "200"
