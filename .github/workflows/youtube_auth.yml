@@ -46,7 +46,11 @@ jobs:
           cfg = json.loads(os.environ["CLIENT_SECRET_JSON"])
           kind = "installed" if "installed" in cfg else "web"
           print("Client type:", kind)
-          flow = Flow.from_client_config(cfg, SCOPES, redirect_uri="http://localhost")
+          import hashlib
+          secret = cfg[kind].get("client_secret", "")
+          verifier = hashlib.sha256(("yt-daily-shorts-pkce:" + secret).encode()).hexdigest()  # same in run 1 & 2
+          flow = Flow.from_client_config(cfg, SCOPES, redirect_uri="http://localhost", code_verifier=verifier,
+                                         autogenerate_code_verifier=False)
           code = os.environ.get("AUTH_CODE", "").strip()
           if code.startswith("http"):
               code = urllib.parse.parse_qs(urllib.parse.urlparse(code).query).get("code", [""])[0]
