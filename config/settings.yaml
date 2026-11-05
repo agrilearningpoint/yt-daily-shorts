@@ -42,11 +42,14 @@ video:
   target_duration: 52
   min_duration: 25
   max_duration: 58
-  news_max_duration: 90       # 15 complete stories need ~85s (Shorts allow up to 3 min)
+  news_max_duration: 135      # hard cap (Shorts allow up to 3 min)
+  news_target_duration: 120   # 2-minute bulletin
+  news_national_count: 30     # section 1: India
+  news_international_count: 6 # section 2: world
   output_format: "mp4"
   background_music: true
   music_volume: 0.10
-  news_headline_count: 15     # 15 complete stories (what + why) in a ~60s news Short
+  news_headline_count: 36     # 30 national + 6 international one-line complete stories
   show_headline_chips: true   # short 2-4 word title chip per story (NOT subtitles)
   sound_effects: true         # whoosh/pop on every cut
 

@@ -221,8 +221,24 @@ class SceneComposer:
 # Motion-graphics layers (v3): static frame + sliding headline chip + cards
 # ---------------------------------------------------------------------------
 
+def compose_ticker(composer: "SceneComposer", out_path: str, headlines: List[str], height: int = 84) -> str:
+    """Long scrolling news-ticker strip (RGBA) with all of today's headlines."""
+    f = font(46, "Bold")
+    sep = "   |   "
+    text = sep.join(h.strip() for h in headlines if h and h.strip()) + sep
+    probe = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+    tw = int(probe.textlength(text, font=f)) + 40
+    tw = min(tw, 30000)
+    img = Image.new("RGBA", (tw, height), (12, 12, 18, 225))
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, tw, 4], fill=composer.primary + (255,))
+    d.text((20, 10), text, font=f, fill=(255, 255, 255, 255))
+    img.save(out_path, "PNG")
+    return out_path
+
+
 def compose_frame(composer: "SceneComposer", out_path: str, badge: str, index: int, total: int,
-                  counter: str = "", date_label: str = "") -> str:
+                  counter: str = "", date_label: str = "", ticker_y: int = 0) -> str:
     """Transparent 1080x1920 frame: top progress bar, badge, counter pill, watermark."""
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -247,7 +263,14 @@ def compose_frame(composer: "SceneComposer", out_path: str, badge: str, index: i
         dw = d.textlength(date_label, font=df)
         d.text((W - 60 - dw, 153), date_label, font=df, fill=(255, 255, 255, 230),
                stroke_width=2, stroke_fill=(0, 0, 0, 180))
-    if composer.channel_name:
+    if ticker_y and composer.channel_name:  # channel bug on the left of the ticker, like TV channels
+        lf = font(40)
+        lw = d.textlength(composer.channel_name, font=lf)
+        d.polygon([(0, ticker_y - 8), (lw + 70, ticker_y - 8), (lw + 40, ticker_y + 92), (0, ticker_y + 92)],
+                  fill=composer.primary + (255,))
+        d.text((24, ticker_y + 12), composer.channel_name, font=lf, fill=(255, 255, 255, 255),
+               stroke_width=2, stroke_fill=(0, 0, 0, 160))
+    elif composer.channel_name:
         wf = font(38, "Medium")
         ww = d.textlength(composer.channel_name, font=wf)
         d.text(((W - ww) / 2, H - 230), composer.channel_name, font=wf, fill=(255, 255, 255, 150))

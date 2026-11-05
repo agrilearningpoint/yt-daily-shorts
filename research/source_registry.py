@@ -43,6 +43,16 @@ DEFAULT_TRUSTED_SOURCES: List[SourceDefinition] = [
     SourceDefinition("LiveMint", "https://www.livemint.com/rss/news", "https://www.livemint.com", "economy", 0.9, False, "en"),
     SourceDefinition("NDTV India", "https://feeds.feedburner.com/ndtvkhabar-latest", "https://ndtv.in", "national", 0.88, False, "hi"),
     SourceDefinition("Amar Ujala", "https://www.amarujala.com/rss/breaking-news.xml", "https://www.amarujala.com", "national", 0.86, False, "hi"),
+    # Google News = the stories every big media house is running in the last hours (trending, multi-outlet)
+    SourceDefinition("Google News Top Hindi", "https://news.google.com/rss?hl=hi&gl=IN&ceid=IN:hi", "https://news.google.com", "national", 0.9, False, "hi"),
+    SourceDefinition("Google News India Hindi", "https://news.google.com/rss/headlines/section/topic/NATION?hl=hi&gl=IN&ceid=IN:hi", "https://news.google.com", "national", 0.9, False, "hi"),
+    SourceDefinition("Google News India", "https://news.google.com/rss/headlines/section/topic/NATION?hl=en-IN&gl=IN&ceid=IN:en", "https://news.google.com", "national", 0.88, False, "en"),
+    SourceDefinition("Google News World Hindi", "https://news.google.com/rss/headlines/section/topic/WORLD?hl=hi&gl=IN&ceid=IN:hi", "https://news.google.com", "international", 0.9, False, "hi"),
+    SourceDefinition("Google News World", "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-IN&gl=IN&ceid=IN:en", "https://news.google.com", "international", 0.88, False, "en"),
+    SourceDefinition("Google News Business", "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=hi&gl=IN&ceid=IN:hi", "https://news.google.com", "economy", 0.86, False, "hi"),
+    SourceDefinition("Google News Sports", "https://news.google.com/rss/headlines/section/topic/SPORTS?hl=hi&gl=IN&ceid=IN:hi", "https://news.google.com", "sports", 0.86, False, "hi"),
+    SourceDefinition("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml", "https://www.bbc.com/news/world", "international", 0.95, False, "en"),
+    SourceDefinition("DW Hindi", "https://rss.dw.com/xml/rss-hi-all", "https://www.dw.com/hi", "international", 0.92, False, "hi"),
 ]
 
 

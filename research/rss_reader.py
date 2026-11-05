@@ -27,6 +27,8 @@ class RawArticle:
     source_name: str
     language: str = "hi"
     image_url: str = ""
+    region: str = ""            # "national" | "international" ("" = decide from the source)
+    publisher: str = ""         # real outlet when read through an aggregator (Google News)
 
 
 class RSSReader:
@@ -84,6 +86,14 @@ class RSSReader:
                 else:
                     pub_date = datetime.now(timezone.utc)
 
+                publisher = ""
+                if "news.google." in url:  # "Headline - Outlet" -> clean headline + real outlet
+                    src = entry.get("source") or {}
+                    publisher = (src.get("title") if isinstance(src, dict) else "") or ""
+                    if " - " in title:
+                        title, tail = title.rsplit(" - ", 1)
+                        publisher = publisher or tail.strip()
+                    summary = ""  # Google News summary is just the headline list
                 if title and link:
                     articles.append(RawArticle(
                         title=title,
@@ -93,6 +103,7 @@ class RSSReader:
                         source_name=source_name,
                         language=language,
                         image_url=image_url,
+                        publisher=publisher,
                     ))
         except Exception as exc:
             logger.error("Failed fetching feed %s (%s): %s", source_name, url, exc)

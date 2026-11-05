@@ -17,7 +17,9 @@ from agents.base_agent import AgentResult, BaseAgent
 from video.vision_check import make_vision_check
 from video.media_collector import MediaCollector
 from video.renderer import SceneClip, VideoRenderer
-from video.scene_composer import SceneComposer, compose_chip, compose_frame, compose_title_card
+from video.scene_composer import (SceneComposer, compose_chip, compose_frame, compose_ticker,
+                                  compose_title_card)
+from video.editor_director import EditorDirector
 from video.tts import GeminiTTS, TTSEngine, probe_duration
 
 HINDI_MONTHS = ["जनवरी", "फरवरी", "मार्च", "अप्रैल", "मई", "जून", "जुलाई", "अगस्त", "सितंबर", "अक्टूबर", "नवंबर", "दिसंबर"]
@@ -125,6 +127,31 @@ class VideoProducerAgent(BaseAgent):
                         p["search"] = f"{topic_kw} {p['search']}"
             beats.append({"kind": "item", "text": s["narration"], "chip": s.get("on_screen_text", ""),
                           "category": s.get("category", ""), "parts": parts, "n": i + 1})
+        if is_news and any(s.get("section") for s in scenes):
+            # Two sections only, announced by the anchor like a TV bulletin.
+            withsec, seen = [], set()
+            for b in beats:
+                sec = scenes[b["n"] - 1].get("section", "national") if b["kind"] == "item" else ""
+                if sec and sec not in seen:
+                    seen.add(sec)
+                    intl = sec == "international"
+                    withsec.append({"kind": "section", "text": "अब दुनिया की बड़ी खबरें।" if intl
+                                    else "पहले देश की बड़ी खबरें।",
+                                    "big": "अंतरराष्ट्रीय" if intl else "राष्ट्रीय",
+                                    "small": "दुनिया की खबरें" if intl else "देश की खबरें",
+                                    "chip": "", "category": "", "parts": [], "section": sec})
+                if b["kind"] == "item":
+                    b["section"] = sec
+                withsec.append(b)
+            beats = withsec
+            sec_total: Dict[str, int] = {}
+            for b in beats:
+                if b["kind"] == "item":
+                    sec_total[b["section"]] = sec_total.get(b["section"], 0) + 1
+                    b["sec_n"] = sec_total[b["section"]]
+            for b in beats:
+                if b["kind"] == "item":
+                    b["sec_of"] = sec_total[b["section"]]
         if outro:
             beats.append({"kind": "outro", "text": outro, "chip": "", "category": "", "parts": []})
 
@@ -178,7 +205,20 @@ class VideoProducerAgent(BaseAgent):
                     assets[(i, k)] = next((a for a in near if a), None)
 
         # ---- 3. motion-graphics layers --------------------------------------
+        # Editor Director: today's look (different every day, learns from yesterday's review)
+        editor = EditorDirector(self.config.llm.gemini_api_key)
+        recipe = editor.plan("news" if is_news else "knowledge")
+        theme = EditorDirector.theme(recipe, theme)
         composer = SceneComposer(theme, channel_name=self.config.general.channel_name)
+        self.renderer.recipe = recipe
+        ticker_y = 0
+        self.renderer.ticker = None
+        if is_news and recipe.get("ticker"):
+            heads = [b["chip"] for b in beats if b["kind"] == "item" and b.get("chip")]
+            if heads:
+                self.renderer.ticker = compose_ticker(composer, str(out_dir / "ticker.png"), heads)
+                ticker_y = self.renderer.ticker_y
+        fx_cycle = recipe.get("cut_fx") or ["flash"]
         default_badge = "आज की बड़ी खबरें" if is_news else CATEGORY_BADGES.get(research.get("day_name", ""), "रोचक जानकारी")
         date_label = self._date_label()
         n_items = sum(1 for b in beats if b["kind"] == "item")
@@ -203,6 +243,9 @@ class VideoProducerAgent(BaseAgent):
                 if b["kind"] == "hook":
                     big = script.get("title", "")[:60] if is_news else (scenes[0].get("on_screen_text", "") if scenes else "")
                     compose_title_card(composer, bg, big or hook[:40], date_label, asset.path if asset else None, seed=ci)
+                elif b["kind"] == "section":
+                    nxt = next((assets.get((j, 0)) for j in range(i + 1, len(beats)) if assets.get((j, 0))), None)
+                    compose_title_card(composer, bg, b["big"], b["small"], nxt.path if nxt else first_image, seed=ci)
                 elif b["kind"] == "outro":
                     compose_title_card(composer, bg, "लाइक + सब्सक्राइब", self.config.general.channel_name,
                                        first_image, seed=ci)
@@ -213,11 +256,17 @@ class VideoProducerAgent(BaseAgent):
                         _stamp(bg, "सांकेतिक चित्र (AI)")
                     if vcfg.show_headline_chips and b["chip"] and asset and k == 0:
                         chip = compose_chip(composer, str(out_dir / f"chip_{i:03d}.png"), b["chip"])
-                counter = f"{b['n']:02d}/{n_items}" if (is_news and b["kind"] == "item") else ""
-                badge = (b.get("category") or default_badge) if b["kind"] != "outro" else ""
+                if is_news and b["kind"] == "item" and b.get("sec_n"):
+                    counter = f"{b['sec_n']:02d}/{b['sec_of']}"
+                else:
+                    counter = f"{b['n']:02d}/{n_items}" if (is_news and b["kind"] == "item") else ""
+                badge = (b.get("category") or default_badge) if b["kind"] not in ("outro", "section") else ""
                 frame = compose_frame(composer, str(out_dir / f"ov_{i:03d}_{k}.png"), badge, ci, total_clips,
-                                      counter, date_label if not is_news else "")
-                clips.append(SceneClip(bg, frame, pdur, chip=chip, story_start=(k == 0)))
+                                      counter, date_label if not is_news else "",
+                                      ticker_y=ticker_y if b["kind"] == "item" else 0)
+                fx = "dip" if b["kind"] in ("section", "outro") else fx_cycle[ci % len(fx_cycle)]
+                clips.append(SceneClip(bg, frame, pdur, chip=chip, story_start=(k == 0), fx=fx,
+                                       ticker=bool(ticker_y) and b["kind"] == "item"))
                 ci += 1
 
         # ---- 4. render ---------------------------------------------------------
@@ -225,13 +274,18 @@ class VideoProducerAgent(BaseAgent):
         self.renderer.render(clips, voice.audio_path, final_path, music=vcfg.background_music,
                              music_volume=vcfg.music_volume, tempo=tempo, sfx=vcfg.sound_effects)
 
+        try:
+            review = editor.review(final_path, recipe, str(out_dir))
+        except Exception as exc:
+            review = {"score": None, "notes": [str(exc)[:100]]}
         duration = probe_duration(final_path)
         ok = Path(final_path).exists() and Path(final_path).stat().st_size > 200_000 and duration >= 10
         return AgentResult(
             success=ok,
             data={"video_path": final_path, "audio_path": voice.audio_path, "duration": round(duration, 1),
                   "first_image": first_image, "media_credits": list(dict.fromkeys(credits)),
-                  "voice_provider": voice.provider, "beats": len(beats), "visual_parts": len(clips),
+                  "voice_provider": voice.provider, "editor_recipe": {k: v for k, v in recipe.items() if k != "notes"},
+                  "editor_review": review, "beats": len(beats), "visual_parts": len(clips),
                   "images_found": sum(1 for a in assets.values() if a),
                   "ai_images": sum(1 for a in assets.values() if a and a.source == "ai")},
             errors=[] if ok else ["rendered video missing or too small"],

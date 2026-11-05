@@ -50,7 +50,7 @@ class ResearchManagerAgent(BaseAgent):
         if video_type == "news":
             exclude = self.history.recent_news() if self.history else []
             n = self.config.video.news_headline_count
-            items = self.collector.collect_and_rank_news(target_count=max(n + 18, 40), exclude=exclude)
+            items = self.collector.collect_and_rank_news(target_count=max(n + 25, 60), exclude=exclude)
             data_items = [vars(i) for i in items]
             sources = [i.source_url for i in items]
         else:

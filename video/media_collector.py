@@ -6,6 +6,7 @@ If nothing usable is found the scene composer draws a designed text card.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import io
 import logging
@@ -109,6 +110,30 @@ class MediaCollector:
                     return MediaAsset(str(dest), "pexels", f"Photo: {p.get('photographer', '')} (Pexels)", p.get("url", ""))
         except Exception as exc:
             logger.warning("Pexels error: %s", exc)
+        return None
+
+    def _unsplash(self, query: str, dest: Path) -> Optional[MediaAsset]:
+        key = os.getenv("YT_UNSPLASH_ACCESS_KEY", "")
+        if not key or not query:
+            return None
+        try:
+            h = {"Authorization": f"Client-ID {key}", "Accept-Version": "v1"}
+            r = requests.get("https://api.unsplash.com/search/photos", headers=h, timeout=self.timeout,
+                             params={"query": query, "per_page": 10, "orientation": "portrait", "content_filter": "high"})
+            for p in r.json().get("results", []) if r.ok else []:
+                text = " ".join(filter(None, [p.get("alt_description"), p.get("description"),
+                                              (p.get("links") or {}).get("html", "").replace("-", " ")]))
+                if not self._relevant(query, text):
+                    continue
+                if self._download(p["urls"]["regular"], dest):
+                    try:  # API guideline: register the download
+                        requests.get(p["links"]["download_location"], headers=h, timeout=8)
+                    except Exception:
+                        pass
+                    return MediaAsset(str(dest), "unsplash", f"Photo: {p['user'].get('name', '')} (Unsplash)",
+                                      p["links"].get("html", ""))
+        except Exception as exc:
+            logger.warning("Unsplash error: %s", exc)
         return None
 
     def _pixabay(self, query: str, dest: Path) -> Optional[MediaAsset]:
@@ -418,6 +443,8 @@ class MediaCollector:
         stock = []
         if self.pexels_key:
             stock.append(("pexels", self._checked(lambda: search and self._pexels(search, dest), desc)))
+        if os.getenv("YT_UNSPLASH_ACCESS_KEY"):
+            stock.append(("unsplash", self._checked(lambda: search and self._unsplash(search, dest), desc)))
         if self.pixabay_key:
             stock.append(("pixabay", self._checked(lambda: search and self._pixabay(search, dest), desc)))
         ai = [("ai", lambda: self._agnes(visual or search, dest, mode)),

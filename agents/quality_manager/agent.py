@@ -23,8 +23,8 @@ class QualityManagerAgent(BaseAgent):
         words += len(script.get("outro", "").split())
         est = words / (2.5 if is_news else 2.4)
         v = self.config.video
-        min_scenes = v.news_headline_count - 1 if is_news else 2
-        max_scenes = 40 if is_news else 9
+        min_scenes = (v.news_national_count + min(5, v.news_international_count) - 3) if is_news else 2
+        max_scenes = 50 if is_news else 9
         text = hook + " ".join(s.get("narration", "") for s in scenes)
 
         checks = [

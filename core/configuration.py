@@ -89,12 +89,15 @@ class VideoConfig:
     target_duration: int = 52
     min_duration: int = 25
     max_duration: int = 59
-    news_max_duration: int = 90
+    news_max_duration: int = 135
+    news_target_duration: int = 120
+    news_national_count: int = 30
+    news_international_count: int = 6
     output_format: str = "mp4"
     quality: str = "high"
     background_music: bool = True
     music_volume: float = 0.10
-    news_headline_count: int = 15
+    news_headline_count: int = 36
     show_headline_chips: bool = True
     sound_effects: bool = True
 

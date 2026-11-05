@@ -17,8 +17,8 @@ class PromptEngineerAgent(BaseAgent):
     def word_bounds(self, video_type: str = "knowledge") -> tuple:
         v = self.config.video
         if video_type == "news":
-            n = self.config.video.news_headline_count
-            return n * 13 + 10, n * 16 + 14
+            secs = self.config.video.news_target_duration
+            return int(secs * 2.35), int(secs * 2.75)
         wps = WORDS_PER_SEC["knowledge"]
         return int(v.target_duration * 0.95 * wps), int(v.max_duration * 1.15 * wps)
 
@@ -34,7 +34,10 @@ class PromptEngineerAgent(BaseAgent):
             if len(items) < n:
                 return AgentResult(success=False, errors=[f"only {len(items)} candidate stories, need {n}"])
             prompt = render_prompt("scripting/news_script.j2", {
-                "items": items, "count": n, "seconds": self.config.video.news_max_duration, "min_words": min_w, "max_words": max_w})
+                "items": items, "count": n, "seconds": self.config.video.news_target_duration,
+                "national": self.config.video.news_national_count,
+                "international": self.config.video.news_international_count,
+                "min_words": min_w, "max_words": max_w})
         else:
             if not items:
                 return AgentResult(success=False, errors=["No research topic available"])

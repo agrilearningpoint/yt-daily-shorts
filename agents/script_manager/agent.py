@@ -28,6 +28,7 @@ class Scene:
     source_name: str = ""
     # Small visual beats: each part = a few spoken words + exactly what the screen shows meanwhile.
     parts: List[Dict[str, str]] = field(default_factory=list)
+    section: str = ""             # news: "national" | "international"
 
 
 @dataclass
@@ -77,7 +78,12 @@ def parse_script(data: Dict[str, Any], video_type: str, fallback_sources: List[s
     if video_type != "news":  # knowledge: always credit every page the research actually read
         sources = list(dict.fromkeys(sources + [s for s in fallback_sources if isinstance(s, str) and s.startswith("http")]))
     scenes = []
-    for idx, sc in enumerate(data.get("scenes") or [], 1):
+    raw_scenes = data.get("scenes") or []
+    if video_type == "news" and (data.get("national") or data.get("international")):
+        raw_scenes = ([{**s, "section": "national"} for s in (data.get("national") or []) if isinstance(s, dict)]
+                      + [{**s, "section": "international"} for s in (data.get("international") or [])
+                         if isinstance(s, dict)])
+    for idx, sc in enumerate(raw_scenes, 1):
         if not isinstance(sc, dict):
             continue
         parts = []
@@ -94,11 +100,9 @@ def parse_script(data: Dict[str, Any], video_type: str, fallback_sources: List[s
                       "source": "entity" if sc.get("image_query") else "stock"}]
         item = {}
         category = str(sc.get("category", "")).strip()[:20]
-        if video_type == "news" and parts:
-            head = parts[0]["say"][:30]
-            m = re.match(r"^\s*([^:,।]{2,22}?)\s*(?::|\s+में,|\s+मोर्चे पर,|\s+जगत में,)", head)
-            if m:  # the badge must show exactly the section the voice says
-                category = m.group(1).strip()
+        section = str(sc.get("section", "")).strip()
+        if video_type == "news" and section:
+            category = "अंतरराष्ट्रीय" if section == "international" else "राष्ट्रीय"
         sc_sources = [s for s in (sc.get("sources") or []) if isinstance(s, str) and s.startswith("http")]
         src = sc.get("src")
         try:
@@ -120,6 +124,7 @@ def parse_script(data: Dict[str, Any], video_type: str, fallback_sources: List[s
             headline=str(item.get("title", "")).strip()[:160],
             source_name=str(item.get("source_name", "")).strip(),
             parts=parts,
+            section=section,
         ))
     all_sources = list(dict.fromkeys(sources + [u for s in scenes for u in s.sources]))
     return Script(title=str(data.get("title", "")).strip(), hook=str(data.get("hook", "")).strip(),
@@ -137,16 +142,25 @@ class ScriptManagerAgent(BaseAgent):
     def validate(self, script: Script, min_w: int, max_w: int) -> List[str]:
         problems = []
         if script.video_type == "news":
-            need = self.config.video.news_headline_count - 1
-            if len(script.scenes) < need:
-                problems.append(f"only {len(script.scenes)} stories, need at least {need}")
-            short_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) < 10]
-            long_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) > 18]
-            if len(short_lines) > 2:
-                problems.append(f"story lines {short_lines[:6]} are bare headlines: each must be a complete "
-                                f"12-15 word report (who did what + why it matters / effect)")
-            if long_lines:
-                problems.append(f"stories {long_lines[:5]} too long: keep each narration 12-16 words")
+            v = self.config.video
+            nat = [s for s in script.scenes if s.section != "international"]
+            intl = [s for s in script.scenes if s.section == "international"]
+            if len(nat) < v.news_national_count - 2:
+                problems.append(f"only {len(nat)} national stories, need {v.news_national_count}")
+            if len(intl) < min(5, v.news_international_count):
+                problems.append(f"only {len(intl)} international stories, need {v.news_international_count}")
+            short_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) < 6]
+            long_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) > 13]
+            if len(short_lines) > 3:
+                problems.append(f"stories {short_lines[:6]} are meaningless fragments: each must be a complete "
+                                f"7-10 word sentence (who did what + key detail)")
+            if len(long_lines) > 3:
+                problems.append(f"stories {long_lines[:5]} too long: keep each story 7-10 words")
+            labelled = [s.scene_number for s in script.scenes
+                        if re.match(r"^\s*[^\s,]{2,14}\s*(में|मोर्चे पर|जगत में)?\s*[,:]", s.narration)]
+            if len(labelled) > 3:
+                problems.append(f"stories {labelled[:5]} start with a topic label like 'खेल में,': remove labels, "
+                                f"just say the news")
             crime = [s.scene_number for s in script.scenes if "अपराध" in s.category or "क्राइम" in s.category]
             if crime:
                 problems.append(f"stories {crime} are crime news: replace them with other important stories")
@@ -154,9 +168,10 @@ class ScriptManagerAgent(BaseAgent):
             if len(no_cat) > 2:
                 problems.append(f"stories {no_cat[:5]} missing \"category\" (Hindi section name)")
         few_parts = [s.scene_number for s in script.scenes if len(s.parts) < 2]
-        if len(few_parts) > max(1, len(script.scenes) // 4):
+        if script.video_type != "news" and len(few_parts) > max(1, len(script.scenes) // 4):
             problems.append(f"scenes {few_parts[:6]} need 2-3 \"parts\" (small visual beats), each with its own visual")
-        long_parts = [s.scene_number for s in script.scenes if any(len(p["say"].split()) > 11 for p in s.parts)]
+        lim = 7 if script.video_type == "news" else 11
+        long_parts = [s.scene_number for s in script.scenes if any(len(p["say"].split()) > lim for p in s.parts)]
         if len(long_parts) > max(1, len(script.scenes) // 4):
             problems.append(f"scenes {long_parts[:6]} have parts longer than 10 words: split into smaller parts")
         if not script.title:

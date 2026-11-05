@@ -36,12 +36,17 @@ class SceneClip:
     chip: Optional[str] = None   # sliding headline chip PNG
     chip_y: int = 1230
     story_start: bool = True     # whoosh/pop only when a new story/scene begins (not on every small cut)
+    fx: str = "flash"            # cut effect chosen by the Editor Director
+    ticker: bool = False         # show the scrolling headline ticker on this clip
 
 
 def _run(cmd: List[str], timeout: int = 600) -> None:
     res = subprocess.run(cmd, capture_output=True, timeout=timeout)
     if res.returncode != 0:
-        raise RenderError(res.stderr.decode(errors="ignore")[-1500:])
+        err = res.stderr.decode(errors="ignore")
+        lines = [ln for ln in err.replace("\r", "\n").splitlines()
+                 if ln.strip() and not ln.lstrip().startswith(("frame=", "size=")) and "time=" not in ln]
+        raise RenderError("\n".join(lines[-25:])[-2000:])
 
 
 def ensure_sfx() -> dict:
@@ -69,28 +74,74 @@ class VideoRenderer:
         self.height = height
         self.fps = fps
         self._ffmpeg = shutil.which("ffmpeg")
+        self.recipe: dict = {}
+        self.ticker: Optional[str] = None
+        self.ticker_y = 1726
+        self._t0 = 0.0
+
+    def _motion(self, idx: int, frames: int) -> tuple:
+        zmax = float(self.recipe.get("zoom", 1.12))
+        inc = (zmax - 1.0) / frames
+        style = self.recipe.get("motion", "kenburns_mix")
+        if style == "kenburns_in":
+            mode = 0
+        elif style == "slow_push":
+            mode, inc = 0, inc * 0.6
+        elif style == "parallax_pan":
+            mode = 2 + idx % 2
+        else:
+            mode = idx % 4
+        if mode == 0:
+            return f"min(1+{inc:.6f}*on,{zmax})", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
+        if mode == 1:
+            return f"max({zmax}-{inc:.6f}*on,1)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
+        if mode == 2:
+            return f"{zmax:.2f}", f"(iw-iw/zoom)*on/{frames}", "ih/2-(ih/zoom/2)"
+        return f"{zmax:.2f}", "iw/2-(iw/zoom/2)", f"(ih-ih/zoom)*(1-on/{frames})"
+
+    def _fx(self, fx: str) -> str:
+        col = self.recipe.get("flash_color", "white")
+        col = col.replace("#", "0x")
+        return {
+            "flash": f",fade=t=in:st=0:d=0.14:color={col}",
+            "dip": ",fade=t=in:st=0:d=0.2:color=black",
+            "glitch": ",rgbashift=rh=-26:bh=26:gv=8:enable='lt(t,0.2)',fade=t=in:st=0:d=0.06:color=white",
+            "whip": ",gblur=sigma=45:steps=2:enable='lt(t,0.13)'",
+            "light": ",eq=brightness=0.28:saturation=1.3:enable='lt(t,0.16)'",
+            "punch": f",fade=t=in:st=0:d=0.08:color={col}",
+        }.get(fx, ",fade=t=in:st=0:d=0.12:color=white")
 
     def _beat_clip(self, clip: SceneClip, length: float, idx: int, out: str) -> str:
         frames = max(int(round(length * self.fps)), 2)
-        zmax = 1.12
-        inc = (zmax - 1.0) / frames
-        mode = idx % 4
-        if mode == 0:
-            z, x, y = f"min(1+{inc:.6f}*on,{zmax})", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
-        elif mode == 1:
-            z, x, y = f"max({zmax}-{inc:.6f}*on,1)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
-        elif mode == 2:
-            z, x, y = "1.10", f"(iw-iw/zoom)*on/{frames}", "ih/2-(ih/zoom/2)"
-        else:
-            z, x, y = "1.10", "iw/2-(iw/zoom/2)", f"(ih-ih/zoom)*(1-on/{frames})"
+        z, x, y = self._motion(idx, frames)
+        if clip.fx == "punch":  # quick zoom-punch into the new picture
+            z = f"({z})+0.22*max(0,1-on/7)"
+        grade = ""
+        try:
+            from video.editor_director import GRADES
+            g = GRADES.get(self.recipe.get("grade", ""), "")
+            grade = f",{g}" if g else ""
+        except Exception:
+            pass
+        vig = ",vignette=PI/5" if self.recipe.get("vignette") else ""
         inputs = ["-i", clip.background, "-i", clip.overlay]
         fc = (f"[0:v]scale={int(self.width * 1.5)}:-2,zoompan=z='{z}':x='{x}':y='{y}':d={frames}:"
-              f"s={self.width}x{self.height}:fps={self.fps},setsar=1,"
-              f"fade=t=in:st=0:d=0.12:color=white[bg];[bg][1:v]overlay=0:0[f]")
+              f"s={self.width}x{self.height}:fps={self.fps},setsar=1{grade}{vig}{self._fx(clip.fx)}[bg]")
+        last = "[bg]"
+        n = 2
+        if clip.ticker and self.ticker and Path(self.ticker).exists():
+            inputs += ["-loop", "1", "-i", self.ticker]
+            speed = 170
+            fc += (f";{last}drawbox=x=0:y={self.ticker_y}:w=iw:h=84:color=0x0C0C12@0.88:t=fill[tb]")
+            last = "[tb]"
+            fc += (f";[{n}:v]format=rgba[tk];{last}[tk]overlay="
+                   f"x='W-mod((t+{self._t0:.3f})*{speed},w+W)':y={self.ticker_y}:shortest=1[t1]")
+            last, n = "[t1]", n + 1
+        fc += f";{last}[1:v]overlay=0:0[f]"
         last = "[f]"
         if clip.chip and Path(clip.chip).exists():
             inputs += ["-loop", "1", "-i", clip.chip]
-            fc += (f";[2:v]format=rgba[chip];{last}[chip]overlay="
+            fc += (f";[{n}:v]format=rgba[chip];{last}[chip]overlay="
                    f"x='if(lt(t,0.28),-w+(w+60)*(t/0.28),60)':y={clip.chip_y}:shortest=1[c]")
             last = "[c]"
         fc += f";{last}format=yuv420p[v]"
@@ -117,7 +168,11 @@ class VideoRenderer:
         durs = [c.duration / tempo for c in clips]
         durs[-1] += TAIL
         # frame-accurate lengths so cuts stay in sync with the voice
-        paths = [self._beat_clip(c, durs[i], i, str(work / f"clip_{i:03d}.mp4")) for i, c in enumerate(clips)]
+        paths = []
+        self._t0 = 0.0
+        for i, c in enumerate(clips):
+            paths.append(self._beat_clip(c, durs[i], i, str(work / f"clip_{i:03d}.mp4")))
+            self._t0 += durs[i]
         concat_list = work / "list.txt"
         concat_list.write_text("".join(f"file '{Path(p).resolve().as_posix()}'\n" for p in paths))
         video_only = work / "video.mp4"

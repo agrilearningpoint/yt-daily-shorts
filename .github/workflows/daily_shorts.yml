@@ -55,6 +55,10 @@ jobs:
       YT_AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
       YT_CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       YT_CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      YT_NEWSDATA_API_KEY: ${{ secrets.NEWSDATA_API_KEY }}
+      YT_GNEWS_API_KEY: ${{ secrets.GNEWS_API_KEY }}
+      YT_UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+      YT_HF_TOKEN: ${{ secrets.HF_TOKEN }}
       YT_HF_TOKEN: ${{ secrets.HF_TOKEN }}
       # Optional repository variables (Settings -> Secrets and variables -> Variables)
       YT_YOUTUBE_PRIVACY: ${{ vars.YT_YOUTUBE_PRIVACY }}
@@ -109,6 +113,7 @@ jobs:
           path: |
             data/history.json
             data/yt_shorts.db
+            data/editor_memory.json
           key: yt-state-${{ github.run_id }}
           restore-keys: yt-state-
 
@@ -125,6 +130,7 @@ jobs:
           path: |
             data/history.json
             data/yt_shorts.db
+            data/editor_memory.json
           key: yt-state-${{ github.run_id }}
 
       - name: Upload artifacts

@@ -191,18 +191,17 @@ class MockLLMProvider(BaseLLMProvider):
             return {"verdict": "pass", "confidence": 0.9, "issues": [], "corrected_scenes": []}
         m = re.search(r"(\d+) बड़ी खबरें", prompt)
         if m and "candidate number" in prompt:
-            n = int(m.group(1))
             topics = ["डिजिटल इंडिया", "इसरो मिशन", "किसान योजना", "रेलवे विस्तार", "निर्यात वृद्धि", "शिक्षा नीति"]
-            return {
-                "title": f"आज की {n} बड़ी खबरें",
-                "hook": f"साठ सेकंड में देखिए आज की {n} बड़ी खबरें!",
-                "scenes": [{"category": "अर्थव्यवस्था", "on_screen_text": topics[i % 6], "src": (i % 3) + 1,
-                            "parts": [{"say": f"अर्थव्यवस्था में, {topics[i % 6]} पर बड़ा फैसला,", "visual": "Indian parliament building",
-                                       "entity": "Parliament House (India)", "search": "india parliament", "source": "entity"},
-                                      {"say": "जिससे करोड़ों लोगों को सीधा फायदा मिलेगा।", "visual": "happy indian families",
-                                       "entity": "", "search": "indian family", "source": "stock"}]} for i in range(n)],
-                "outro": "रोज़ की खबरों के लिए चैनल सब्सक्राइब करें!",
-            }
+
+            def story(i, sec):
+                return {"on_screen_text": topics[i % 6], "src": (i % 3) + 1,
+                        "parts": [{"say": f"सरकार ने {topics[i % 6]} पर", "visual": "Indian parliament building",
+                                   "entity": "Parliament House (India)", "search": "india parliament", "source": "entity"},
+                                  {"say": "नया फैसला लिया, लाखों को फायदा।", "visual": "happy indian families",
+                                   "entity": "", "search": "indian family", "source": "stock"}]}
+            return {"title": "आज की बड़ी खबरें", "hook": "देखिए आज की 36 बड़ी खबरें, फटाफट!",
+                    "national": [story(i, "n") for i in range(30)],
+                    "international": [story(i, "i") for i in range(6)]}
         if "SEO_METADATA" in prompt:
             return {"title": "भारत की बड़ी उपलब्धि | 60 सेकंड में", "tags": ["india", "hindi news"],
                     "description_hook": "जानिए आज की सबसे अहम बात।"}

@@ -31,6 +31,7 @@ class ProcessedNewsItem:
     reliability_score: float
     importance_score: float
     image_url: str = ""
+    region: str = "national"     # national (India) | international (world)
 
 
 def _fallback_items(n: int = 3) -> List[ProcessedNewsItem]:
@@ -69,6 +70,15 @@ class NewsCollector:
         with ThreadPoolExecutor(max_workers=8) as pool:
             for fetched in pool.map(lambda s: self.reader.fetch_feed(s.feed_url, s.name, s.language), sources):
                 articles.extend(fetched)
+        cat = {s.name: s.category for s in sources}
+        for a in articles:
+            if not a.region:
+                a.region = "international" if cat.get(a.source_name) == "international" else "national"
+        try:
+            from research.api_news import fetch_api_news
+            articles.extend(fetch_api_news())
+        except Exception as exc:
+            logger.warning("news APIs skipped: %s", exc)
         logger.info("Fetched %d raw articles from %d sources", len(articles), len(sources))
         return articles
 
@@ -106,12 +116,13 @@ class NewsCollector:
             recency = max(0.4, 1.0 - hours_old / 36.0)
             substance = min(1.0, (len(a.title) + len(a.summary)) / 220.0)
             # Stories covered by several outlets are more important.
-            coverage = sum(1 for b in recent if b.source_name != a.source_name
+            coverage = sum(1 for b in recent if (b.publisher or b.source_name) != (a.publisher or a.source_name)
                            and jaccard_similarity(a.title, b.title) >= 0.25)
             coverage_score = min(1.0, coverage / 3.0)
             importance = reliability * 0.35 + recency * 0.25 + substance * 0.15 + coverage_score * 0.25
             processed.append(ProcessedNewsItem(
-                title=a.title, summary=a.summary, source_url=a.link, source_name=a.source_name,
+                title=a.title, summary=a.summary, source_url=a.link,
+                source_name=a.publisher or a.source_name, region=a.region or "national",
                 published_at=a.published_at.isoformat() if a.published_at else "",
                 reliability_score=reliability, importance_score=round(importance, 3), image_url=a.image_url))
 
@@ -123,4 +134,9 @@ class NewsCollector:
             logger.warning("No feeds reachable — using OFFLINE sample news (dry-run only)")
             processed = _fallback_items(target_count)
 
-        return processed[:target_count]
+        intl_n = max(8, target_count // 5)
+        intl = [p for p in processed if p.region == "international"][:intl_n]
+        nat = [p for p in processed if p.region != "international"][:max(target_count - len(intl), 0)]
+        out = nat + intl
+        out.sort(key=lambda x: x.importance_score, reverse=True)
+        return out
