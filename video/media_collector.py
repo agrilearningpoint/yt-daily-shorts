@@ -267,7 +267,8 @@ class MediaCollector:
                     return None
             page = pages[0]
             src = (page.get("original") or {}).get("source", "")
-            if not src or src.lower().endswith((".svg", ".gif")):
+            if not src or src.lower().endswith((".svg", ".gif")) or re.search(
+                    r"logo|emblem|seal_of|coat_of_arms|insignia|wordmark", src, re.I):
                 return None
             if self._download(src, dest):
                 return MediaAsset(str(dest), "wikipedia", f"{page.get('title', entity)} — Wikipedia/Wikimedia Commons",
