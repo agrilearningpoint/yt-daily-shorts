@@ -1,0 +1,25 @@
+name: YouTube token check
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh token and read channel
+        env:
+          TOKEN: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.parse
+          t = json.loads(os.environ["TOKEN"])
+          data = urllib.parse.urlencode({"client_id": t["client_id"], "client_secret": t["client_secret"],
+                  "refresh_token": t["refresh_token"], "grant_type": "refresh_token"}).encode()
+          tok = json.load(urllib.request.urlopen("https://oauth2.googleapis.com/token", data))["access_token"]
+          req = urllib.request.Request("https://www.googleapis.com/youtube/v3/channels?part=snippet,status&mine=true",
+                                       headers={"Authorization": "Bearer " + tok})
+          ch = json.load(urllib.request.urlopen(req))
+          items = ch.get("items", [])
+          assert items, "token works but this Google account has no YouTube channel"
+          for i in items:
+              print("CHANNEL:", i["snippet"]["title"], i["id"], i.get("status", {}).get("privacyStatus"))
+          PY
