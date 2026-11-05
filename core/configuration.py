@@ -21,7 +21,8 @@ from dotenv import load_dotenv
 @dataclass
 class GeneralConfig:
     project_name: str = "yt-daily-shorts"
-    channel_name: str = "Daily Hindi Shorts"
+    channel_name: str = "BHARAT KI SOCH"
+    channel_name_spoken: str = "भारत की सोच"
     timezone: str = "Asia/Kolkata"
     daily_video_count: int = 2
     max_video_count: int = 3
@@ -134,6 +135,10 @@ class MediaConfig:
     agnes_api_key: str = ""
     agnes_model: str = "agnes-image-2.5-flash"
     use_publisher_images: bool = False   # news-site photos are copyrighted -> claims; keep off
+    use_news_photos: bool = True         # real photo of the same event from the latest news articles (Bing News)
+    cf_api_token: str = ""               # Cloudflare Workers AI (free FLUX images) - backup AI artist
+    cf_account_id: str = ""
+    vision_check: bool = True            # Gemini looks at stock/commons photos and rejects unrelated ones
     use_openverse: bool = True
     use_wikimedia: bool = True
     cache_dir: str = "data/media_cache"
@@ -204,6 +209,8 @@ _ENV_MAP: Dict[str, tuple] = {
     "YT_PEXELS_API_KEY": ("media", "pexels_api_key"),
     "YT_PIXABAY_API_KEY": ("media", "pixabay_api_key"),
     "YT_AGNES_API_KEY": ("media", "agnes_api_key"),
+    "YT_CF_API_TOKEN": ("media", "cf_api_token"),
+    "YT_CF_ACCOUNT_ID": ("media", "cf_account_id"),
     "YT_HF_TOKEN": ("media", "hf_token"),
     "YT_MONGODB_URI": ("database", "mongodb_uri"),
     "YT_CLOUDFLARE_R2_ACCESS_KEY": ("media", "r2_access_key"),

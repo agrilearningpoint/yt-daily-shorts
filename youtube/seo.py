@@ -26,7 +26,7 @@ class YouTubeSEOFormatter:
 
     @staticmethod
     def format_description(summary_hook: str, source_urls: List[str], hashtags: List[str],
-                           channel_name: str = "Daily Hindi Shorts",
+                           channel_name: str = "BHARAT KI SOCH",
                            media_credits: Optional[List[str]] = None, max_length: int = 5000,
                            story_lines: Optional[List[str]] = None, sources_title: str = "") -> str:
         sources = f"📌 {sources_title or 'स्रोत / Sources'}:\n"

@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 import pytz
 
 from agents.base_agent import AgentResult, BaseAgent
+from video.vision_check import make_vision_check
 from video.media_collector import MediaCollector
 from video.renderer import SceneClip, VideoRenderer
 from video.scene_composer import SceneComposer, compose_chip, compose_frame, compose_title_card
@@ -59,7 +60,12 @@ class VideoProducerAgent(BaseAgent):
                                     cache_dir=config.media.cache_dir, use_wikimedia=config.media.use_wikimedia,
                                     use_openverse=config.media.use_openverse,
                                     agnes_key=config.media.agnes_api_key, agnes_model=config.media.agnes_model,
-                                    use_publisher_images=config.media.use_publisher_images)
+                                    use_publisher_images=config.media.use_publisher_images,
+                                    use_news_photos=getattr(config.media, "use_news_photos", True),
+                                    cf_token=getattr(config.media, "cf_api_token", ""),
+                                    cf_account=getattr(config.media, "cf_account_id", ""),
+                                    vision=(make_vision_check(config.llm.gemini_api_key)
+                                            if getattr(config.media, "vision_check", True) else None))
         self.renderer = VideoRenderer(config.video.width, config.video.height, config.video.fps)
 
     def _date_label(self) -> str:
@@ -79,7 +85,12 @@ class VideoProducerAgent(BaseAgent):
 
         scenes: List[Dict[str, Any]] = script.get("scenes", [])
         hook = script.get("hook", "").strip()
-        outro = script.get("outro", "").strip()
+        spoken = getattr(self.config.general, "channel_name_spoken", "") or self.config.general.channel_name
+        # Fixed closing line: ask for like + subscribe and say the channel's name.
+        outro = (f"खबरें पसंद आईं तो वीडियो को लाइक कीजिए, और रोज़ की खबरों के लिए {spoken} को सब्सक्राइब कीजिए!"
+                 if is_news else
+                 f"जानकारी अच्छी लगी तो लाइक कीजिए, और ऐसी रोचक बातों के लिए {spoken} को सब्सक्राइब कीजिए!")
+        script["outro"] = outro
 
         # ---- beats (one voice segment each) + small visual parts inside every beat ----------------
         items = research.get("items", [])
@@ -105,6 +116,9 @@ class VideoProducerAgent(BaseAgent):
                 parts[0]["publisher"] = it.get("image_url", "")
                 parts[0]["publisher_name"] = it.get("source_name", "")
                 parts[0]["article_page"] = url
+                nq = it.get("title") or s.get("headline") or s.get("on_screen_text", "")
+                for p in parts:
+                    p["news_query"] = nq
             elif topic_kw:
                 for p in parts:
                     if p.get("search") and topic_kw.lower().split()[0] not in p["search"].lower():
@@ -121,9 +135,26 @@ class VideoProducerAgent(BaseAgent):
         # _clean_dash
         # ---- 1. voice (human-like, one pass) ----------------------------------
         style = self.config.tts.news_style if is_news else self.config.tts.knowledge_style
-        texts = [b["text"] for b in beats]
-        voice = await self.tts.voice_beats(texts, str(out_dir), style=style)
-        self.tts.dump_timings(texts, voice.durations, voice.provider, str(out_dir / "timings.json"))
+        # Voice is made per small PART (the line each picture belongs to), so every picture changes
+        # exactly when its own line starts: no more "voice about X over a photo of Y".
+        seg_texts: List[str] = []
+        seg_owner: List[tuple] = []
+        for i, b in enumerate(beats):
+            says = [p.get("say", "").strip() for p in b["parts"]] if b["parts"] else []
+            if len(says) > 1 and all(says):
+                for k, t in enumerate(says):
+                    seg_texts.append(t)
+                    seg_owner.append((i, k))
+            else:
+                seg_texts.append(b["text"])
+                seg_owner.append((i, 0))
+        voice = await self.tts.voice_beats(seg_texts, str(out_dir), style=style)
+        self.tts.dump_timings(seg_texts, voice.durations, voice.provider, str(out_dir / "timings.json"))
+        part_dur: Dict[tuple, float] = {}
+        beat_dur = [0.0] * len(beats)
+        for (i, k), d in zip(seg_owner, voice.durations):
+            part_dur[(i, k)] = d
+            beat_dur[i] += d
         total_audio = sum(voice.durations)
         tempo = 1.0
         max_d = vcfg.news_max_duration if is_news else vcfg.max_duration
@@ -151,16 +182,17 @@ class VideoProducerAgent(BaseAgent):
         default_badge = "आज की बड़ी खबरें" if is_news else CATEGORY_BADGES.get(research.get("day_name", ""), "रोचक जानकारी")
         date_label = self._date_label()
         n_items = sum(1 for b in beats if b["kind"] == "item")
-        total_clips = sum(max(1, len(b["parts"])) for b in beats)
+        total_clips = len(seg_owner)
         clips: List[SceneClip] = []
         credits: List[str] = []
         first_image = None
         ci = 0
-        for i, (b, dur) in enumerate(zip(beats, voice.durations)):
+        for i, (b, dur) in enumerate(zip(beats, beat_dur)):
             parts = b["parts"] or [{"say": b["text"]}]
-            weights = [max(4, len(p.get("say", ""))) for p in parts]
+            if not all((i, k) in part_dur for k in range(len(parts))):
+                parts = parts[:1]  # voiced as one line -> one picture for the whole line
             for k, p in enumerate(parts):
-                pdur = dur * weights[k] / sum(weights)
+                pdur = part_dur.get((i, k), dur)
                 asset = assets.get((i, k))
                 if asset:
                     if asset.source != "ai":
@@ -172,7 +204,7 @@ class VideoProducerAgent(BaseAgent):
                     big = script.get("title", "")[:60] if is_news else (scenes[0].get("on_screen_text", "") if scenes else "")
                     compose_title_card(composer, bg, big or hook[:40], date_label, asset.path if asset else None, seed=ci)
                 elif b["kind"] == "outro":
-                    compose_title_card(composer, bg, "सब्सक्राइब करें", self.config.general.channel_name,
+                    compose_title_card(composer, bg, "लाइक + सब्सक्राइब", self.config.general.channel_name,
                                        first_image, seed=ci)
                 else:
                     composer.compose_background(asset.path if asset else None, bg, seed=ci,

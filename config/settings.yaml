@@ -5,7 +5,8 @@
 
 general:
   project_name: "yt-daily-shorts"
-  channel_name: "Daily Hindi Shorts"   # override with repo variable YT_CHANNEL_NAME
+  channel_name: "BHARAT KI SOCH"
+  channel_name_spoken: "भारत की सोच"   # override with repo variable YT_CHANNEL_NAME
   timezone: "Asia/Kolkata"
   daily_video_count: 2
   max_video_count: 3
@@ -83,7 +84,7 @@ seo:
     - "#knowledge"
 
 youtube:
-  default_privacy: "public"     # override with repo variable YT_YOUTUBE_PRIVACY
+  default_privacy: "unlisted"     # override with repo variable YT_YOUTUBE_PRIVACY
   news_category_id: "25"        # News & Politics
   knowledge_category_id: "27"   # Education
   contains_synthetic_media: true
