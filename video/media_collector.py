@@ -57,12 +57,30 @@ class MediaCollector:
             img.load()
             if min(img.size) < 400:
                 return None
-            img.convert("RGB").save(dest, "JPEG", quality=92)
+            if img.mode in ("RGBA", "LA", "P"):
+                img = img.convert("RGBA")
+                bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
+                img = Image.alpha_composite(bg, img)
+            img = img.convert("RGB")
+            if self._looks_blank(img):
+                logger.info("rejecting blank/logo-like image %s", url)
+                return None
+            img.save(dest, "JPEG", quality=92)
             self._used.add(url)
             return str(dest)
         except Exception as exc:
             logger.debug("download failed %s: %s", url, exc)
             return None
+
+    @staticmethod
+    def _looks_blank(img: "Image.Image") -> bool:
+        """Flat images (transparent logos, white documents, solid fills) look empty on screen."""
+        g = img.convert("L").resize((64, 64))
+        px = list(g.getdata())
+        mean = sum(px) / len(px)
+        std = (sum((v - mean) ** 2 for v in px) / len(px)) ** 0.5
+        flat = sum(1 for v in px if v > 235 or v < 20) / len(px)
+        return std < 18 or flat > 0.7
 
     _STOP = {"with", "from", "the", "and", "for", "india", "indian", "photo", "image", "people", "during"}
 

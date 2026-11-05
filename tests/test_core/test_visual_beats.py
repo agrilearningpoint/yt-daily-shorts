@@ -32,3 +32,17 @@ def test_ai_hint_tries_ai_first(tmp_path, monkeypatch):
     monkeypatch.setattr(mc, "_wikipedia_exact", lambda e, d: calls.append("entity") or None)
     a = mc.find_visual({"visual": "new chip", "search": "chip", "source": "ai"}, str(tmp_path / "x.jpg"))
     assert a.source == "ai" and calls == ["ai"]
+
+
+def test_blank_and_logo_images_rejected():
+    from PIL import Image, ImageDraw
+    from video.media_collector import MediaCollector
+    white = Image.new("RGB", (800, 800), "white")
+    logo = white.copy(); ImageDraw.Draw(logo).ellipse((350, 350, 450, 450), fill="navy")
+    import random
+    random.seed(1)
+    photo = Image.new("RGB", (64, 64))
+    photo.putdata([(random.randint(40, 220),) * 3 for _ in range(64 * 64)])
+    assert MediaCollector._looks_blank(white)
+    assert MediaCollector._looks_blank(logo)
+    assert not MediaCollector._looks_blank(photo)
