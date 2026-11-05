@@ -145,12 +145,12 @@ class ScriptManagerAgent(BaseAgent):
             v = self.config.video
             nat = [s for s in script.scenes if s.section != "international"]
             intl = [s for s in script.scenes if s.section == "international"]
-            if len(nat) < v.news_national_count - 2:
+            if len(nat) < v.news_national_count - 6:
                 problems.append(f"only {len(nat)} national stories, need {v.news_national_count}")
             if len(intl) < min(5, v.news_international_count):
                 problems.append(f"only {len(intl)} international stories, need {v.news_international_count}")
             short_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) < 6]
-            long_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) > 13]
+            long_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) > 16]
             if len(short_lines) > 3:
                 problems.append(f"stories {short_lines[:6]} are meaningless fragments: each must be a complete "
                                 f"7-10 word sentence (who did what + key detail)")

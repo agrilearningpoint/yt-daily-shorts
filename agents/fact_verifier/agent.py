@@ -22,7 +22,9 @@ class FactVerifierAgent(BaseAgent):
         items = research.get("items", [])
         used = set(script.get("sources", []))
         if len(items) > 10 and used:  # news: check only the stories actually used (keeps the prompt small)
-            items = [i for i in items if i.get("source_url") in used] or items[:20]
+            picked = [i for i in items if i.get("source_url") in used]
+            # stories that cite by number may not list URLs: never check against a truncated list
+            items = picked if len(picked) >= max(5, len(script.get("scenes", [])) // 2) else items[:70]
 
         if not script.get("sources"):
             return AgentResult(success=False, data={"verdict": "fail", "script": script},
