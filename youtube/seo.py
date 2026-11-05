@@ -27,15 +27,20 @@ class YouTubeSEOFormatter:
     @staticmethod
     def format_description(summary_hook: str, source_urls: List[str], hashtags: List[str],
                            channel_name: str = "Daily Hindi Shorts",
-                           media_credits: Optional[List[str]] = None, max_length: int = 5000) -> str:
-        sources = "📌 स्रोत / Sources:\n"
-        if source_urls:
+                           media_credits: Optional[List[str]] = None, max_length: int = 5000,
+                           story_lines: Optional[List[str]] = None, sources_title: str = "") -> str:
+        sources = f"📌 {sources_title or 'स्रोत / Sources'}:\n"
+        if story_lines:
+            sources += "".join(f"{line}\n" for line in story_lines)
+        elif source_urls:
             sources += "".join(f"{i}. {u}\n" for i, u in enumerate(source_urls, 1))
         else:
             sources += "1. Official public sources\n"
         credits = ""
         if media_credits:
-            credits = "\n🖼️ Image credits:\n" + "".join(f"• {c}\n" for c in media_credits[:8])
+            credits = ("\n🖼️ तस्वीरें कहाँ से / Image credits:\n"
+                       + "".join(f"• {c}\n" for c in list(dict.fromkeys(media_credits))[:25])
+                       + "• जिन दृश्यों पर 'सांकेतिक चित्र (AI)' लिखा है, वे AI से बनाए गए हैं।\n")
         tags = " ".join(h if h.startswith("#") else f"#{h}" for h in hashtags)
         desc = (f"{summary_hook}\n\n{sources}{credits}\n"
                 f"🔔 रोज़ ऐसी जानकारी के लिए {channel_name} को सब्सक्राइब करें!\n\n"

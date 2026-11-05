@@ -35,6 +35,7 @@ class SceneClip:
     duration: float              # seconds of voice for this beat
     chip: Optional[str] = None   # sliding headline chip PNG
     chip_y: int = 1230
+    story_start: bool = True     # whoosh/pop only when a new story/scene begins (not on every small cut)
 
 
 def _run(cmd: List[str], timeout: int = 600) -> None:
@@ -143,9 +144,10 @@ class VideoRenderer:
             inputs += ["-i", fx["whoosh"], "-i", fx["pop"], "-i", fx["hit"]]
             w_i, p_i, h_i = idx, idx + 1, idx + 2
             cut_times, t = [], 0.0
-            for d in durs[:-1]:
+            for k, d in enumerate(durs[:-1]):
                 t += d
-                cut_times.append(t)
+                if clips[k + 1].story_start:
+                    cut_times.append(t)
             n = len(cut_times)
             if n:
                 fc.append(f"[{w_i}:a]asplit={n}" + "".join(f"[w{k}]" for k in range(n)))

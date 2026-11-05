@@ -196,9 +196,11 @@ class MockLLMProvider(BaseLLMProvider):
             return {
                 "title": f"आज की {n} बड़ी खबरें",
                 "hook": f"साठ सेकंड में देखिए आज की {n} बड़ी खबरें!",
-                "scenes": [{"narration": f"{topics[i % 6]} पर सरकार ने आज बड़ा फैसला लिया, जिससे देश के करोड़ों लोगों को सीधा फायदा मिलेगा।",
-                            "on_screen_text": topics[i % 6], "image_query": "India",
-                            "visual_keywords": "india", "src": (i % 3) + 1} for i in range(n)],
+                "scenes": [{"category": "अर्थव्यवस्था", "on_screen_text": topics[i % 6], "src": (i % 3) + 1,
+                            "parts": [{"say": f"अर्थव्यवस्था में, {topics[i % 6]} पर बड़ा फैसला,", "visual": "Indian parliament building",
+                                       "entity": "Parliament House (India)", "search": "india parliament", "source": "entity"},
+                                      {"say": "जिससे करोड़ों लोगों को सीधा फायदा मिलेगा।", "visual": "happy indian families",
+                                       "entity": "", "search": "indian family", "source": "stock"}]} for i in range(n)],
                 "outro": "रोज़ की खबरों के लिए चैनल सब्सक्राइब करें!",
             }
         if "SEO_METADATA" in prompt:
@@ -209,13 +211,13 @@ class MockLLMProvider(BaseLLMProvider):
             "hook": "क्या आप जानते हैं आज देश में कौन सा बड़ा फैसला हुआ?",
             "scenes": [
                 {"scene_number": 1, "on_screen_text": "बड़ा फैसला",
-                 "narration": "भारत सरकार ने आज डिजिटल इंफ्रास्ट्रक्चर को लेकर एक बड़ा और अहम निर्णय लिया है जिसका असर करोड़ों लोगों पर होगा।",
+                 "parts": [{"say": "भारत सरकार ने आज डिजिटल इंफ्रास्ट्रक्चर को लेकर", "visual": "india digital infrastructure", "entity": "", "search": "india digital infrastructure", "source": "stock"}, {"say": "एक बड़ा और अहम निर्णय लिया है जिसका", "visual": "india digital infrastructure", "entity": "", "search": "india digital infrastructure", "source": "stock"}, {"say": "असर करोड़ों लोगों पर होगा।", "visual": "india digital infrastructure", "entity": "", "search": "india digital infrastructure", "source": "stock"}],
                  "visual_keywords": "india digital infrastructure", "sources": ["https://pib.gov.in"]},
                 {"scene_number": 2, "on_screen_text": "युवाओं को फायदा",
-                 "narration": "इस परियोजना से लाखों युवाओं को रोजगार मिलेगा और गांवों तक तेज इंटरनेट पहुंचेगा, जिससे पढ़ाई और कारोबार दोनों आसान होंगे।",
+                 "parts": [{"say": "इस परियोजना से लाखों युवाओं को रोजगार मिलेगा", "visual": "indian youth technology", "entity": "", "search": "indian youth technology", "source": "stock"}, {"say": "और गांवों तक तेज इंटरनेट पहुंचेगा, जिससे पढ़ाई", "visual": "indian youth technology", "entity": "", "search": "indian youth technology", "source": "stock"}, {"say": "और कारोबार दोनों आसान होंगे।", "visual": "indian youth technology", "entity": "", "search": "indian youth technology", "source": "stock"}],
                  "visual_keywords": "indian youth technology", "sources": ["https://pib.gov.in"]},
                 {"scene_number": 3, "on_screen_text": "आपकी राय?",
-                 "narration": "विशेषज्ञ मानते हैं कि यह कदम अर्थव्यवस्था को नई रफ्तार देगा। आपको क्या लगता है? कमेंट में बताइए और चैनल को सब्सक्राइब कीजिए।",
+                 "parts": [{"say": "विशेषज्ञ मानते हैं कि यह कदम अर्थव्यवस्था को", "visual": "india economy growth", "entity": "", "search": "india economy growth", "source": "stock"}, {"say": "नई रफ्तार देगा। आपको क्या लगता है? कमेंट", "visual": "india economy growth", "entity": "", "search": "india economy growth", "source": "stock"}, {"say": "में बताइए और चैनल को सब्सक्राइब कीजिए।", "visual": "india economy growth", "entity": "", "search": "india economy growth", "source": "stock"}],
                  "visual_keywords": "india economy growth", "sources": ["https://pib.gov.in"]},
             ],
             "sources": ["https://pib.gov.in"],

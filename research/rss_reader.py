@@ -26,6 +26,7 @@ class RawArticle:
     published_at: Optional[datetime]
     source_name: str
     language: str = "hi"
+    image_url: str = ""
 
 
 class RSSReader:
@@ -51,6 +52,20 @@ class RSSReader:
                 title = entry.get("title", "").strip()
                 link = entry.get("link", "").strip()
                 summary = entry.get("summary", "") or entry.get("description", "")
+                image_url = ""
+                for m in (entry.get("media_content") or []) + (entry.get("media_thumbnail") or []):
+                    if m.get("url"):
+                        image_url = m["url"]
+                        break
+                if not image_url:
+                    for enc in entry.get("enclosures") or []:
+                        if str(enc.get("type", "")).startswith("image") and enc.get("href"):
+                            image_url = enc["href"]
+                            break
+                if not image_url and "<img" in summary:
+                    import re as _re
+                    mm = _re.search(r'<img[^>]+src=["\']([^"\']+)', summary)
+                    image_url = mm.group(1) if mm else ""
                 
                 # Strip simple HTML from summary if needed
                 if "<" in summary and ">" in summary:
@@ -76,7 +91,8 @@ class RSSReader:
                         summary=summary[:1000],
                         published_at=pub_date,
                         source_name=source_name,
-                        language=language
+                        language=language,
+                        image_url=image_url,
                     ))
         except Exception as exc:
             logger.error("Failed fetching feed %s (%s): %s", source_name, url, exc)

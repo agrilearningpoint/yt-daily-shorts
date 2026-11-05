@@ -42,7 +42,19 @@ class SEOManagerAgent(BaseAgent):
         title = YouTubeSEOFormatter.format_title(title, max_length=self.config.seo.max_title_length)
         hashtags = list(self.config.seo.default_hashtags)
         hashtags.append("#news" if video_type == "news" else "#gk")
+        story_lines: List[str] = []
+        if video_type == "news":
+            for n, sc in enumerate(script.get("scenes", []), 1):
+                url = (sc.get("sources") or [""])[0]
+                label = sc.get("on_screen_text") or sc.get("headline", "")
+                cat = f"[{sc['category']}] " if sc.get("category") else ""
+                src = sc.get("source_name") or "स्रोत"
+                story_lines.append(f"{n:02d}. {cat}{label} — {src}: {url}".strip())
+            sources_title = "हर खबर का स्रोत / Source of each story"
+        else:
+            sources_title = "कहाँ से पढ़ा / Sources we read"
         description = YouTubeSEOFormatter.format_description(
+            story_lines=story_lines, sources_title=sources_title,
             summary_hook=hook_line,
             source_urls=script.get("sources", []),
             hashtags=hashtags,

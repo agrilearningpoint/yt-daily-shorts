@@ -30,7 +30,9 @@ class MediaAsset:
 
 class MediaCollector:
     def __init__(self, pexels_key: str = "", pixabay_key: str = "", cache_dir: str = "data/media_cache",
-                 use_wikimedia: bool = True, use_openverse: bool = True, timeout: int = 15):
+                 use_wikimedia: bool = True, use_openverse: bool = True, timeout: int = 15,
+                 agnes_key: str = "", agnes_model: str = "agnes-image-2.5-flash",
+                 use_publisher_images: bool = False):
         self.pexels_key = pexels_key
         self.pixabay_key = pixabay_key
         self.cache_dir = Path(cache_dir)
@@ -39,6 +41,9 @@ class MediaCollector:
         self.use_openverse = use_openverse
         self.timeout = timeout
         self._used: set = set()
+        self.agnes_key = agnes_key
+        self.agnes_model = agnes_model
+        self.use_publisher_images = use_publisher_images
 
     # ------------------------------------------------------------------
     def _download(self, url: str, dest: Path) -> Optional[str]:
@@ -200,6 +205,105 @@ class MediaCollector:
                     return asset
         logger.info("No image found for '%s' — designed card will be used", query)
         return None
+
+    # ------------------------------------------------------------------
+    def _wikipedia_exact(self, entity: str, dest: Path) -> Optional[MediaAsset]:
+        """Lead image of the EXACT Wikipedia article (no fuzzy search drift -> no off-topic photos)."""
+        try:
+            r = requests.get("https://en.wikipedia.org/w/api.php", headers=_UA, timeout=self.timeout, params={
+                "action": "query", "format": "json", "titles": entity, "redirects": 1,
+                "prop": "pageimages|info", "piprop": "original", "inprop": "url"})
+            pages = list(r.json().get("query", {}).get("pages", {}).values())
+            if not pages or "missing" in pages[0]:
+                # search, but only accept a title that really names the same thing
+                r = requests.get("https://en.wikipedia.org/w/api.php", headers=_UA, timeout=self.timeout, params={
+                    "action": "query", "format": "json", "generator": "search", "gsrsearch": entity,
+                    "gsrlimit": 1, "prop": "pageimages|info", "piprop": "original", "inprop": "url"})
+                pages = list(r.json().get("query", {}).get("pages", {}).values())
+                want = {w for w in re.findall(r"[a-z0-9]+", entity.lower()) if len(w) > 2}
+                got = set(re.findall(r"[a-z0-9]+", (pages[0].get("title", "") if pages else "").lower()))
+                if not pages or not want or len(want & got) / len(want) < 0.6:
+                    return None
+            page = pages[0]
+            src = (page.get("original") or {}).get("source", "")
+            if not src or src.lower().endswith((".svg", ".gif")):
+                return None
+            if self._download(src, dest):
+                return MediaAsset(str(dest), "wikipedia", f"{page.get('title', entity)} — Wikipedia/Wikimedia Commons",
+                                  page.get("fullurl", ""))
+        except Exception as exc:
+            logger.debug("Wikipedia exact image failed for %s: %s", entity, exc)
+        return None
+
+    def _agnes(self, visual: str, dest: Path, mode: str = "news") -> Optional[MediaAsset]:
+        """AI picture written from the scene description (Agnes AI, OpenAI-compatible images API)."""
+        if not self.agnes_key or not visual:
+            return None
+        style = ("photorealistic editorial news photograph, natural light, realistic Indian setting"
+                 if mode == "news" else
+                 "cinematic, historically accurate, richly detailed, documentary illustration, dramatic light")
+        prompt = (f"{visual}. {style}. Vertical 9:16 composition, subject centred. No text, no letters, "
+                  f"no captions, no watermark, no logos, no recognisable real politician faces.")
+        try:
+            r = requests.post("https://apihub.agnes-ai.com/v1/images/generations", timeout=120,
+                              headers={"Authorization": f"Bearer {self.agnes_key}", "Content-Type": "application/json"},
+                              json={"model": self.agnes_model, "prompt": prompt, "size": "1K", "ratio": "9:16"})
+            url = ((r.json().get("data") or [{}])[0] or {}).get("url", "")
+            if url and self._download(url, dest):
+                return MediaAsset(str(dest), "ai", "AI-generated illustration (Agnes AI)", "")
+            logger.warning("Agnes AI image failed: HTTP %s %s", r.status_code, r.text[:160])
+        except Exception as exc:
+            logger.warning("Agnes AI error: %s", exc)
+        return None
+
+    def find_visual(self, spec: dict, dest_path: str, mode: str = "news") -> Optional[MediaAsset]:
+        """One picture for one small beat. spec: visual, entity, search, source, article, preferred, publisher."""
+        dest = Path(dest_path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        entity, search, visual = spec.get("entity", ""), spec.get("search", ""), spec.get("visual", "")
+        hint = (spec.get("source") or "").lower()
+        steps = []
+        if spec.get("preferred"):
+            steps.append(("preferred", lambda: self._download(spec["preferred"], dest) and
+                          MediaAsset(str(dest), "wikipedia", "Image: Wikipedia / Wikimedia Commons", spec["preferred"])))
+        if spec.get("article"):
+            steps.append(("article", lambda: self.article_image(spec["article"], dest)))
+        if spec.get("publisher") and self.use_publisher_images:
+            steps.append(("publisher", lambda: self._download(spec["publisher"], dest) and
+                          MediaAsset(str(dest), "publisher", f"Image: {spec.get('publisher_name', 'news source')}",
+                                     spec.get("article_page", ""))))
+        ent = [("entity", lambda: entity and self._wikipedia_exact(entity, dest))]
+        stock = []
+        if self.pexels_key:
+            stock.append(("pexels", lambda: search and self._pexels(search, dest)))
+        if self.pixabay_key:
+            stock.append(("pixabay", lambda: search and self._pixabay(search, dest)))
+        ai = [("ai", lambda: self._agnes(visual or search, dest, mode))]
+        if hint == "ai":
+            order = ai + ent + stock
+        elif hint == "stock":
+            order = stock + ai + ent
+        else:  # entity first, then the AI illustration (more specific than generic stock)
+            order = ent + (ai + stock if mode == "knowledge" else stock + ai)
+        tail = []
+        if self.use_wikimedia:
+            tail.append(("commons", lambda: search and self._commons(" ".join(search.split()[:3]), dest)))
+        for name, fn in steps + order + tail:
+            try:
+                asset = fn()
+            except Exception as exc:
+                logger.debug("visual step %s failed: %s", name, exc)
+                asset = None
+            if asset:
+                logger.info("Beat visual via %s (%s)", name, (visual or search or entity)[:60])
+                return asset
+        return None
+
+    def find_visuals(self, specs: List[dict], mode: str = "news", workers: int = 6) -> List[Optional[MediaAsset]]:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = [pool.submit(self.find_visual, s, s["dest"], mode) for s in specs]
+            return [f.result() for f in futs]
 
     def find_many(self, requests_: List[dict], workers: int = 6) -> List[Optional[MediaAsset]]:
         """Parallel find_image for many beats. Each dict: keywords, dest, preferred, entity."""

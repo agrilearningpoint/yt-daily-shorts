@@ -4,12 +4,16 @@ TOPIC: {{ topic.title }}
 CATEGORY: {{ category }}
 
 RESEARCH (the ONLY facts you may use — never invent dates, numbers or quotes):
-{{ topic.summary[:2500] }}
+{{ topic.summary[:5000] }}
+{% if topic.extra_text %}
+HINDI WIKIPEDIA (same topic, use for correct Hindi names/terms):
+{{ topic.extra_text[:2000] }}
+{% endif %}
 
 KEY POINTS:
 {% for pt in topic.key_points %}- {{ pt }}
 {% endfor %}
-SOURCE: {{ topic.source_url }}
+SOURCES: {{ topic.source_url }}{% for u in topic.extra_sources %}, {{ u }}{% endfor %}
 
 WRITE ONE 50–58 second Hindi Short that tells the COMPLETE story, so a viewer who knew nothing understands
 it fully by the end (what it is, where/when, how it happened, the surprising part, why it matters today):
@@ -18,19 +22,27 @@ it fully by the end (what it is, where/when, how it happened, the surprising par
 - 6–7 scenes, in story order: 1) background/what it is  2) where & when  3) how it happened / how it works
   4) the most surprising detail  5) a second fascinating fact  6) why it matters today
   7) one-line takeaway + a comment question + "ऐसे रोचक तथ्यों के लिए सब्सक्राइब करें".
-- Each narration 15–22 words, natural conversational Hindi in Devanagari, storytelling tone, every
-  scene adds NEW information (no repetition, no filler). Use concrete names, numbers and dates from the research.
-- on_screen_text: 2–4 punchy Hindi words per scene (shown as a small title chip, not subtitles).
-- image_query: English Wikipedia article title whose photo best shows THIS scene (the place, person,
-  object, monument or event), e.g. "Konark Sun Temple", "Narasimhadeva I".
-- visual_keywords: 2–4 simple ENGLISH image-search words for that scene (backup).
+- Each scene is 15–22 spoken words told in 2–3 SMALL "parts" (4–9 words each). Every part has its own picture
+  that matches EXACTLY what those words say, so the image changes with the voice. Every scene adds NEW
+  information (no repetition, no filler). Use concrete names, numbers and dates from the research.
+  Each part:
+    "say":    the spoken Hindi words (Devanagari, conversational storytelling)
+    "visual": one English sentence describing exactly what should be on screen for THESE words
+              (historically accurate: period, place, clothing, objects)
+    "entity": exact English Wikipedia article title when a real thing/person/place is shown, else ""
+    "search": 2–4 English stock-photo words (backup)
+    "source": "entity" when a real photo of it exists (monument, person, artefact, place), "ai" for
+              historical scenes/events/processes no camera captured, "stock" for generic modern scenes
+- on_screen_text: 2–4 punchy Hindi words per scene (small title chip, not subtitles).
 
 Return JSON exactly in this shape:
 {
   "title": "Hindi title under 70 characters",
   "hook": "...",
   "scenes": [
-    {"scene_number": 1, "on_screen_text": "...", "narration": "...", "image_query": "...", "visual_keywords": "...", "sources": ["{{ topic.source_url }}"]}
+    {"scene_number": 1, "on_screen_text": "...",
+     "parts": [{"say": "...", "visual": "...", "entity": "...", "search": "...", "source": "entity"}],
+     "sources": ["{{ topic.source_url }}"]}
   ],
   "sources": ["{{ topic.source_url }}"]
 }

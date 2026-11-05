@@ -29,6 +29,8 @@ class TopicDetails:
     key_points: List[str] = field(default_factory=list)
     image_url: str = ""
     seed: str = ""
+    extra_sources: List[str] = field(default_factory=list)   # other pages actually read
+    extra_text: str = ""
 
 
 EDITORIAL_SEEDS: Dict[str, List[str]] = {
@@ -119,14 +121,30 @@ class TrendDiscovery:
         title = self._search_title(query) or query
         try:
             r = requests.get("https://en.wikipedia.org/w/api.php", headers=_UA, timeout=self.timeout, params={
-                "action": "query", "prop": "extracts|pageimages|info", "titles": title, "redirects": 1,
-                "exintro": 1, "explaintext": 1, "piprop": "original", "inprop": "url", "format": "json"})
+                "action": "query", "prop": "extracts|pageimages|info|langlinks", "titles": title, "redirects": 1,
+                "explaintext": 1, "exchars": 6000, "piprop": "original", "inprop": "url", "lllang": "hi",
+                "format": "json"})
             pages = r.json().get("query", {}).get("pages", {})
             page = next(iter(pages.values())) if pages else {}
             extract = (page.get("extract") or "").strip()
             if extract:
                 sentences = [s.strip() for s in extract.replace("\n", " ").split(". ") if len(s.strip()) > 20]
+                extra_sources, extra_text = [], ""
+                hi_title = ((page.get("langlinks") or [{}])[0] or {}).get("*", "")
+                if hi_title:  # Hindi Wikipedia article on the same topic = second source actually read
+                    try:
+                        hr = requests.get("https://hi.wikipedia.org/w/api.php", headers=_UA, timeout=self.timeout,
+                                          params={"action": "query", "prop": "extracts|info", "titles": hi_title,
+                                                  "explaintext": 1, "exchars": 2500, "inprop": "url",
+                                                  "format": "json"})
+                        hp = next(iter(hr.json().get("query", {}).get("pages", {}).values()), {})
+                        if hp.get("extract"):
+                            extra_text = hp["extract"].strip()[:2500]
+                            extra_sources.append(hp.get("fullurl") or f"https://hi.wikipedia.org/wiki/{hi_title}")
+                    except Exception as exc:
+                        logger.debug("Hindi Wikipedia fetch failed: %s", exc)
                 return TopicDetails(
+                    extra_sources=extra_sources, extra_text=extra_text,
                     title=page.get("title", title),
                     summary=extract[:3000],
                     source_url=page.get("fullurl") or f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}",

@@ -52,6 +52,7 @@ jobs:
       YT_YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
       YT_PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
       YT_PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      YT_AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
       YT_HF_TOKEN: ${{ secrets.HF_TOKEN }}
       # Optional repository variables (Settings -> Secrets and variables -> Variables)
       YT_YOUTUBE_PRIVACY: ${{ vars.YT_YOUTUBE_PRIVACY }}

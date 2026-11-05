@@ -20,6 +20,9 @@ class FactVerifierAgent(BaseAgent):
         script = copy.deepcopy(kwargs.get("script", {}) or {})
         research = kwargs.get("research_data", {}) or {}
         items = research.get("items", [])
+        used = set(script.get("sources", []))
+        if len(items) > 10 and used:  # news: check only the stories actually used (keeps the prompt small)
+            items = [i for i in items if i.get("source_url") in used] or items[:20]
 
         if not script.get("sources"):
             return AgentResult(success=False, data={"verdict": "fail", "script": script},
@@ -42,8 +45,10 @@ class FactVerifierAgent(BaseAgent):
                  for c in (result.get("corrected_scenes") or []) if isinstance(c, dict)}
         for sc in script.get("scenes", []):
             new = (fixes.get(int(sc.get("scene_number", 0))) or "").strip()
-            if new:
+            if new and new != sc.get("narration"):
                 sc["narration"] = new
+                from agents.script_manager.agent import resplit_parts
+                sc["parts"] = resplit_parts(sc.get("parts") or [], new)
         if (result.get("corrected_hook") or "").strip():
             script["hook"] = result["corrected_hook"].strip()
 

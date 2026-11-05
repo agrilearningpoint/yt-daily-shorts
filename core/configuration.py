@@ -131,6 +131,9 @@ class MediaConfig:
     pexels_api_key: str = ""
     pixabay_api_key: str = ""
     hf_token: str = ""
+    agnes_api_key: str = ""
+    agnes_model: str = "agnes-image-2.5-flash"
+    use_publisher_images: bool = False   # news-site photos are copyrighted -> claims; keep off
     use_openverse: bool = True
     use_wikimedia: bool = True
     cache_dir: str = "data/media_cache"
@@ -200,6 +203,7 @@ _ENV_MAP: Dict[str, tuple] = {
     "YT_YOUTUBE_PRIVACY": ("youtube", "default_privacy"),
     "YT_PEXELS_API_KEY": ("media", "pexels_api_key"),
     "YT_PIXABAY_API_KEY": ("media", "pixabay_api_key"),
+    "YT_AGNES_API_KEY": ("media", "agnes_api_key"),
     "YT_HF_TOKEN": ("media", "hf_token"),
     "YT_MONGODB_URI": ("database", "mongodb_uri"),
     "YT_CLOUDFLARE_R2_ACCESS_KEY": ("media", "r2_access_key"),

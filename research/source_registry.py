@@ -30,6 +30,17 @@ DEFAULT_TRUSTED_SOURCES: List[SourceDefinition] = [
     SourceDefinition("The Hindu National", "https://www.thehindu.com/news/national/feeder/default.rss", "https://www.thehindu.com", "national", 0.93, False, "en"),
     SourceDefinition("The Hindu Science", "https://www.thehindu.com/sci-tech/science/feeder/default.rss", "https://www.thehindu.com", "science", 0.92, False, "en"),
     SourceDefinition("Indian Express India", "https://indianexpress.com/section/india/feed/", "https://indianexpress.com", "national", 0.92, False, "en"),
+    SourceDefinition("Hindustan Times India", "https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml", "https://www.hindustantimes.com", "national", 0.9, False, "en"),
+    SourceDefinition("Times of India India", "https://timesofindia.indiatimes.com/rssfeeds/-2128936835.cms", "https://timesofindia.indiatimes.com", "national", 0.88, False, "en"),
+    SourceDefinition("Amar Ujala India", "https://www.amarujala.com/rss/india-news.xml", "https://www.amarujala.com", "national", 0.87, False, "hi"),
+    SourceDefinition("ABP Live India", "https://www.abplive.com/news/india/feed", "https://www.abplive.com", "national", 0.85, False, "hi"),
+    SourceDefinition("Dainik Bhaskar", "https://www.bhaskar.com/rss-v1--category-1061.xml", "https://www.bhaskar.com", "national", 0.86, False, "hi"),
+    SourceDefinition("TV9 Hindi", "https://www.tv9hindi.com/feed", "https://www.tv9hindi.com", "national", 0.82, False, "hi"),
+    SourceDefinition("NDTV India News", "https://feeds.feedburner.com/ndtvnews-india-news", "https://www.ndtv.com", "national", 0.88, False, "en"),
+    SourceDefinition("The Hindu Business", "https://www.thehindu.com/business/feeder/default.rss", "https://www.thehindu.com", "economy", 0.92, False, "en"),
+    SourceDefinition("The Hindu Sport", "https://www.thehindu.com/sport/feeder/default.rss", "https://www.thehindu.com", "sports", 0.92, False, "en"),
+    SourceDefinition("The Hindu International", "https://www.thehindu.com/news/international/feeder/default.rss", "https://www.thehindu.com", "international", 0.92, False, "en"),
+    SourceDefinition("LiveMint", "https://www.livemint.com/rss/news", "https://www.livemint.com", "economy", 0.9, False, "en"),
     SourceDefinition("NDTV India", "https://feeds.feedburner.com/ndtvkhabar-latest", "https://ndtv.in", "national", 0.88, False, "hi"),
     SourceDefinition("Amar Ujala", "https://www.amarujala.com/rss/breaking-news.xml", "https://www.amarujala.com", "national", 0.86, False, "hi"),
 ]
@@ -54,7 +65,8 @@ class SourceRegistry:
         trusted_domains = [
             "pib.gov.in", "ddnews.gov.in", "isro.gov.in", "bbc.com", "bbc.co.uk", "thehindu.com",
             "indianexpress.com", "reuters.com", "wikipedia.org", "nature.com", "ndtv.in",
-            "ndtv.com", "amarujala.com"
+            "ndtv.com", "amarujala.com", "hindustantimes.com", "timesofindia.indiatimes.com", "abplive.com",
+            "bhaskar.com", "tv9hindi.com", "livemint.com"
         ]
         return any(domain in url.lower() for domain in trusted_domains)
 

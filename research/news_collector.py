@@ -30,6 +30,7 @@ class ProcessedNewsItem:
     published_at: str
     reliability_score: float
     importance_score: float
+    image_url: str = ""
 
 
 def _fallback_items(n: int = 3) -> List[ProcessedNewsItem]:
@@ -112,7 +113,7 @@ class NewsCollector:
             processed.append(ProcessedNewsItem(
                 title=a.title, summary=a.summary, source_url=a.link, source_name=a.source_name,
                 published_at=a.published_at.isoformat() if a.published_at else "",
-                reliability_score=reliability, importance_score=round(importance, 3)))
+                reliability_score=reliability, importance_score=round(importance, 3), image_url=a.image_url))
 
         processed.sort(key=lambda x: x.importance_score, reverse=True)
 

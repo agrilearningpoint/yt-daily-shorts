@@ -23,6 +23,11 @@ class Scene:
     visual_keywords: str = ""
     image_query: str = ""
     sources: List[str] = field(default_factory=list)
+    category: str = ""            # news section, e.g. "रक्षा", "खेल"
+    headline: str = ""            # source headline (for the description)
+    source_name: str = ""
+    # Small visual beats: each part = a few spoken words + exactly what the screen shows meanwhile.
+    parts: List[Dict[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -49,24 +54,51 @@ class Script:
         }
 
 
+def resplit_parts(parts: List[Dict[str, str]], text: str) -> List[Dict[str, str]]:
+    """Re-distribute corrected narration over the existing visual beats (by word share)."""
+    words = text.split()
+    if not parts or not words:
+        return parts
+    sizes = [max(1, len(p.get("say", "").split())) for p in parts]
+    total, out, i = sum(sizes), [], 0
+    for k, (p, sz) in enumerate(zip(parts, sizes)):
+        take = len(words) - i if k == len(parts) - 1 else max(1, round(len(words) * sz / total))
+        chunk = words[i:i + take]
+        i += take
+        if chunk:
+            out.append({**p, "say": " ".join(chunk)})
+    return out or parts
+
+
 def parse_script(data: Dict[str, Any], video_type: str, fallback_sources: List[str],
                  items: List[Dict[str, Any]] = None) -> Script:
     items = items or []
     sources = [s for s in (data.get("sources") or []) if isinstance(s, str) and s.startswith("http")]
-    if not sources and video_type != "news":
-        sources = [s for s in fallback_sources if isinstance(s, str) and s.startswith("http")]
+    if video_type != "news":  # knowledge: always credit every page the research actually read
+        sources = list(dict.fromkeys(sources + [s for s in fallback_sources if isinstance(s, str) and s.startswith("http")]))
     scenes = []
     for idx, sc in enumerate(data.get("scenes") or [], 1):
         if not isinstance(sc, dict):
             continue
-        narration = str(sc.get("narration", "")).strip()
+        parts = []
+        for pt in sc.get("parts") or []:
+            if isinstance(pt, dict) and str(pt.get("say", "")).strip():
+                parts.append({k: str(pt.get(k, "") or "").strip()[:200]
+                              for k in ("say", "visual", "entity", "search", "source")})
+        narration = " ".join(p["say"] for p in parts) if parts else str(sc.get("narration", "")).strip()
         if not narration:
             continue
+        if not parts:
+            parts = [{"say": narration, "visual": str(sc.get("visual_keywords", "")),
+                      "entity": str(sc.get("image_query", "")), "search": str(sc.get("visual_keywords", "")),
+                      "source": "entity" if sc.get("image_query") else "stock"}]
+        item = {}
         sc_sources = [s for s in (sc.get("sources") or []) if isinstance(s, str) and s.startswith("http")]
         src = sc.get("src")
         try:
             if src is not None and 1 <= int(str(src).strip("[] ")) <= len(items):
-                sc_sources = [items[int(str(src).strip("[] ")) - 1].get("source_url", "")] + sc_sources
+                item = items[int(str(src).strip("[] ")) - 1]
+                sc_sources = [item.get("source_url", "")] + sc_sources
         except ValueError:
             pass
         if not sc_sources and video_type != "news":
@@ -76,8 +108,12 @@ def parse_script(data: Dict[str, Any], video_type: str, fallback_sources: List[s
             narration=narration,
             on_screen_text=str(sc.get("on_screen_text", "")).strip()[:40],
             visual_keywords=str(sc.get("visual_keywords") or sc.get("visual_instructions") or "").strip()[:80],
-            image_query=str(sc.get("image_query", "")).strip()[:80],
+            image_query=str(sc.get("image_query", "") or parts[0].get("entity", "")).strip()[:80],
             sources=[u for u in dict.fromkeys(sc_sources) if u],
+            category=str(sc.get("category", "")).strip()[:20],
+            headline=str(item.get("title", "")).strip()[:160],
+            source_name=str(item.get("source_name", "")).strip(),
+            parts=parts,
         ))
     all_sources = list(dict.fromkeys(sources + [u for s in scenes for u in s.sources]))
     return Script(title=str(data.get("title", "")).strip(), hook=str(data.get("hook", "")).strip(),
@@ -104,7 +140,16 @@ class ScriptManagerAgent(BaseAgent):
                 problems.append(f"story lines {short_lines[:6]} are bare headlines: each must be a complete "
                                 f"12-15 word report (who did what + why it matters / effect)")
             if long_lines:
-                problems.append(f"stories {long_lines[:5]} too long: keep each narration 12-15 words")
+                problems.append(f"stories {long_lines[:5]} too long: keep each narration 12-16 words")
+            no_cat = [s.scene_number for s in script.scenes if not s.category]
+            if len(no_cat) > 2:
+                problems.append(f"stories {no_cat[:5]} missing \"category\" (Hindi section name)")
+        few_parts = [s.scene_number for s in script.scenes if len(s.parts) < 2]
+        if len(few_parts) > max(1, len(script.scenes) // 4):
+            problems.append(f"scenes {few_parts[:6]} need 2-3 \"parts\" (small visual beats), each with its own visual")
+        long_parts = [s.scene_number for s in script.scenes if any(len(p["say"].split()) > 11 for p in s.parts)]
+        if len(long_parts) > max(1, len(script.scenes) // 4):
+            problems.append(f"scenes {long_parts[:6]} have parts longer than 10 words: split into smaller parts")
         if not script.title:
             problems.append("missing title")
         if len(script.hook.split()) < 4:

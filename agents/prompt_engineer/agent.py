@@ -18,7 +18,7 @@ class PromptEngineerAgent(BaseAgent):
         v = self.config.video
         if video_type == "news":
             n = self.config.video.news_headline_count
-            return n * 12 + 10, n * 15 + 14
+            return n * 13 + 10, n * 16 + 14
         wps = WORDS_PER_SEC["knowledge"]
         return int(v.target_duration * 0.95 * wps), int(v.max_duration * 1.15 * wps)
 

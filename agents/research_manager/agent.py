@@ -62,7 +62,7 @@ class ResearchManagerAgent(BaseAgent):
             if not topic.summary and self.config.general.strict_mode:
                 return AgentResult(success=False, errors=[f"No Wikipedia content for topic '{topic.title}'"])
             data_items = [vars(topic)]
-            sources = [topic.source_url]
+            sources = [topic.source_url] + list(topic.extra_sources)
 
         return AgentResult(
             success=bool(data_items),
