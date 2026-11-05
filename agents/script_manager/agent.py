@@ -93,6 +93,12 @@ def parse_script(data: Dict[str, Any], video_type: str, fallback_sources: List[s
                       "entity": str(sc.get("image_query", "")), "search": str(sc.get("visual_keywords", "")),
                       "source": "entity" if sc.get("image_query") else "stock"}]
         item = {}
+        category = str(sc.get("category", "")).strip()[:20]
+        if video_type == "news" and parts:
+            head = parts[0]["say"][:30]
+            m = re.match(r"^\s*([^:,।]{2,22}?)\s*(?::|\s+में,|\s+मोर्चे पर,|\s+जगत में,)", head)
+            if m:  # the badge must show exactly the section the voice says
+                category = m.group(1).strip()
         sc_sources = [s for s in (sc.get("sources") or []) if isinstance(s, str) and s.startswith("http")]
         src = sc.get("src")
         try:
@@ -110,7 +116,7 @@ def parse_script(data: Dict[str, Any], video_type: str, fallback_sources: List[s
             visual_keywords=str(sc.get("visual_keywords") or sc.get("visual_instructions") or "").strip()[:80],
             image_query=str(sc.get("image_query", "") or parts[0].get("entity", "")).strip()[:80],
             sources=[u for u in dict.fromkeys(sc_sources) if u],
-            category=str(sc.get("category", "")).strip()[:20],
+            category=category,
             headline=str(item.get("title", "")).strip()[:160],
             source_name=str(item.get("source_name", "")).strip(),
             parts=parts,
@@ -141,6 +147,9 @@ class ScriptManagerAgent(BaseAgent):
                                 f"12-15 word report (who did what + why it matters / effect)")
             if long_lines:
                 problems.append(f"stories {long_lines[:5]} too long: keep each narration 12-16 words")
+            crime = [s.scene_number for s in script.scenes if "अपराध" in s.category or "क्राइम" in s.category]
+            if crime:
+                problems.append(f"stories {crime} are crime news: replace them with other important stories")
             no_cat = [s.scene_number for s in script.scenes if not s.category]
             if len(no_cat) > 2:
                 problems.append(f"stories {no_cat[:5]} missing \"category\" (Hindi section name)")

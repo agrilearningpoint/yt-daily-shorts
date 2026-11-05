@@ -64,11 +64,24 @@ class MediaCollector:
             logger.debug("download failed %s: %s", url, exc)
             return None
 
+    _STOP = {"with", "from", "the", "and", "for", "india", "indian", "photo", "image", "people", "during"}
+
+    def _relevant(self, query: str, text: str) -> bool:
+        """The photo's own alt text/tags must mention the query's key words (stops random stock photos)."""
+        want = [w for w in re.findall(r"[a-z]+", query.lower()) if len(w) > 3 and w not in self._STOP]
+        if not want:
+            return True
+        low = text.lower()
+        hits = sum(1 for w in want if w in low or w.rstrip("s") in low)
+        return hits >= max(1, -(-2 * len(want) // 3))
+
     def _pexels(self, query: str, dest: Path) -> Optional[MediaAsset]:
         try:
             r = requests.get("https://api.pexels.com/v1/search", headers={"Authorization": self.pexels_key},
-                             params={"query": query, "per_page": 5, "orientation": "portrait"}, timeout=self.timeout)
+                             params={"query": query, "per_page": 10, "orientation": "portrait"}, timeout=self.timeout)
             for p in r.json().get("photos", []):
+                if not self._relevant(query, p.get("alt", "") + " " + p.get("url", "").replace("-", " ")):
+                    continue
                 if self._download(p["src"]["large2x"], dest):
                     return MediaAsset(str(dest), "pexels", f"Photo: {p.get('photographer', '')} (Pexels)", p.get("url", ""))
         except Exception as exc:
@@ -79,8 +92,10 @@ class MediaCollector:
         try:
             r = requests.get("https://pixabay.com/api/", params={
                 "key": self.pixabay_key, "q": query, "image_type": "photo", "orientation": "vertical",
-                "per_page": 5, "safesearch": "true"}, timeout=self.timeout)
+                "per_page": 10, "safesearch": "true"}, timeout=self.timeout)
             for h in r.json().get("hits", []):
+                if not self._relevant(query, h.get("tags", "")):
+                    continue
                 if self._download(h["largeImageURL"], dest):
                     return MediaAsset(str(dest), "pixabay", f"Image: {h.get('user', '')} (Pixabay)", h.get("pageURL", ""))
         except Exception as exc:
