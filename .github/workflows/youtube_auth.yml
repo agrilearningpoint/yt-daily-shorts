@@ -1,0 +1,69 @@
+name: YouTube one-time authorization
+
+# Creates the YOUTUBE_TOKEN_JSON value without needing a local computer.
+# Run 1 (no auth_code): the log prints a Google sign-in link.
+# Open it, sign in with the channel's Google account, allow access. The browser then goes to
+# http://localhost/?code=... (the page will not load — that's fine). Copy that code.
+# Run 2 (auth_code + cert_pem): the token is exchanged and printed ENCRYPTED for the given
+# public certificate only, so it never appears in plain text in the logs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      auth_code:
+        description: "Code from the http://localhost/?code=... address (leave empty for run 1)"
+        required: false
+        default: ""
+      cert_pem:
+        description: "Public certificate (PEM) used to encrypt the token output"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLIENT_SECRET_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRET_JSON }}
+      AUTH_CODE: ${{ github.event.inputs.auth_code }}
+      CERT_PEM: ${{ github.event.inputs.cert_pem }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q google-auth-oauthlib
+      - name: Authorize
+        run: |
+          python - <<'EOF'
+          import json, os, subprocess, base64, urllib.parse
+          from google_auth_oauthlib.flow import Flow
+          SCOPES = ["https://www.googleapis.com/auth/youtube.upload",
+                    "https://www.googleapis.com/auth/youtube.readonly",
+                    "https://www.googleapis.com/auth/youtube.force-ssl"]
+          cfg = json.loads(os.environ["CLIENT_SECRET_JSON"])
+          kind = "installed" if "installed" in cfg else "web"
+          print("Client type:", kind)
+          flow = Flow.from_client_config(cfg, SCOPES, redirect_uri="http://localhost")
+          code = os.environ.get("AUTH_CODE", "").strip()
+          if code.startswith("http"):
+              code = urllib.parse.parse_qs(urllib.parse.urlparse(code).query).get("code", [""])[0]
+          if not code:
+              url, _ = flow.authorization_url(access_type="offline", prompt="consent", include_granted_scopes="true")
+              print("\n=== OPEN THIS LINK ===\n" + url + "\n======================")
+              raise SystemExit(0)
+          flow.fetch_token(code=code)
+          token = flow.credentials.to_json()
+          assert json.loads(token).get("refresh_token"), "no refresh_token returned (revoke old access and retry)"
+          cert = os.environ.get("CERT_PEM", "").strip()
+          assert cert.startswith("-----BEGIN CERTIFICATE-----"), "cert_pem missing: refusing to print the token"
+          open("cert.pem", "w").write(cert.replace("\\n", "\n"))
+          open("token.json", "w").write(token)
+          subprocess.run(["openssl", "smime", "-encrypt", "-aes256", "-binary", "-outform", "DER",
+                          "-in", "token.json", "-out", "token.der", "cert.pem"], check=True)
+          print("\n=== ENCRYPTED TOKEN ===\n" + base64.b64encode(open("token.der", "rb").read()).decode()
+                + "\n=======================")
+          os.remove("token.json")
+          EOF
