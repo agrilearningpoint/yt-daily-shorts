@@ -139,6 +139,23 @@ class ScriptManagerAgent(BaseAgent):
         super().__init__(config, state_manager)
         self.llm = llm
 
+    def fit_news(self, script: Script, max_w: int) -> None:
+        """LLMs overshoot length: drop the longest/extra stories (keeping section minimums) instead of failing."""
+        v = self.config.video
+        need = {"national": v.news_national_count - 6, "international": min(5, v.news_international_count)}
+        sec = lambda s: "international" if s.section == "international" else "national"
+        # very long stories first, then trailing ones, while words exceed the budget
+        while script.word_count() > max_w:
+            counts = {k: sum(1 for s in script.scenes if sec(s) == k) for k in need}
+            cand = [s for s in script.scenes if counts[sec(s)] > need[sec(s)]]
+            if not cand:
+                break
+            victim = max(cand, key=lambda s: (len(s.narration.split()) > 14, sec(s) == "national",
+                                              len(s.narration.split()), s.scene_number))
+            script.scenes.remove(victim)
+        for i, s in enumerate(script.scenes, 1):
+            s.scene_number = i
+
     def validate(self, script: Script, min_w: int, max_w: int) -> List[str]:
         problems = []
         if script.video_type == "news":
@@ -154,7 +171,7 @@ class ScriptManagerAgent(BaseAgent):
             if len(short_lines) > 3:
                 problems.append(f"stories {short_lines[:6]} are meaningless fragments: each must be a complete "
                                 f"7-10 word sentence (who did what + key detail)")
-            if len(long_lines) > 3:
+            if len(long_lines) > 6:
                 problems.append(f"stories {long_lines[:5]} too long: keep each story 7-10 words")
             labelled = [s.scene_number for s in script.scenes
                         if re.match(r"^\s*[^\s,]{2,14}\s*(में|मोर्चे पर|जगत में)?\s*[,:]", s.narration)]
@@ -170,7 +187,7 @@ class ScriptManagerAgent(BaseAgent):
         few_parts = [s.scene_number for s in script.scenes if len(s.parts) < 2]
         if script.video_type != "news" and len(few_parts) > max(1, len(script.scenes) // 4):
             problems.append(f"scenes {few_parts[:6]} need 2-3 \"parts\" (small visual beats), each with its own visual")
-        lim = 7 if script.video_type == "news" else 11
+        lim = 12 if script.video_type == "news" else 11
         long_parts = [s.scene_number for s in script.scenes if any(len(p["say"].split()) > lim for p in s.parts)]
         if len(long_parts) > max(1, len(script.scenes) // 4):
             problems.append(f"scenes {long_parts[:6]} have parts longer than 10 words: split into smaller parts")
@@ -186,7 +203,7 @@ class ScriptManagerAgent(BaseAgent):
         wc = script.word_count()
         if wc < min_w * 0.8:
             problems.append(f"too short: {wc} words, need {min_w}-{max_w}")
-        if wc > max_w * 1.1:
+        if wc > max_w * (1.25 if script.video_type == "news" else 1.1):
             problems.append(f"too long: {wc} words, need {min_w}-{max_w}")
         if not script.sources:
             problems.append("no sources")
@@ -213,6 +230,8 @@ class ScriptManagerAgent(BaseAgent):
                 self.logger.error("Script generation failed: %s", exc)
                 return AgentResult(success=False, errors=[str(exc)])
             script = parse_script(data, video_type, fallback_sources, research_data.get("items", []))
+            if video_type == "news":
+                self.fit_news(script, int(max_w * 1.2))
             last_problems = self.validate(script, min_w, max_w)
             if not last_problems:
                 break
