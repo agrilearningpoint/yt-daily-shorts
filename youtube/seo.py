@@ -36,11 +36,10 @@ class YouTubeSEOFormatter:
             sources += "".join(f"{i}. {u}\n" for i, u in enumerate(source_urls, 1))
         else:
             sources += "1. Official public sources\n"
+        # Image source links are NOT listed (Satyam, 2026-11-05). Only the AI disclosure stays.
         credits = ""
-        if media_credits:
-            credits = ("\n🖼️ तस्वीरें कहाँ से / Image credits:\n"
-                       + "".join(f"• {c}\n" for c in list(dict.fromkeys(media_credits))[:25])
-                       + "• जिन दृश्यों पर 'सांकेतिक चित्र (AI)' लिखा है, वे AI से बनाए गए हैं।\n")
+        if media_credits and any("AI" in c for c in media_credits):
+            credits = "\nℹ️ जिन दृश्यों पर 'सांकेतिक चित्र (AI)' लिखा है, वे AI से बनाए गए हैं।\n"
         tags = " ".join(h if h.startswith("#") else f"#{h}" for h in hashtags)
         desc = (f"{summary_hook}\n\n{sources}{credits}\n"
                 f"🔔 रोज़ ऐसी जानकारी के लिए {channel_name} को सब्सक्राइब करें!\n\n"

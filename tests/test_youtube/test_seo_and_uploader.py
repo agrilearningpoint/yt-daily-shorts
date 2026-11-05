@@ -20,8 +20,9 @@ def test_seo_title_formatting():
 
 def test_seo_description_has_sources_and_disclosure():
     desc = YouTubeSEOFormatter.format_description("क्या आप जानते हैं?", ["https://pib.gov.in/pr1"], ["#shorts"],
-                                                 media_credits=["Photo X (CC BY)"])
-    assert "https://pib.gov.in/pr1" in desc and "AI" in desc and "Photo X" in desc and "#shorts" in desc
+                                                 media_credits=["Photo X (CC BY)", "AI-generated illustration"])
+    assert "https://pib.gov.in/pr1" in desc and "AI" in desc and "#shorts" in desc
+    assert "Photo X" not in desc  # image source links are not listed
 
 
 def test_dry_run_uploader():
