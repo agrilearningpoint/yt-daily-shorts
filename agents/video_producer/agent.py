@@ -114,6 +114,11 @@ class VideoProducerAgent(BaseAgent):
         if outro:
             beats.append({"kind": "outro", "text": outro, "chip": "", "category": "", "parts": []})
 
+        _dash = str.maketrans({c: "-" for c in "\u2010\u2011\u2012\u2013\u2014\u2015\u2212"})
+        for b in beats:  # fonts lack the special hyphens (shows as a box)
+            b["chip"] = (b.get("chip") or "").translate(_dash)
+            b["category"] = (b.get("category") or "").translate(_dash)
+        # _clean_dash
         # ---- 1. voice (human-like, one pass) ----------------------------------
         style = self.config.tts.news_style if is_news else self.config.tts.knowledge_style
         texts = [b["text"] for b in beats]
@@ -133,6 +138,13 @@ class VideoProducerAgent(BaseAgent):
                 specs.append({**p, "dest": str(out_dir / f"src_{i:03d}_{k}.jpg"), "_beat": i, "_part": k})
         found = self.media.find_visuals(specs, mode="news" if is_news else "knowledge")
         assets: Dict[tuple, Any] = {(sp["_beat"], sp["_part"]): a for sp, a in zip(specs, found)}
+        # A part with no matching picture keeps its story's own picture (never a random one).
+        for i, b in enumerate(beats):
+            n = len(b["parts"])
+            for k in range(n):
+                if not assets.get((i, k)):
+                    near = [assets.get((i, j)) for j in sorted(range(n), key=lambda j: abs(j - k)) if j != k]
+                    assets[(i, k)] = next((a for a in near if a), None)
 
         # ---- 3. motion-graphics layers --------------------------------------
         composer = SceneComposer(theme, channel_name=self.config.general.channel_name)

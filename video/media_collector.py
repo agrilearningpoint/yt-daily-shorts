@@ -131,6 +131,9 @@ class MediaCollector:
                 info = (p.get("imageinfo") or [{}])[0]
                 if info.get("mime") not in ("image/jpeg", "image/png", "image/webp"):
                     continue
+                desc = str(info.get("extmetadata", {}).get("ImageDescription", {}).get("value", ""))
+                if not self._relevant(query, p.get("title", "") + " " + re.sub(r"<[^>]+>", " ", desc)):
+                    continue
                 if self._download(info.get("thumburl") or info.get("url"), dest):
                     meta = info.get("extmetadata", {})
                     lic = meta.get("LicenseShortName", {}).get("value", "CC")
@@ -270,23 +273,37 @@ class MediaCollector:
 
     def _agnes(self, visual: str, dest: Path, mode: str = "news") -> Optional[MediaAsset]:
         """AI picture written from the scene description (Agnes AI, OpenAI-compatible images API)."""
-        if not self.agnes_key or not visual:
+        if not self.agnes_key or not visual or getattr(self, "_agnes_dead", False):
             return None
+        import threading, time
+        if not hasattr(MediaCollector, "_agnes_gate"):
+            MediaCollector._agnes_gate = threading.Semaphore(2)  # free tier rate-limits bursts
         style = ("photorealistic editorial news photograph, natural light, realistic Indian setting"
                  if mode == "news" else
                  "cinematic, historically accurate, richly detailed, documentary illustration, dramatic light")
         prompt = (f"{visual}. {style}. Vertical 9:16 composition, subject centred. No text, no letters, "
                   f"no captions, no watermark, no logos, no recognisable real politician faces.")
-        try:
-            r = requests.post("https://apihub.agnes-ai.com/v1/images/generations", timeout=120,
-                              headers={"Authorization": f"Bearer {self.agnes_key}", "Content-Type": "application/json"},
-                              json={"model": self.agnes_model, "prompt": prompt, "size": "1K", "ratio": "9:16"})
-            url = ((r.json().get("data") or [{}])[0] or {}).get("url", "")
-            if url and self._download(url, dest):
-                return MediaAsset(str(dest), "ai", "AI-generated illustration (Agnes AI)", "")
-            logger.warning("Agnes AI image failed: HTTP %s %s", r.status_code, r.text[:160])
-        except Exception as exc:
-            logger.warning("Agnes AI error: %s", exc)
+        for attempt in range(3):
+            try:
+                with MediaCollector._agnes_gate:
+                    r = requests.post("https://apihub.agnes-ai.com/v1/images/generations", timeout=120,
+                                      headers={"Authorization": f"Bearer {self.agnes_key}", "Content-Type": "application/json"},
+                                      json={"model": self.agnes_model, "prompt": prompt, "size": "1K", "ratio": "9:16"})
+                if r.status_code == 429:
+                    if attempt == 2:
+                        self._agnes_dead = True  # stop hammering for the rest of this run
+                        logger.warning("Agnes AI rate limit reached; no more AI images this run")
+                        return None
+                    time.sleep(20 * (attempt + 1))
+                    continue
+                url = ((r.json().get("data") or [{}])[0] or {}).get("url", "")
+                if url and self._download(url, dest):
+                    return MediaAsset(str(dest), "ai", "AI-generated illustration (Agnes AI)", "")
+                logger.warning("Agnes AI image failed: HTTP %s %s", r.status_code, r.text[:160])
+                return None
+            except Exception as exc:
+                logger.warning("Agnes AI error: %s", exc)
+                return None
         return None
 
     def find_visual(self, spec: dict, dest_path: str, mode: str = "news") -> Optional[MediaAsset]:
