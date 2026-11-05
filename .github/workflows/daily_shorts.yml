@@ -59,7 +59,6 @@ jobs:
       YT_GNEWS_API_KEY: ${{ secrets.GNEWS_API_KEY }}
       YT_UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
       YT_HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      YT_HF_TOKEN: ${{ secrets.HF_TOKEN }}
       # Optional repository variables (Settings -> Secrets and variables -> Variables)
       YT_YOUTUBE_PRIVACY: ${{ vars.YT_YOUTUBE_PRIVACY }}
       YT_CHANNEL_NAME: ${{ vars.YT_CHANNEL_NAME }}
