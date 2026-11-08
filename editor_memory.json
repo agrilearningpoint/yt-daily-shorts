@@ -1,0 +1,318 @@
+{
+ "runs": [
+  {
+   "at": "2026-11-05T13:01",
+   "recipe": {
+    "palette": [
+     "#7C3AED",
+     "#120B2E",
+     "#FACC15"
+    ],
+    "cut_fx": [
+     "dip",
+     "punch",
+     "light"
+    ],
+    "motion": "parallax_pan",
+    "grade": "news_crisp",
+    "zoom": 1.1,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": null
+  },
+  {
+   "at": "2026-11-05T17:03",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "whip",
+     "flash",
+     "punch"
+    ],
+    "motion": "slow_push",
+    "grade": "punchy",
+    "zoom": 1.14,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "#FFD60A"
+   },
+   "score": null
+  },
+  {
+   "at": "2026-11-06T06:16",
+   "recipe": {
+    "palette": [
+     "#14B8A6",
+     "#0A1F1C",
+     "#FDE047"
+    ],
+    "cut_fx": [
+     "light",
+     "punch",
+     "whip"
+    ],
+    "motion": "kenburns_mix",
+    "grade": "neutral",
+    "zoom": 1.1,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 8.0
+  },
+  {
+   "at": "2026-11-06T16:35",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "whip",
+     "flash",
+     "punch"
+    ],
+    "motion": "parallax_pan",
+    "grade": "warm_film",
+    "zoom": 1.14,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "#FFD60A"
+   },
+   "score": 5.0
+  },
+  {
+   "at": "2026-11-07T05:45",
+   "recipe": {
+    "palette": [
+     "#00A3FF",
+     "#04122B",
+     "#FFE066"
+    ],
+    "cut_fx": [
+     "light",
+     "punch",
+     "whip"
+    ],
+    "motion": "kenburns_mix",
+    "grade": "neutral",
+    "zoom": 1.18,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 7.0
+  },
+  {
+   "at": "2026-11-08T05:59",
+   "recipe": {
+    "palette": [
+     "#14B8A6",
+     "#0A1F1C",
+     "#FDE047"
+    ],
+    "cut_fx": [
+     "flash",
+     "punch",
+     "glitch"
+    ],
+    "motion": "kenburns_in",
+    "grade": "cool_studio",
+    "zoom": 1.1,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "#FFD60A"
+   },
+   "score": 7.0
+  },
+  {
+   "at": "2026-11-08T09:02",
+   "recipe": {
+    "palette": [
+     "#7C3AED",
+     "#120B2E",
+     "#FACC15"
+    ],
+    "cut_fx": [
+     "light",
+     "punch",
+     "whip"
+    ],
+    "motion": "parallax_pan",
+    "grade": "punchy",
+    "zoom": 1.14,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 6.0
+  },
+  {
+   "at": "2026-11-08T10:17",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "glitch",
+     "whip",
+     "flash"
+    ],
+    "motion": "slow_push",
+    "grade": "cool_studio",
+    "zoom": 1.1,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "#FFD60A"
+   },
+   "score": 6.0
+  },
+  {
+   "at": "2026-11-08T10:53",
+   "recipe": {
+    "palette": [
+     "#FF7A00",
+     "#101828",
+     "#FFFFFF"
+    ],
+    "cut_fx": [
+     "light",
+     "punch",
+     "whip"
+    ],
+    "motion": "parallax_pan",
+    "grade": "cool_studio",
+    "zoom": 1.14,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 5.0
+  }
+ ],
+ "option_scores": {
+  "palette=[\"#14B8A6\", \"#0A1F1C\", \"#FDE047\"]": {
+   "sum": 15.0,
+   "n": 2
+  },
+  "cut_fx=[\"light\", \"punch\", \"whip\"]": {
+   "sum": 26.0,
+   "n": 4
+  },
+  "motion=\"kenburns_mix\"": {
+   "sum": 15.0,
+   "n": 2
+  },
+  "grade=\"neutral\"": {
+   "sum": 15.0,
+   "n": 2
+  },
+  "zoom=1.1": {
+   "sum": 21.0,
+   "n": 3
+  },
+  "vignette=true": {
+   "sum": 26.0,
+   "n": 4
+  },
+  "ticker=true": {
+   "sum": 44.0,
+   "n": 7
+  },
+  "flash_color=\"white\"": {
+   "sum": 26.0,
+   "n": 4
+  },
+  "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
+   "sum": 11.0,
+   "n": 2
+  },
+  "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
+   "sum": 5.0,
+   "n": 1
+  },
+  "motion=\"parallax_pan\"": {
+   "sum": 16.0,
+   "n": 3
+  },
+  "grade=\"warm_film\"": {
+   "sum": 5.0,
+   "n": 1
+  },
+  "zoom=1.14": {
+   "sum": 16.0,
+   "n": 3
+  },
+  "vignette=false": {
+   "sum": 18.0,
+   "n": 3
+  },
+  "flash_color=\"#FFD60A\"": {
+   "sum": 18.0,
+   "n": 3
+  },
+  "palette=[\"#00A3FF\", \"#04122B\", \"#FFE066\"]": {
+   "sum": 7.0,
+   "n": 1
+  },
+  "zoom=1.18": {
+   "sum": 7.0,
+   "n": 1
+  },
+  "cut_fx=[\"flash\", \"punch\", \"glitch\"]": {
+   "sum": 7.0,
+   "n": 1
+  },
+  "motion=\"kenburns_in\"": {
+   "sum": 7.0,
+   "n": 1
+  },
+  "grade=\"cool_studio\"": {
+   "sum": 18.0,
+   "n": 3
+  },
+  "palette=[\"#7C3AED\", \"#120B2E\", \"#FACC15\"]": {
+   "sum": 6.0,
+   "n": 1
+  },
+  "grade=\"punchy\"": {
+   "sum": 6.0,
+   "n": 1
+  },
+  "cut_fx=[\"glitch\", \"whip\", \"flash\"]": {
+   "sum": 6.0,
+   "n": 1
+  },
+  "motion=\"slow_push\"": {
+   "sum": 6.0,
+   "n": 1
+  },
+  "palette=[\"#FF7A00\", \"#101828\", \"#FFFFFF\"]": {
+   "sum": 5.0,
+   "n": 1
+  }
+ },
+ "notes": [
+  "Replace static headshots with active video clips or dynamic pan-and-zoom motion to boost engagement.",
+  "Add animated keyword highlighting within text overlays to improve visual hierarchy and readability on mobile.",
+  "Vary the lower-third template across topics to prevent visual monotony over rapid news transitions.",
+  "Replace repetitive generic building stock images (frames 09, 10, 16, 17) with dynamic video clips or specific subject cutouts.",
+  "Upgrade the plain white box lower-thirds to branded animated graphics with gradient accents to look like top-tier TV channels.",
+  "Improve framing and visual contrast on text overlays so headlines stand out better against bright or cluttered background imagery.",
+  "Reduce the height of lower-third graphics and remove the bottom ticker bar to free up vertical screen real estate.",
+  "Replace static stock photos and still portraits (e.g., building, plane, static headshots) with dynamic, high-energy motion video clips.",
+  "Upgrade the end-screen Call-To-Action (Like + Subscribe) from flat static text to dynamic kinetic typography with animated channel branding.",
+  "Fix blank or failed-to-render asset frames (such as tiles 16 and 17) before finalizing the visual edit.",
+  "Avoid using repetitive building visuals and generic stock footage like abstract clock close-ups.",
+  "Filter out motion-blurred and out-of-focus visual clips (tiles 25 and 33) to keep the broadcast looking sharp and professional."
+ ]
+}
