@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+
+from core.duration import WORDS_PER_SEC, bounds, estimate_seconds
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
@@ -139,10 +141,18 @@ class ScriptManagerAgent(BaseAgent):
         super().__init__(config, state_manager)
         self.llm = llm
 
+    def _targets(self) -> dict:
+        t = getattr(self, "targets", None)
+        if t:
+            return t
+        v = self.config.video
+        return {"national": v.news_national_count, "international": v.news_international_count,
+                "min_national": v.news_national_count - 6, "min_international": min(5, v.news_international_count)}
+
     def fit_news(self, script: Script, max_w: int) -> None:
         """LLMs overshoot length: drop the longest/extra stories (keeping section minimums) instead of failing."""
-        v = self.config.video
-        need = {"national": v.news_national_count - 6, "international": min(5, v.news_international_count)}
+        t = self._targets()
+        need = {"national": t["min_national"], "international": t["min_international"]}
         sec = lambda s: "international" if s.section == "international" else "national"
         # very long stories first, then trailing ones, while words exceed the budget
         while script.word_count() > max_w:
@@ -159,13 +169,13 @@ class ScriptManagerAgent(BaseAgent):
     def validate(self, script: Script, min_w: int, max_w: int) -> List[str]:
         problems = []
         if script.video_type == "news":
-            v = self.config.video
+            t = self._targets()
             nat = [s for s in script.scenes if s.section != "international"]
             intl = [s for s in script.scenes if s.section == "international"]
-            if len(nat) < v.news_national_count - 6:
-                problems.append(f"only {len(nat)} national stories, need {v.news_national_count}")
-            if len(intl) < min(5, v.news_international_count):
-                problems.append(f"only {len(intl)} international stories, need {v.news_international_count}")
+            if len(nat) < t["min_national"]:
+                problems.append(f"only {len(nat)} national stories, need {t['national']}")
+            if len(intl) < t["min_international"]:
+                problems.append(f"only {len(intl)} international stories, need {t['international']}")
             short_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) < 6]
             long_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) > 16]
             if len(short_lines) > 3:
@@ -205,6 +215,12 @@ class ScriptManagerAgent(BaseAgent):
             problems.append(f"too short: {wc} words, need {min_w}-{max_w}")
         if wc > max_w * (1.25 if script.video_type == "news" else 1.1):
             problems.append(f"too long: {wc} words, need {min_w}-{max_w}")
+        est = wc / WORDS_PER_SEC.get(script.video_type or "knowledge", 2.4)
+        lo, hi = bounds(self.config.video, script.video_type or "knowledge", getattr(self, "targets", None))
+        if est > hi:
+            problems.append(f"too long: about {est:.0f}s spoken, must be under {hi:.0f}s - shorten")
+        elif est < lo:
+            problems.append(f"too short: about {est:.0f}s spoken, must be at least {lo:.0f}s")
         if not script.sources:
             problems.append("no sources")
         return problems
@@ -216,6 +232,7 @@ class ScriptManagerAgent(BaseAgent):
         min_w = int(kwargs.get("min_words", 110))
         max_w = int(kwargs.get("max_words", 135))
         fallback_sources = research_data.get("sources", [])
+        self.targets = kwargs.get("targets") or None
 
         if self.llm is None:
             return AgentResult(success=False, errors=["No LLM configured"])
@@ -239,14 +256,30 @@ class ScriptManagerAgent(BaseAgent):
             attempt_prompt = (prompt + "\n\nYOUR PREVIOUS ANSWER WAS REJECTED because: "
                               + "; ".join(last_problems) + ". Fix these and return the full JSON again.")
 
-        if script is None or last_problems:
-            hard = [p for p in last_problems if not p.startswith("too ")
-                    or (video_type == "news" and p.startswith("too short"))]
+        if script is not None and video_type == "news":
+            # last resort: trim to the SAME limit the Quality Manager enforces
+            lo, hi = bounds(self.config.video, "news", self.targets)
+            self.fit_news(script, int(hi * WORDS_PER_SEC["news"]))
+        hard = [p for p in last_problems if not p.startswith("too ")]
+        if script is not None:
+            est = estimate_seconds(self._as_dict(script, video_type))
+            lo, hi = bounds(self.config.video, video_type, self.targets)
+            if not lo <= est <= hi:  # same rule the Quality Manager applies
+                hard.append(f"estimated {est:.0f}s outside {lo:.0f}-{hi:.0f}s")
+        if script is None or hard or last_problems:
             if script is None or hard:
-                return AgentResult(success=False, errors=last_problems or ["no script"])
+                return AgentResult(success=False, errors=hard or last_problems or ["no script"])
             self.logger.warning("Accepting script with soft issues: %s", last_problems)
 
-        script.total_duration = round(script.word_count() / (2.5 if video_type == "news" else 2.4), 1)
-        return AgentResult(success=True,
-                           data={"script": script.to_dict(), "llm": getattr(self.llm, "last_used", "")},
+        data = self._as_dict(script, video_type)
+        script.total_duration = round(estimate_seconds(data), 1)
+        data = self._as_dict(script, video_type)
+        return AgentResult(success=True, data={"script": data, "llm": getattr(self.llm, "last_used", "")},
                            metadata={"video_type": video_type})
+
+    def _as_dict(self, script: Script, video_type: str) -> dict:
+        d = script.to_dict()
+        d.setdefault("video_type", video_type)
+        if video_type == "news" and self.targets:
+            d["news_targets"] = self.targets
+        return d

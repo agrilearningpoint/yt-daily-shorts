@@ -18,6 +18,32 @@ class UploadError(RuntimeError):
     pass
 
 
+def publish_key(video_type: str, when=None) -> str:
+    """One upload per video type per IST day, e.g. 'bks-news-20261108' (stored as a video tag)."""
+    import datetime as _dt
+    ist = _dt.timezone(_dt.timedelta(hours=5, minutes=30))
+    day = (when or _dt.datetime.now(ist)).astimezone(ist).strftime("%Y%m%d")
+    return f"bks-{video_type or 'video'}-{day}"
+
+
+def find_existing_upload(youtube, key: str, scan: int = 20) -> Optional[str]:
+    """Look through the channel's latest uploads for one tagged with this publishing key."""
+    ch = youtube.channels().list(part="contentDetails", mine=True).execute()
+    items = ch.get("items") or []
+    if not items:
+        return None
+    uploads = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+    pl = youtube.playlistItems().list(part="contentDetails", playlistId=uploads, maxResults=scan).execute()
+    ids = [i["contentDetails"]["videoId"] for i in pl.get("items", [])]
+    if not ids:
+        return None
+    vids = youtube.videos().list(part="snippet", id=",".join(ids)).execute()
+    for v in vids.get("items", []):
+        if key in (v.get("snippet", {}).get("tags") or []):
+            return v["id"]
+    return None
+
+
 class YouTubeUploader:
     def __init__(self, oauth_manager: YouTubeOAuthManager, dry_run: bool = True, strict: bool = False):
         self.oauth_manager = oauth_manager
@@ -27,7 +53,8 @@ class YouTubeUploader:
     def upload_video(self, video_path: str, title: str, description: str, tags: List[str],
                      category_id: str = "27", privacy_status: str = "public",
                      contains_synthetic_media: bool = True, language: str = "hi",
-                     thumbnail_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+                     thumbnail_path: Optional[str] = None, publishing_key: str = "",
+                     force: bool = False) -> Optional[Dict[str, Any]]:
         if self.dry_run:
             logger.info("⚡ [DRY_RUN] Skipping YouTube upload: %s", title)
             sim = f"mock_{Path(video_path).parent.name}"
@@ -49,6 +76,17 @@ class YouTubeUploader:
         from googleapiclient.http import MediaFileUpload
 
         youtube = build("youtube", "v3", credentials=creds, cache_discovery=False)
+        if publishing_key:
+            tags = list(tags or []) + [publishing_key]
+            if not force:
+                try:
+                    existing = find_existing_upload(youtube, publishing_key)
+                except Exception as exc:
+                    raise UploadError(f"duplicate check failed, not uploading blind: {exc}") from exc
+                if existing:
+                    logger.warning("Already uploaded today (%s): %s - skipping duplicate", publishing_key, existing)
+                    return {"id": existing, "url": f"https://youtube.com/shorts/{existing}",
+                            "status": "duplicate_skipped", "privacy": privacy_status}
         body = {
             "snippet": {"title": title[:100], "description": description[:5000], "tags": tags,
                         "categoryId": str(category_id), "defaultLanguage": language,
@@ -71,12 +109,20 @@ class YouTubeUploader:
                     retry += 1
                     time.sleep(min(2 ** retry + random.random(), 60))
                     continue
+                found = _verify_after_failure(youtube, publishing_key)
+                if found:
+                    response = {"id": found}
+                    break
                 raise UploadError(f"YouTube API error {exc.resp.status}: {exc}") from exc
             except (ConnectionError, TimeoutError, OSError) as exc:
                 if retry < 5:
                     retry += 1
                     time.sleep(min(2 ** retry + random.random(), 60))
                     continue
+                found = _verify_after_failure(youtube, publishing_key)
+                if found:
+                    response = {"id": found}
+                    break
                 raise UploadError(f"upload network failure: {exc}") from exc
 
         video_id = response.get("id", "")
@@ -93,3 +139,17 @@ class YouTubeUploader:
         upload_status = (response.get("status") or {}).get("uploadStatus", "")
         return {"id": video_id, "url": f"https://youtube.com/shorts/{video_id}", "status": upload_status or "uploaded",
                 "privacy": privacy_status}
+
+
+def _verify_after_failure(youtube, key: str) -> Optional[str]:
+    """A timed-out upload may still have landed: check the channel before anyone retries."""
+    if not key:
+        return None
+    try:
+        time.sleep(20)
+        found = find_existing_upload(youtube, key)
+        if found:
+            logger.warning("Upload errored but video %s exists on the channel - treating as uploaded", found)
+        return found
+    except Exception:
+        return None

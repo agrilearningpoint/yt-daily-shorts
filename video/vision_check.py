@@ -37,7 +37,8 @@ def make_vision_check(api_key: str, models: Optional[List[str]] = None,
         img.save(buf, "JPEG", quality=80)
         prompt = (f"A Hindi news video shows this photo while the narrator says: \"{description}\".\n"
                   "Does the photo clearly show that scene, its people, place or object (not a random/unrelated "
-                  "stock photo, not a different country's scene, not a logo or text slide)? Answer only YES or NO.")
+                  "stock photo, not a different country's scene, not a logo or text slide, not a social-media post or "
+                  "profile screenshot, not a TV/website screenshot with on-screen text)? Answer only YES or NO.")
         body = {"contents": [{"parts": [{"text": prompt},
                                         {"inline_data": {"mime_type": "image/jpeg",
                                                          "data": base64.b64encode(buf.getvalue()).decode()}}]}],

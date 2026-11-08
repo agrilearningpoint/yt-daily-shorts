@@ -19,6 +19,11 @@ on:
         required: true
         default: true
         type: boolean
+      force_upload:
+        description: 'Upload even if today\'s video of this type is already on the channel'
+        required: false
+        default: false
+        type: boolean
       llm_check:
         description: 'Only test LLM providers (no video)'
         required: false
@@ -58,6 +63,7 @@ jobs:
       YT_NEWSDATA_API_KEY: ${{ secrets.NEWSDATA_API_KEY }}
       YT_GNEWS_API_KEY: ${{ secrets.GNEWS_API_KEY }}
       YT_UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+      YT_FORCE_UPLOAD: ${{ github.event.inputs.force_upload || 'false' }}
       YT_HF_TOKEN: ${{ secrets.HF_TOKEN }}
       # Optional repository variables (Settings -> Secrets and variables -> Variables)
       YT_YOUTUBE_PRIVACY: ${{ vars.YT_YOUTUBE_PRIVACY }}

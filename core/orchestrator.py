@@ -8,6 +8,7 @@ broken is ever published.
 
 from __future__ import annotations
 
+from core.duration import SHORTS_HARD_LIMIT
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -133,7 +134,8 @@ class DailyOrchestrator:
             self.state.update_state(vid, state=PipelineState.SCRIPTING)
             script_data = await self._stage(vid, "script_generation", lambda: self.script_agent.execute(
                 video_type=task.video_type, research_data=research, prompt_instructions=prompt_text,
-                min_words=prompt.get("min_words", 110), max_words=prompt.get("max_words", 135)))
+                min_words=prompt.get("min_words", 110), max_words=prompt.get("max_words", 135),
+                targets=prompt.get("targets")))
             script = script_data.get("script", script_data)
             llm_used = script_data.get("llm", "")
 
@@ -151,6 +153,10 @@ class DailyOrchestrator:
             production = await self._stage(vid, "video_production", lambda: self.producer_agent.execute(
                 video_id=vid, script=script, creative_brief=creative, research_data=research))
 
+            dur = float(production.get("duration") or 0)
+            if dur > SHORTS_HARD_LIMIT or (0 < dur < 15):
+                raise StageError("video_production", f"rendered video is {dur:.1f}s (Shorts must be 15-{SHORTS_HARD_LIMIT:.0f}s)")
+
             seo = await self._stage(vid, "seo_optimization", lambda: self.seo_agent.execute(
                 script=script, production=production))
             thumb = await self._stage(vid, "thumbnail_design", lambda: self.thumbnail_agent.execute(
@@ -159,7 +165,7 @@ class DailyOrchestrator:
             self.state.update_state(vid, state=PipelineState.PUBLISHING, title=seo.get("title", ""))
             pub = await self._stage(vid, "publishing", lambda: self.publisher_agent.execute(
                 video_path=production.get("video_path", ""), seo_data=seo,
-                thumbnail_path=thumb.get("thumbnail_path")))
+                thumbnail_path=thumb.get("thumbnail_path"), video_type=task.video_type))
 
             yt_id, yt_url = pub.get("youtube_id", ""), pub.get("youtube_url", "")
             self.state.update_state(vid, state=PipelineState.COMPLETED, youtube_id=yt_id, youtube_url=yt_url)

@@ -19,7 +19,7 @@ def _dt(s: str):
         d = date_parser.parse(s)
         return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
     except Exception:
-        return datetime.now(timezone.utc)
+        return None  # unverified date -> rejected by the collector
 
 
 def gnews(key: str) -> List[RawArticle]:

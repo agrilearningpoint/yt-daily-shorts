@@ -337,7 +337,11 @@ class MediaCollector:
                 return None
         return None
 
-    _BAD_IMG = re.compile(r"logo|default|placeholder|favicon|sprite|icon|avatar|banner-ad|1x1", re.I)
+    _BAD_IMG = re.compile(r"logo|default|placeholder|favicon|sprite|icon|avatar|banner-ad|1x1|profile_images|"
+                          r"profile|/user/|fbcdn|twimg|ytimg\.com/vi/|screenshot|share[-_]?image|og[-_]?default|"
+                          r"social[-_]?share|brand", re.I)
+    _SOCIAL_HOST = re.compile(r"(^|\.)(twitter|x|facebook|fb|instagram|threads|linkedin|youtube|youtu|tiktok|"
+                              r"reddit|pinterest|kooapp|sharechat|telegram|t)\.(com|me|in|net|be)$", re.I)
 
     def _news_candidates(self, query: str, want: int = 6) -> List[tuple]:
         """Real photos of the SAME event from several outlets (Bing News RSS -> each article's og:image).
@@ -373,6 +377,9 @@ class MediaCollector:
                 real = urllib.parse.parse_qs(urllib.parse.urlparse(link).query).get("url", [link])[0]
                 if not real.startswith("http") or real in seen or not self._news_match(query, title):
                     continue
+                rhost = re.sub(r"^https?://(www\.)?", "", real).split("/")[0]
+                if self._SOCIAL_HOST.search(rhost):
+                    continue  # social posts give profile pictures/screenshots, not event photos
                 seen.add(real)
                 try:
                     page = requests.get(real, headers=_UA, timeout=self.timeout).text

@@ -6,7 +6,9 @@ from typing import Any
 
 from agents.base_agent import AgentResult, BaseAgent
 from youtube.oauth import YouTubeOAuthManager
-from youtube.uploader import YouTubeUploader
+import os
+
+from youtube.uploader import YouTubeUploader, publish_key
 
 
 class PublisherAgent(BaseAgent):
@@ -30,6 +32,8 @@ class PublisherAgent(BaseAgent):
                 privacy_status=self.config.youtube.default_privacy,
                 contains_synthetic_media=self.config.youtube.contains_synthetic_media,
                 thumbnail_path=kwargs.get("thumbnail_path"),
+                publishing_key=publish_key(kwargs.get("video_type", "")),
+                force=os.getenv("YT_FORCE_UPLOAD", "").lower() in ("1", "true", "yes"),
             )
         except Exception as exc:
             return AgentResult(success=False, errors=[str(exc)])

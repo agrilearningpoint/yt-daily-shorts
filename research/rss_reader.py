@@ -82,9 +82,7 @@ class RSSReader:
                         if pub_date and pub_date.tzinfo is None:
                             pub_date = pub_date.replace(tzinfo=timezone.utc)
                     except Exception:
-                        pub_date = datetime.now(timezone.utc)
-                else:
-                    pub_date = datetime.now(timezone.utc)
+                        pub_date = None  # unverified date: collector rejects it (never assume "now")
 
                 publisher = ""
                 if "news.google." in url:  # "Headline - Outlet" -> clean headline + real outlet

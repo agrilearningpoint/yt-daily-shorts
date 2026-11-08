@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from agents.base_agent import AgentResult, BaseAgent
+from core.duration import MIN_NEWS_STORIES as MIN_STORIES, news_targets
 from prompts import render_prompt
 
 # Natural Hindi narration speed (words/second)
@@ -30,14 +31,17 @@ class PromptEngineerAgent(BaseAgent):
         min_w, max_w = self.word_bounds(video_type)
 
         if video_type == "news":
-            n = self.config.video.news_headline_count
-            if len(items) < n:
-                return AgentResult(success=False, errors=[f"only {len(items)} candidate stories, need {n}"])
+            t = news_targets(self.config.video, items)
+            if t["total"] < MIN_STORIES:
+                return AgentResult(success=False, errors=[
+                    f"only {t['total']} fresh (<24h, dated) stories available, need {MIN_STORIES}; not using old news"])
+            min_w, max_w = int(t["seconds"] * 2.35), int(t["seconds"] * 2.75)
             prompt = render_prompt("scripting/news_script.j2", {
-                "items": items, "count": n, "seconds": self.config.video.news_target_duration,
-                "national": self.config.video.news_national_count,
-                "international": self.config.video.news_international_count,
+                "items": items, "count": t["total"], "seconds": t["seconds"],
+                "national": t["national"], "international": t["international"],
                 "min_words": min_w, "max_words": max_w})
+            return AgentResult(success=True, data={"prompt": prompt, "min_words": min_w, "max_words": max_w,
+                                                   "targets": t}, metadata={"video_type": video_type})
         else:
             if not items:
                 return AgentResult(success=False, errors=["No research topic available"])

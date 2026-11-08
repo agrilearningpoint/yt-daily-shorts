@@ -91,10 +91,14 @@ class NewsCollector:
 
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(hours=self.max_hours_old)
-        recent = [a for a in all_articles if a.published_at and a.published_at >= cutoff]
-        if not recent and all_articles:
-            logger.warning("No articles in past %dh; using latest available", self.max_hours_old)
-            recent = all_articles
+        # Freshness gate: only stories with a VERIFIED publish time inside the window.
+        # Undated, old or future-dated items are dropped; never fall back to old news.
+        recent = [a for a in all_articles
+                  if a.published_at and cutoff <= a.published_at <= now + timedelta(hours=1)]
+        undated = sum(1 for a in all_articles if not a.published_at)
+        logger.info("Freshness: %d/%d articles within %dh (%d undated rejected, %d stale/future rejected)",
+                    len(recent), len(all_articles), self.max_hours_old, undated,
+                    len(all_articles) - len(recent) - undated)
 
         filtered = []
         for a in recent:
@@ -112,7 +116,7 @@ class NewsCollector:
         processed: List[ProcessedNewsItem] = []
         for a in unique:
             reliability = self.registry.get_reliability_weight(a.source_name)
-            hours_old = (now - (a.published_at or now)).total_seconds() / 3600.0
+            hours_old = (now - a.published_at).total_seconds() / 3600.0
             recency = max(0.4, 1.0 - hours_old / 36.0)
             substance = min(1.0, (len(a.title) + len(a.summary)) / 220.0)
             # Stories covered by several outlets are more important.
