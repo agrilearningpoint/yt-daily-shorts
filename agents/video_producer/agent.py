@@ -386,7 +386,8 @@ class VideoProducerAgent(BaseAgent):
         words, t = [], 0.0
         for c, m in zip(clips, clip_meta):
             dur = c.duration / (tempo or 1.0)
-            say = (m["spec"].get("say") or "").strip()
+            # title/section/outro cards already show big text: no captions on top of them
+            say = (m["spec"].get("say") or "").strip() if m.get("kind") == "item" else ""
             toks = say.split()
             if toks:
                 lead, span = 0.06, dur * 0.94 - 0.06
