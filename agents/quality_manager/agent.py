@@ -31,6 +31,16 @@ class QualityManagerAgent(BaseAgent):
         else:
             min_scenes = 2
         max_scenes = 50 if is_news else 9
+        if is_news and est > hi:
+            # later stages (fact-check rewrite, hook agent) can add a few words: trim the longest national
+            # stories in place instead of failing the whole day (run 42502796963 failed at 142s > 138s)
+            while est > hi and len(scenes) > min_scenes:
+                nat = [s for s in scenes if s.get("section") != "international"] or scenes
+                scenes.remove(max(nat, key=lambda s: len((s.get("narration") or "").split())))
+                est = estimate_seconds(script)
+            for i, s in enumerate(scenes, 1):
+                s["scene_number"] = i
+            self.logger.info("trimmed news script to %d stories, ~%.0fs", len(scenes), est)
         text = hook + " ".join(s.get("narration", "") for s in scenes)
 
         checks = [
