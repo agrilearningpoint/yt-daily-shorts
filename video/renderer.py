@@ -38,6 +38,7 @@ class SceneClip:
     story_start: bool = True     # whoosh/pop only when a new story/scene begins (not on every small cut)
     fx: str = "flash"            # cut effect chosen by the Editor Director
     ticker: bool = False         # show the scrolling headline ticker on this clip
+    video: str = ""              # real-motion clip used instead of the still background
 
 
 def _run(cmd: List[str], timeout: int = 600) -> None:
@@ -125,9 +126,17 @@ class VideoRenderer:
         except Exception:
             pass
         vig = ",vignette=PI/5" if self.recipe.get("vignette") else ""
-        inputs = ["-i", clip.background, "-i", clip.overlay]
-        fc = (f"[0:v]scale={int(self.width * 1.5)}:-2,zoompan=z='{z}':x='{x}':y='{y}':d={frames}:"
-              f"s={self.width}x{self.height}:fps={self.fps},setsar=1{grade}{vig}{self._fx(clip.fx)}[bg]")
+        if clip.video and Path(clip.video).exists():
+            W, H = self.width, self.height
+            inputs = ["-stream_loop", "-1", "-ss", "0.5", "-i", clip.video, "-i", clip.overlay]
+            fc = (f"[0:v]fps={self.fps},split[va][vb];"
+                  f"[va]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},boxblur=24:2[vbg];"
+                  f"[vb]scale={W}:{H}:force_original_aspect_ratio=decrease[vfg];"
+                  f"[vbg][vfg]overlay=(W-w)/2:(H-h)/2,setsar=1{grade}{vig}{self._fx(clip.fx)}[bg]")
+        else:
+            inputs = ["-i", clip.background, "-i", clip.overlay]
+            fc = (f"[0:v]scale={int(self.width * 1.5)}:-2,zoompan=z='{z}':x='{x}':y='{y}':d={frames}:"
+                  f"s={self.width}x{self.height}:fps={self.fps},setsar=1{grade}{vig}{self._fx(clip.fx)}[bg]")
         last = "[bg]"
         n = 2
         if clip.ticker and self.ticker and Path(self.ticker).exists():

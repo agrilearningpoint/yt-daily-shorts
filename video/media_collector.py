@@ -27,6 +27,7 @@ class MediaAsset:
     source: str
     credit: str = ""
     page_url: str = ""
+    video: str = ""      # short real-motion clip (mp4); path above is a still frame of it
 
 
 class MediaCollector:
@@ -110,6 +111,72 @@ class MediaCollector:
                     return MediaAsset(str(dest), "pexels", f"Photo: {p.get('photographer', '')} (Pexels)", p.get("url", ""))
         except Exception as exc:
             logger.warning("Pexels error: %s", exc)
+        return None
+
+    def _clip(self, url: str, dest: Path, source: str, credit: str, page: str) -> Optional[MediaAsset]:
+        """Download a short stock clip + grab a still frame (used for vision check / title cards)."""
+        if not url or url in self._used:
+            return None
+        vid = dest.with_suffix(".mp4")
+        try:
+            with requests.get(url, stream=True, timeout=40) as r:
+                if r.status_code != 200:
+                    return None
+                size = 0
+                with open(vid, "wb") as fh:
+                    for chunk in r.iter_content(1 << 16):
+                        size += len(chunk)
+                        if size > 40 * 1024 * 1024:
+                            return None
+                        fh.write(chunk)
+            import subprocess
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", "1", "-i", str(vid), "-frames:v", "1",
+                            "-q:v", "3", str(dest)], timeout=60, check=True)
+            if not dest.exists():
+                return None
+            self._used.add(url)
+            return MediaAsset(str(dest), source, credit, page, video=str(vid))
+        except Exception as exc:
+            logger.debug("clip download failed: %s", exc)
+            return None
+
+    def _pexels_video(self, query: str, dest: Path) -> Optional[MediaAsset]:
+        try:
+            r = requests.get("https://api.pexels.com/videos/search", headers={"Authorization": self.pexels_key},
+                             params={"query": query, "per_page": 8, "orientation": "portrait", "size": "medium"},
+                             timeout=self.timeout)
+            for v in r.json().get("videos", []):
+                if not 3 <= int(v.get("duration", 0) or 0) <= 40:
+                    continue
+                if not self._relevant(query, v.get("url", "").replace("-", " ")):
+                    continue
+                files = [f for f in v.get("video_files", []) if f.get("file_type") == "video/mp4"
+                         and 960 <= int(f.get("height") or 0) <= 1920]
+                files.sort(key=lambda f: abs(int(f.get("height") or 0) - 1920))
+                if files:
+                    a = self._clip(files[0]["link"], dest, "pexels-video",
+                                   f"Video: {v.get('user', {}).get('name', '')} (Pexels)", v.get("url", ""))
+                    if a:
+                        return a
+        except Exception as exc:
+            logger.warning("Pexels video error: %s", exc)
+        return None
+
+    def _pixabay_video(self, query: str, dest: Path) -> Optional[MediaAsset]:
+        try:
+            r = requests.get("https://pixabay.com/api/videos/", params={
+                "key": self.pixabay_key, "q": query, "per_page": 8, "safesearch": "true"}, timeout=self.timeout)
+            for h in r.json().get("hits", []):
+                if not 3 <= int(h.get("duration", 0) or 0) <= 40:
+                    continue
+                if not self._relevant(query, h.get("tags", "")):
+                    continue
+                url = ((h.get("videos") or {}).get("medium") or {}).get("url", "")
+                a = self._clip(url, dest, "pixabay-video", f"Video: {h.get('user', '')} (Pixabay)", h.get("pageURL", ""))
+                if a:
+                    return a
+        except Exception as exc:
+            logger.warning("Pixabay video error: %s", exc)
         return None
 
     def _unsplash(self, query: str, dest: Path) -> Optional[MediaAsset]:
@@ -508,12 +575,17 @@ class MediaCollector:
             stock.append(("unsplash", self._checked(lambda: search and self._unsplash(search, dest), desc)))
         if self.pixabay_key:
             stock.append(("pixabay", self._checked(lambda: search and self._pixabay(search, dest), desc)))
+        clips = []   # short real-motion stock clips (vision-checked against this line), mixed with photos
+        if self.pexels_key:
+            clips.append(("pexels-video", self._checked(lambda: search and self._pexels_video(search, dest), desc)))
+        if self.pixabay_key:
+            clips.append(("pixabay-video", self._checked(lambda: search and self._pixabay_video(search, dest), desc)))
         ai = [("ai", lambda: self._agnes(visual or search, dest, mode)),
               ("ai-cf", lambda: self._cloudflare(visual or search, dest, mode))]
         if hint == "stock":
-            order = ent + stock + ai
-        else:  # real photo of the person/thing first, else an AI picture made for this exact line
-            order = ent + ai + stock
+            order = ent + clips + stock + ai
+        else:  # real photo of the person/thing first, then a matching real clip, else an AI picture for this line
+            order = ent + clips + ai + stock
         tail = []
         if self.use_wikimedia:
             tail.append(("commons", self._checked(

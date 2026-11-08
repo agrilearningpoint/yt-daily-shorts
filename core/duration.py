@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
-WORDS_PER_SEC = {"news": 2.5, "knowledge": 2.4}  # measured on Gemini TTS Hindi
+WORDS_PER_SEC = {"news": 2.3, "knowledge": 2.4}  # measured on Gemini TTS Hindi
 SHORTS_HARD_LIMIT = 179.0                         # YouTube Shorts max is 180 s
 MIN_NEWS_STORIES = 12                             # below this we skip the day instead of padding with old news
 

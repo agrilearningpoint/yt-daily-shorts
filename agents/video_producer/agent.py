@@ -187,7 +187,7 @@ class VideoProducerAgent(BaseAgent):
         tempo = 1.0
         max_d = vcfg.news_max_duration if is_news else vcfg.max_duration
         if total_audio > max_d:
-            tempo = min(total_audio / max_d, 1.25)
+            tempo = min(total_audio / max_d, 1.06)   # never chipmunk the anchor
             self.logger.warning("Voice %.1fs > %ss — tempo %.3f", total_audio, max_d, tempo)
 
         # ---- 2. one picture per small part (parallel) -------------------------
@@ -274,7 +274,9 @@ class VideoProducerAgent(BaseAgent):
                 else:         # next line of the same story: straight cut, like TV news
                     fx = "cut"
                 clips.append(SceneClip(bg, frame, pdur, chip=chip, story_start=(k == 0), fx=fx,
-                                       ticker=bool(ticker_y) and b["kind"] == "item"))
+                                       ticker=bool(ticker_y) and b["kind"] == "item",
+                                       video=(asset.video if asset and b["kind"] == "item"
+                                              and getattr(asset, "video", "") else "")))
                 clip_meta.append({"beat": i, "part": k, "kind": b["kind"], "bg": bg, "chip": b["chip"],
                                   "spec": dict(p, _part=k), "asset": asset})
                 ci += 1

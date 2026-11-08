@@ -176,13 +176,13 @@ class ScriptManagerAgent(BaseAgent):
                 problems.append(f"only {len(nat)} national stories, need {t['national']}")
             if len(intl) < t["min_international"]:
                 problems.append(f"only {len(intl)} international stories, need {t['international']}")
-            short_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) < 6]
-            long_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) > 16]
+            short_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) < 9]
+            long_lines = [s.scene_number for s in script.scenes if len(s.narration.split()) > 22]
             if len(short_lines) > 3:
                 problems.append(f"stories {short_lines[:6]} are meaningless fragments: each must be a complete "
-                                f"7-10 word sentence (who did what + key detail)")
+                                f"13-17 word story in 2 sentences (what happened + result)")
             if len(long_lines) > 6:
-                problems.append(f"stories {long_lines[:5]} too long: keep each story 7-10 words")
+                problems.append(f"stories {long_lines[:5]} too long: keep each story 13-17 words")
             labelled = [s.scene_number for s in script.scenes
                         if re.match(r"^\s*[^\s,]{2,14}\s*(में|मोर्चे पर|जगत में)?\s*[,:]", s.narration)]
             if len(labelled) > 3:

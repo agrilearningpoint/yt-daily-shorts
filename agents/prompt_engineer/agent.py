@@ -9,7 +9,7 @@ from core.duration import MIN_NEWS_STORIES as MIN_STORIES, news_targets
 from prompts import render_prompt
 
 # Natural Hindi narration speed (words/second)
-WORDS_PER_SEC = {"news": 2.5, "knowledge": 2.4}  # measured on Gemini TTS Hindi
+WORDS_PER_SEC = {"news": 2.3, "knowledge": 2.4}  # measured on Gemini TTS Hindi
 
 
 class PromptEngineerAgent(BaseAgent):
