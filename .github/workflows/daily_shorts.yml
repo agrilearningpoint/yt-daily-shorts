@@ -4,8 +4,8 @@ on:
   schedule:
     # Morning News Short: 05:30 AM IST (00:00 UTC)
     - cron: '0 0 * * *'
-    # Knowledge / Explainer Short: 02:30 PM IST (09:00 UTC)
-    - cron: '0 9 * * *'
+    # Knowledge / Explainer Short: PAUSED 2026-11-08 (focus on news). Re-enable:
+    # - cron: '0 9 * * *'   # 02:30 PM IST (09:00 UTC)
   workflow_dispatch:
     inputs:
       video_type:
