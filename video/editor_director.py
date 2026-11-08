@@ -26,21 +26,15 @@ MEMORY = Path("data/editor_memory.json")
 STYLE_SPACE: Dict[str, List[Any]] = {
     # accent, dark, highlight (lower-third / badge / ticker colours) - broadcast palettes
     "palette": [
-        ["#E50914", "#0B0F1A", "#FFD60A"],   # red breaking
-        ["#FF7A00", "#101828", "#FFFFFF"],   # saffron desk
-        ["#00A3FF", "#04122B", "#FFE066"],   # blue studio
-        ["#D62246", "#1B1B3A", "#F2C14E"],   # crimson gold
-        ["#14B8A6", "#0A1F1C", "#FDE047"],   # teal prime-time
-        ["#7C3AED", "#120B2E", "#FACC15"],   # violet night
+        ["#E50914", "#0B0F1A", "#FFD60A"],   # BHARAT KI SOCH brand: red breaking + yellow highlight (fixed identity)
     ],
-    "cut_fx": [["flash", "punch", "glitch"], ["whip", "flash", "punch"], ["dip", "punch", "light"],
-               ["glitch", "whip", "flash"], ["light", "punch", "whip"], ["punch", "flash", "dip"]],
+    "cut_fx": [["punch"], ["whip"], ["flash"], ["punch", "whip"]],   # story changes only; parts are clean cuts
     "motion": ["kenburns_in", "kenburns_mix", "parallax_pan", "slow_push"],
     "grade": ["news_crisp", "warm_film", "cool_studio", "punchy", "neutral"],
     "zoom": [1.10, 1.14, 1.18],
     "vignette": [True, False],
     "ticker": [True],
-    "flash_color": ["white", "white", "#FFD60A"],
+    "flash_color": ["white"],
 }
 
 GRADES = {

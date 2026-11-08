@@ -274,8 +274,35 @@ class ScriptManagerAgent(BaseAgent):
         data = self._as_dict(script, video_type)
         script.total_duration = round(estimate_seconds(data), 1)
         data = self._as_dict(script, video_type)
+        if video_type == "news":
+            await self._best_hook(data)
         return AgentResult(success=True, data={"script": data, "llm": getattr(self.llm, "last_used", "")},
                            metadata={"video_type": video_type})
+
+    async def _best_hook(self, data: dict) -> None:
+        """Hook Agent: write 4 scroll-stopping hooks from the top stories, keep the best factual one."""
+        scenes = data.get("scenes", [])[:5]
+        if not scenes or self.llm is None:
+            return
+        lines = "\n".join(f"{i + 1}. {s.get('narration', '')}" for i, s in enumerate(scenes))
+        prompt = ("You write the first 2 seconds of a Hindi TV-news YouTube Short. Stories (story 1 opens the video):\n"
+                  f"{lines}\n\nWrite 4 different Hindi hooks, 6-10 words each, about STORY 1 (or the most shocking of "
+                  "these), as a punchy claim or curiosity question. Use only facts written above. No greeting, no "
+                  "channel name, no 'आज की खबरें'. Then pick the best for curiosity + accuracy.\n"
+                  'Return JSON: {"hooks": ["...", "...", "...", "..."], "best": 0}')
+        try:
+            res = await self.llm.generate_json(prompt)
+            hooks = [h.strip() for h in (res.get("hooks") or []) if isinstance(h, str) and h.strip()]
+            best = int(res.get("best", 0) or 0)
+            order = ([hooks[best]] if 0 <= best < len(hooks) else []) + hooks
+            for h in order:
+                n = len(h.split())
+                if 5 <= n <= 12 and not re.search(r"नमस्कार|नमस्ते|स्वागत", h):
+                    self.logger.info("Hook Agent picked: %s (from %d)", h, len(hooks))
+                    data["hook"] = h
+                    return
+        except Exception as exc:
+            self.logger.warning("Hook Agent skipped: %s", exc)
 
     def _as_dict(self, script: Script, video_type: str) -> dict:
         d = script.to_dict()

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import re
 from typing import Any, Dict, List
 
 import pytz
@@ -264,8 +265,14 @@ class VideoProducerAgent(BaseAgent):
                 badge = (b.get("category") or default_badge) if b["kind"] not in ("outro", "section") else ""
                 frame = compose_frame(composer, str(out_dir / f"ov_{i:03d}_{k}.png"), badge, ci, total_clips,
                                       counter, date_label if not is_news else "",
-                                      ticker_y=ticker_y if b["kind"] == "item" else 0)
-                fx = "dip" if b["kind"] in ("section", "outro") else fx_cycle[ci % len(fx_cycle)]
+                                      ticker_y=ticker_y if b["kind"] == "item" else 0,
+                                      stat=_stat(p.get("say", "")) if b["kind"] == "item" and k > 0 else "")
+                if b["kind"] in ("section", "outro"):
+                    fx = "dip"
+                elif k == 0:  # a new story: one clean broadcast transition
+                    fx = fx_cycle[b.get("n", ci) % len(fx_cycle)]
+                else:         # next line of the same story: straight cut, like TV news
+                    fx = "cut"
                 clips.append(SceneClip(bg, frame, pdur, chip=chip, story_start=(k == 0), fx=fx,
                                        ticker=bool(ticker_y) and b["kind"] == "item"))
                 clip_meta.append({"beat": i, "part": k, "kind": b["kind"], "bg": bg, "chip": b["chip"],
@@ -274,8 +281,16 @@ class VideoProducerAgent(BaseAgent):
 
         # ---- 4. render ---------------------------------------------------------
         final_path = str(out_dir / "final_short.mp4")
+        captions = srt_path = None
+        if getattr(vcfg, "burn_captions", True):
+            try:
+                captions, srt_path = self._captions(clips, clip_meta, tempo, out_dir)
+            except Exception as exc:
+                self.logger.warning("captions skipped: %s", exc)
+        self._captions_ass = captions
         self.renderer.render(clips, voice.audio_path, final_path, music=vcfg.background_music,
-                             music_volume=vcfg.music_volume, tempo=tempo, sfx=vcfg.sound_effects)
+                             music_volume=vcfg.music_volume, tempo=tempo, sfx=vcfg.sound_effects,
+                             captions=captions)
 
         try:
             review = editor.review(final_path, recipe, str(out_dir), learn=False)
@@ -292,13 +307,15 @@ class VideoProducerAgent(BaseAgent):
         except Exception:
             pass
         duration = probe_duration(final_path)
+        qa = _render_qa(final_path)
+        self.logger.info("Render QA: %s", qa)
         ok = Path(final_path).exists() and Path(final_path).stat().st_size > 200_000 and duration >= 10
         return AgentResult(
             success=ok,
-            data={"video_path": final_path, "audio_path": voice.audio_path, "duration": round(duration, 1),
+            data={"video_path": final_path, "audio_path": voice.audio_path, "captions_srt": srt_path, "duration": round(duration, 1),
                   "first_image": first_image, "media_credits": list(dict.fromkeys(credits)),
                   "voice_provider": voice.provider, "editor_recipe": {k: v for k, v in recipe.items() if k != "notes"},
-                  "editor_review": review, "beats": len(beats), "visual_parts": len(clips),
+                  "editor_review": review, "render_qa": qa, "beats": len(beats), "visual_parts": len(clips),
                   "images_found": sum(1 for a in assets.values() if a),
                   "ai_images": sum(1 for a in assets.values() if a and a.source == "ai")},
             errors=[] if ok else ["rendered video missing or too small"],
@@ -306,7 +323,7 @@ class VideoProducerAgent(BaseAgent):
 
     def _reedit(self, editor, recipe, review, clips, clip_meta, composer, voice, vcfg, tempo, final_path, out_dir):
         score, bad = review.get("score"), review.get("bad_tiles") or []
-        if not score or score >= 7.5 or not bad:
+        if not score or score >= 8.5 or not bad:   # reviewer bar: 8.5/10
             return final_path, review
         starts, t = [], 0.0
         for c in clips:
@@ -351,7 +368,8 @@ class VideoProducerAgent(BaseAgent):
         self.logger.info("Re-edit: replaced %d flagged pictures, rendering again", replaced)
         second = str(Path(out_dir) / "final_short_v2.mp4")
         self.renderer.render(clips, voice.audio_path, second, music=vcfg.background_music,
-                             music_volume=vcfg.music_volume, tempo=tempo, sfx=vcfg.sound_effects)
+                             music_volume=vcfg.music_volume, tempo=tempo, sfx=vcfg.sound_effects,
+                             captions=getattr(self, "_captions_ass", None))
         if not Path(second).exists():
             return final_path, review
         review2 = editor.review(second, recipe, str(out_dir), learn=False)
@@ -360,3 +378,58 @@ class VideoProducerAgent(BaseAgent):
             review2["reedited"] = replaced
             return second, review2
         return final_path, review
+
+    def _captions(self, clips, clip_meta, tempo, out_dir):
+        """Word-synced Hindi captions. Each picture has its own voiced line, so words are timed inside that
+        line's exact audio window (weighted by word length) -> captions stay locked to the voice."""
+        from video.subtitle_generator import SubtitleGenerator
+        words, t = [], 0.0
+        for c, m in zip(clips, clip_meta):
+            dur = c.duration / (tempo or 1.0)
+            say = (m["spec"].get("say") or "").strip()
+            toks = say.split()
+            if toks:
+                lead, span = 0.06, dur * 0.94 - 0.06
+                weights = [len(w) + 2 for w in toks]
+                tot = float(sum(weights))
+                cur = t + lead
+                for w, wt in zip(toks, weights):
+                    d = span * wt / tot
+                    words.append({"word": w, "start": round(cur, 3), "end": round(cur + d, 3)})
+                    cur += d
+            t += dur
+        if not words:
+            return None, None
+        gen = SubtitleGenerator()
+        ass = gen.generate_ass(words, str(Path(out_dir) / "captions.ass"), highlight_color="#FFD60A",
+                               font_size=112, margin_v=730)
+        srt = gen.generate_srt_from_words(words, str(Path(out_dir) / "captions.srt"))
+        return ass, srt
+
+
+_NUM = re.compile(r"(₹\s?[\d,.]+\s?(?:करोड़|लाख|हज़ार|हजार)?|[\d,.]+\s?(?:%|प्रतिशत|करोड़|लाख|हज़ार|हजार|किलो|किमी|मीटर|डॉलर|रुपये|साल|लोगों|लोग))")
+
+
+def _stat(text: str) -> str:
+    """The key number of a line ("₹500 करोड़", "40%") for an on-screen stat card, else ''."""
+    m = _NUM.search(text or "")
+    if not m:
+        return ""
+    val = m.group(1).strip().rstrip(",.")
+    return val if any(ch.isdigit() for ch in val) and len(val) <= 16 else ""
+
+
+def _render_qa(path: str) -> dict:
+    """Post-render self-check (like a QC desk): black frames and dead air in the final MP4."""
+    import subprocess
+    out = {"black_s": 0.0, "silence_s": 0.0}
+    try:
+        r = subprocess.run(["ffmpeg", "-hide_banner", "-i", path, "-vf", "blackdetect=d=0.4:pix_th=0.08",
+                            "-af", "silencedetect=n=-45dB:d=1.2", "-f", "null", "-"],
+                           capture_output=True, text=True, timeout=300)
+        log = r.stderr
+        out["black_s"] = round(sum(float(x) for x in re.findall(r"black_duration:([\d.]+)", log)), 2)
+        out["silence_s"] = round(sum(float(x) for x in re.findall(r"silence_duration: ([\d.]+)", log)), 2)
+    except Exception as exc:
+        out["error"] = str(exc)[:80]
+    return out

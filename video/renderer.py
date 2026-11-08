@@ -3,7 +3,7 @@
 Each beat = Ken Burns photo + white flash cut + static frame overlay +
 headline chip that slides in. Beats are concatenated losslessly, then the
 voice, optional ducked music and synthesized whoosh/pop SFX are mixed in.
-No subtitles are burned in.
+Word-synced Hindi captions (ASS) are burned in during the final pass.
 """
 
 from __future__ import annotations
@@ -109,6 +109,7 @@ class VideoRenderer:
             "whip": ",gblur=sigma=45:steps=2:enable='lt(t,0.13)'",
             "light": ",eq=brightness=0.28:saturation=1.3:enable='lt(t,0.16)'",
             "punch": f",fade=t=in:st=0:d=0.08:color={col}",
+            "cut": "",
         }.get(fx, ",fade=t=in:st=0:d=0.12:color=white")
 
     def _beat_clip(self, clip: SceneClip, length: float, idx: int, out: str) -> str:
@@ -157,7 +158,8 @@ class VideoRenderer:
         return str(random.choice(tracks)) if tracks else None
 
     def render(self, clips: List[SceneClip], voice_audio: str, output_path: str, music: bool = True,
-               music_volume: float = 0.10, tempo: float = 1.0, sfx: bool = True, **_ignored) -> str:
+               music_volume: float = 0.10, tempo: float = 1.0, sfx: bool = True,
+               captions: Optional[str] = None, **_ignored) -> str:
         if not self._ffmpeg:
             raise RenderError("ffmpeg not installed")
         if not clips:
@@ -210,21 +212,28 @@ class VideoRenderer:
                 for k, ct in enumerate(cut_times):
                     wd = max(int((ct - 0.18) * 1000), 0)
                     pd = int((ct + 0.22) * 1000)
-                    fc.append(f"[w{k}]adelay={wd}|{wd},volume=0.55[wd{k}]")
-                    fc.append(f"[p{k}]adelay={pd}|{pd},volume=0.45[pd{k}]")
+                    fc.append(f"[w{k}]adelay={wd}|{wd},volume=0.32[wd{k}]")
+                    fc.append(f"[p{k}]adelay={pd}|{pd},volume=0.22[pd{k}]")
                 fc.append("".join(f"[wd{k}][pd{k}]" for k in range(n))
                           + f"amix=inputs={2 * n}:normalize=0:duration=longest[fxcuts]")
                 mix.append("[fxcuts]")
             fc.append(f"[{h_i}:a]volume=0.8[hit]")
             mix.append("[hit]")
         if len(mix) == 1:
-            fc.append("[voice]loudnorm=I=-14:TP=-1.5:LRA=11[aout]")
+            fc.append(f"[voice]loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=in:st=0:d=0.25,afade=t=out:st={max(total - 0.6, 0):.2f}:d=0.6[aout]")
         else:
             fc.append("".join(mix) + f"amix=inputs={len(mix)}:normalize=0:duration=first,"
-                      "loudnorm=I=-14:TP=-1.5:LRA=11[aout]")
+                      f"loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=in:st=0:d=0.25,afade=t=out:st={max(total - 0.6, 0):.2f}:d=0.6[aout]")
 
-        cmd = [self._ffmpeg, "-y", *inputs, "-filter_complex", ";".join(fc), "-map", "0:v", "-map", "[aout]",
-               "-t", f"{total:.3f}", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
+        vmap, vcodec = ["-map", "0:v"], ["-c:v", "copy"]
+        if captions and Path(captions).exists():
+            fonts = (ROOT / "assets" / "fonts").as_posix()
+            cap = Path(captions).resolve().as_posix().replace(":", "\\:")
+            fc.append(f"[0:v]ass='{cap}':fontsdir='{fonts}'[vcap]")
+            vmap = ["-map", "[vcap]"]
+            vcodec = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
+        cmd = [self._ffmpeg, "-y", *inputs, "-filter_complex", ";".join(fc), *vmap, "-map", "[aout]",
+               "-t", f"{total:.3f}", *vcodec, "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
                "-movflags", "+faststart", str(out)]
         logger.info("Rendering final video (%d beats, %.1fs)…", len(clips), total)
         _run(cmd, timeout=900)

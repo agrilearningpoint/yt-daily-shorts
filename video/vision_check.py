@@ -19,7 +19,7 @@ URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateC
 
 
 def make_vision_check(api_key: str, models: Optional[List[str]] = None,
-                      max_calls: int = 60) -> Optional[Callable[[str, str], bool]]:
+                      max_calls: int = 150) -> Optional[Callable[[str, str], bool]]:
     if not api_key:
         return None
     models = models or ["gemini-3.5-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
@@ -29,7 +29,7 @@ def make_vision_check(api_key: str, models: Optional[List[str]] = None,
     def check(path: str, description: str) -> bool:
         with lock:
             if state["calls"] >= max_calls:
-                return True
+                return False   # fail closed: an unverified stock photo is never shown (audit 2026-11-08)
             state["calls"] += 1
         img = Image.open(path).convert("RGB")
         img.thumbnail((512, 512))
@@ -58,6 +58,6 @@ def make_vision_check(api_key: str, models: Optional[List[str]] = None,
                 return not txt.startswith("NO")
             except Exception as exc:
                 logger.debug("vision %s failed: %s", m, exc)
-        return True
+        return False   # vision unavailable -> reject; the beat falls back to a real/AI/designed card
 
     return check

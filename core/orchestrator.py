@@ -165,7 +165,8 @@ class DailyOrchestrator:
             self.state.update_state(vid, state=PipelineState.PUBLISHING, title=seo.get("title", ""))
             pub = await self._stage(vid, "publishing", lambda: self.publisher_agent.execute(
                 video_path=production.get("video_path", ""), seo_data=seo,
-                thumbnail_path=thumb.get("thumbnail_path"), video_type=task.video_type))
+                thumbnail_path=thumb.get("thumbnail_path"), video_type=task.video_type,
+                captions_path=production.get("captions_srt")))
 
             yt_id, yt_url = pub.get("youtube_id", ""), pub.get("youtube_url", "")
             self.state.update_state(vid, state=PipelineState.COMPLETED, youtube_id=yt_id, youtube_url=yt_url)

@@ -179,6 +179,8 @@ jobs:
             output/*/thumbnail.jpg
             output/*/voiceover.m4a
             output/*/timings.json
+            output/*/captions.srt
+            output/*/editor_sheet.jpg
             data/logs/
           retention-days: 7
           if-no-files-found: ignore

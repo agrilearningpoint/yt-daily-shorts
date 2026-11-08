@@ -313,7 +313,8 @@ class MediaCollector:
         import threading, time
         if not hasattr(MediaCollector, "_agnes_gate"):
             MediaCollector._agnes_gate = threading.Semaphore(2)  # free tier rate-limits bursts
-        style = ("photorealistic editorial news photograph, natural light, realistic Indian setting"
+        style = ("editorial news illustration, realistic setting, natural light. Show places, objects, crowds from behind "
+                 "or silhouettes only: NEVER a recognisable real person's face (no fake photos of real people)"
                  if mode == "news" else
                  "cinematic, historically accurate, richly detailed, documentary illustration, dramatic light")
         prompt = (f"{visual}. {style}. Vertical 9:16 composition, subject centred. No text, no letters, "
@@ -436,7 +437,8 @@ class MediaCollector:
         if not (self.cf_token and self.cf_account and visual):
             return None
         import base64
-        style = ("photorealistic editorial news photograph, natural light, realistic Indian setting"
+        style = ("editorial news illustration, realistic setting, natural light. Show places, objects, crowds from behind "
+                 "or silhouettes only: NEVER a recognisable real person's face (no fake photos of real people)"
                  if mode == "news" else "cinematic, historically accurate, documentary illustration")
         prompt = f"{visual}. {style}. Vertical composition, subject centred. No text, no letters, no watermark, no logos."
         try:
@@ -466,6 +468,7 @@ class MediaCollector:
                         return None
                 except Exception as exc:
                     logger.debug("vision check error: %s", exc)
+                    return None
             return a
         return run
 

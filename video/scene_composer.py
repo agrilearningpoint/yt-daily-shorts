@@ -238,7 +238,7 @@ def compose_ticker(composer: "SceneComposer", out_path: str, headlines: List[str
 
 
 def compose_frame(composer: "SceneComposer", out_path: str, badge: str, index: int, total: int,
-                  counter: str = "", date_label: str = "", ticker_y: int = 0) -> str:
+                  counter: str = "", date_label: str = "", ticker_y: int = 0, stat: str = "") -> str:
     """Transparent 1080x1920 frame: top progress bar, badge, counter pill, watermark."""
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -279,6 +279,19 @@ def compose_frame(composer: "SceneComposer", out_path: str, badge: str, index: i
         wf = font(38, "Medium")
         ww = d.textlength(composer.channel_name, font=wf)
         d.text(((W - ww) / 2, H - 230), composer.channel_name, font=wf, fill=(255, 255, 255, 150))
+    if stat:  # stat card: the key number of this line, big, right side (infographic-style)
+        sf = font(120)
+        lf = font(34, "Bold")
+        sw = int(d.textlength(stat, font=sf))
+        x1, y0 = W - 60, 300
+        x0 = max(60, x1 - sw - 80)
+        d.rounded_rectangle([x0 + 8, y0 + 10, x1 + 8, y0 + 222], radius=24, fill=(0, 0, 0, 120))
+        d.rounded_rectangle([x0, y0, x1, y0 + 212], radius=24, fill=(10, 12, 24, 225),
+                            outline=composer.primary + (255,), width=5)
+        d.rectangle([x0, y0, x0 + 150, y0 + 40], fill=composer.primary + (255,))
+        d.text((x0 + 14, y0 + 2), "आँकड़ा", font=lf, fill=(255, 255, 255, 255))
+        d.text((x0 + 40, y0 + 36), stat, font=sf, fill=(255, 214, 10, 255), stroke_width=2,
+               stroke_fill=(0, 0, 0, 200))
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     img.save(out_path, "PNG")
     return out_path

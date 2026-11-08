@@ -40,8 +40,10 @@ class SEOManagerAgent(BaseAgent):
                 self.logger.warning("SEO LLM step failed, using script title: %s", exc)
 
         title = YouTubeSEOFormatter.format_title(title, max_length=self.config.seo.max_title_length)
-        hashtags = list(self.config.seo.default_hashtags)
-        hashtags.append("#news" if video_type == "news" else "#gk")
+        if video_type == "news":   # 3 relevant hashtags only (no #facts/#knowledge on a news bulletin)
+            hashtags = ["#Shorts", "#HindiNews", "#AajKiKhabar"]
+        else:
+            hashtags = list(self.config.seo.default_hashtags) + ["#gk"]
         story_lines: List[str] = []
         if video_type == "news":
             for n, sc in enumerate(script.get("scenes", []), 1):

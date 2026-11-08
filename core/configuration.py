@@ -99,6 +99,7 @@ class VideoConfig:
     music_volume: float = 0.10
     news_headline_count: int = 36
     show_headline_chips: bool = True
+    burn_captions: bool = True        # word-synced Hindi captions (audit 2026-11-08)
     sound_effects: bool = True
 
 

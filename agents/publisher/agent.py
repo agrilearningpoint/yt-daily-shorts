@@ -34,6 +34,10 @@ class PublisherAgent(BaseAgent):
                 thumbnail_path=kwargs.get("thumbnail_path"),
                 publishing_key=publish_key(kwargs.get("video_type", "")),
                 force=os.getenv("YT_FORCE_UPLOAD", "").lower() in ("1", "true", "yes"),
+                captions_path=kwargs.get("captions_path"),
+                playlist_title="आज की बड़ी खबरें | BHARAT KI SOCH" if kwargs.get("video_type") == "news" else "",
+                comment=("आज की कौन-सी खबर आपको सबसे बड़ी लगी? कमेंट में बताइए 👇"
+                         if kwargs.get("video_type") == "news" else ""),
             )
         except Exception as exc:
             return AgentResult(success=False, errors=[str(exc)])
