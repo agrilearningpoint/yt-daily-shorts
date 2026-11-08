@@ -339,36 +339,74 @@ class MediaCollector:
 
     _BAD_IMG = re.compile(r"logo|default|placeholder|favicon|sprite|icon|avatar|banner-ad|1x1", re.I)
 
-    def _news_photo(self, query: str, dest: Path) -> Optional[MediaAsset]:
-        """Photo of the SAME event: latest news articles about it (Bing News RSS) -> each article's og:image."""
+    def _news_candidates(self, query: str, want: int = 6) -> List[tuple]:
+        """Real photos of the SAME event from several outlets (Bing News RSS -> each article's og:image).
+        Cached per story so every small part of one story can take a different real photo."""
+        import threading, urllib.parse, html
+        if not hasattr(self, "_nc_cache"):
+            self._nc_cache, self._nc_lock = {}, threading.Lock()
+        with self._nc_lock:
+            ev = self._nc_cache.get(query)
+            owner = ev is None
+            if owner:
+                ev = self._nc_cache[query] = {"done": threading.Event(), "items": []}
+        if not owner:
+            ev["done"].wait(timeout=90)
+            return ev["items"]
+        found, seen = [], set()
+        try:
+            items = []
+            for q in (query[:120], " ".join(query.split()[:6])):
+                try:
+                    r = requests.get("https://www.bing.com/news/search", headers=_UA, timeout=self.timeout,
+                                     params={"q": q, "format": "rss", "setlang": "en-IN", "cc": "IN"})
+                    items += re.findall(r"<item>(.*?)</item>", r.text, re.S)[:15]
+                except Exception as exc:
+                    logger.debug("bing news failed: %s", exc)
+                if len(items) >= 8:
+                    break
+            for it in items:
+                if len(found) >= want:
+                    break
+                title = html.unescape((re.search(r"<title>(.*?)</title>", it, re.S) or [None, ""])[1])
+                link = html.unescape((re.search(r"<link>(.*?)</link>", it, re.S) or [None, ""])[1])
+                real = urllib.parse.parse_qs(urllib.parse.urlparse(link).query).get("url", [link])[0]
+                if not real.startswith("http") or real in seen or not self._news_match(query, title):
+                    continue
+                seen.add(real)
+                try:
+                    page = requests.get(real, headers=_UA, timeout=self.timeout).text
+                except Exception:
+                    continue
+                m = (re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', page, re.I)
+                     or re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', page, re.I)
+                     or re.search(r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)', page, re.I))
+                img = html.unescape(m.group(1)) if m else ""
+                key = img.split("?")[0]
+                if not img or self._BAD_IMG.search(key) or key in seen:
+                    continue
+                seen.add(key)
+                host = re.sub(r"^https?://(www\.)?", "", real).split("/")[0]
+                found.append((img, host, real))
+        finally:
+            ev["items"] = found
+            ev["done"].set()
+        logger.info("News photos for '%s': %d real candidates", query[:60], len(found))
+        return found
+
+    def _news_photo(self, query: str, dest: Path, index: int = 0, cycle: bool = True) -> Optional[MediaAsset]:
+        """Real photo of the SAME event. Part k of a story takes candidate k, so parts differ."""
         if not self.use_news_photos or not query:
             return None
-        import urllib.parse, html
-        try:
-            r = requests.get("https://www.bing.com/news/search", headers=_UA, timeout=self.timeout,
-                             params={"q": query[:120], "format": "rss", "setlang": "en-IN", "cc": "IN"})
-            items = re.findall(r"<item>(.*?)</item>", r.text, re.S)[:8]
-        except Exception as exc:
-            logger.debug("bing news failed: %s", exc)
+        cands = self._news_candidates(query)
+        if not cands:
             return None
-        for it in items:
-            title = html.unescape((re.search(r"<title>(.*?)</title>", it, re.S) or [None, ""])[1])
-            link = html.unescape((re.search(r"<link>(.*?)</link>", it, re.S) or [None, ""])[1])
-            real = urllib.parse.parse_qs(urllib.parse.urlparse(link).query).get("url", [link])[0]
-            if not real.startswith("http") or not self._news_match(query, title):
-                continue
-            try:
-                page = requests.get(real, headers=_UA, timeout=self.timeout).text
-            except Exception:
-                continue
-            m = (re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', page, re.I)
-                 or re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', page, re.I)
-                 or re.search(r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)', page, re.I))
-            img = html.unescape(m.group(1)) if m else ""
-            if not img or self._BAD_IMG.search(img.split("?")[0]):
-                continue
+        order = list(range(index, len(cands))) + (list(range(0, index)) if cycle else [])
+        if not cycle and index >= len(cands):
+            return None
+        for j in order:
+            img, host, real = cands[j]
             if self._download(img, dest):
-                host = re.sub(r"^https?://(www\.)?", "", real).split("/")[0]
                 return MediaAsset(str(dest), "news", f"Photo: {host}", real)
         return None
 
@@ -437,9 +475,15 @@ class MediaCollector:
                           MediaAsset(str(dest), "publisher", f"Image: {spec.get('publisher_name', 'news source')}",
                                      spec.get("article_page", ""))))
         desc = visual or search or entity
-        if mode == "news" and spec.get("news_query"):
-            steps.append(("news", lambda: self._news_photo(spec["news_query"], dest)))
+        part = int(spec.get("_part", 0) or 0)
         ent = [("entity", lambda: entity and self._wikipedia_exact(entity, dest))]
+        if mode == "news" and spec.get("news_query"):
+            # Real photos first: a different real photo of the same story for each part; when the
+            # story has fewer real photos than parts, the person/place photo, then reuse a real one.
+            steps.append(("news", lambda: self._news_photo(spec["news_query"], dest, part, cycle=False)))
+            steps += ent
+            ent = []
+            steps.append(("news-reuse", lambda: self._news_photo(spec["news_query"], dest, part, cycle=True)))
         stock = []
         if self.pexels_key:
             stock.append(("pexels", self._checked(lambda: search and self._pexels(search, dest), desc)))
