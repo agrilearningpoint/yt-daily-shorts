@@ -219,6 +219,27 @@
     "flash_color": "white"
    },
    "score": 6.0
+  },
+  {
+   "at": "2026-11-08T16:43",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "punch",
+     "whip"
+    ],
+    "motion": "kenburns_in",
+    "grade": "cool_studio",
+    "zoom": 1.14,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 5.0
   }
  ],
  "option_scores": {
@@ -243,20 +264,20 @@
    "n": 4
   },
   "vignette=true": {
-   "sum": 26.0,
-   "n": 4
-  },
-  "ticker=true": {
-   "sum": 50.0,
-   "n": 8
-  },
-  "flash_color=\"white\"": {
-   "sum": 32.0,
+   "sum": 31.0,
    "n": 5
   },
+  "ticker=true": {
+   "sum": 55.0,
+   "n": 9
+  },
+  "flash_color=\"white\"": {
+   "sum": 37.0,
+   "n": 6
+  },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 11.0,
-   "n": 2
+   "sum": 16.0,
+   "n": 3
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -271,8 +292,8 @@
    "n": 1
   },
   "zoom=1.14": {
-   "sum": 16.0,
-   "n": 3
+   "sum": 21.0,
+   "n": 4
   },
   "vignette=false": {
    "sum": 24.0,
@@ -295,12 +316,12 @@
    "n": 1
   },
   "motion=\"kenburns_in\"": {
-   "sum": 7.0,
-   "n": 1
+   "sum": 12.0,
+   "n": 2
   },
   "grade=\"cool_studio\"": {
-   "sum": 18.0,
-   "n": 3
+   "sum": 23.0,
+   "n": 4
   },
   "palette=[\"#7C3AED\", \"#120B2E\", \"#FACC15\"]": {
    "sum": 12.0,
@@ -325,12 +346,13 @@
   "cut_fx=[\"dip\", \"punch\", \"light\"]": {
    "sum": 6.0,
    "n": 1
+  },
+  "cut_fx=[\"punch\", \"whip\"]": {
+   "sum": 5.0,
+   "n": 1
   }
  },
  "notes": [
-  "Replace repetitive generic building stock images (frames 09, 10, 16, 17) with dynamic video clips or specific subject cutouts.",
-  "Upgrade the plain white box lower-thirds to branded animated graphics with gradient accents to look like top-tier TV channels.",
-  "Improve framing and visual contrast on text overlays so headlines stand out better against bright or cluttered background imagery.",
   "Reduce the height of lower-third graphics and remove the bottom ticker bar to free up vertical screen real estate.",
   "Replace static stock photos and still portraits (e.g., building, plane, static headshots) with dynamic, high-energy motion video clips.",
   "Upgrade the end-screen Call-To-Action (Like + Subscribe) from flat static text to dynamic kinetic typography with animated channel branding.",
@@ -339,6 +361,9 @@
   "Filter out motion-blurred and out-of-focus visual clips (tiles 25 and 33) to keep the broadcast looking sharp and professional.",
   "Ensure every visual directly matches the spoken news beat instead of using generic stock footage.",
   "Eliminate duplicate or heavily blurred celebrity images across consecutive frames.",
-  "Maintain consistent lower-third text styling and avoid cluttered split screens."
+  "Maintain consistent lower-third text styling and avoid cluttered split screens.",
+  "Replace generic stock city buildings and architectural shots with story-specific on-ground visuals.",
+  "Ensure higher image variety to avoid repetitive silhouettes and candle graphics in consecutive segments.",
+  "Maintain strict adherence to high-resolution news assets instead of blurry screenshots."
  ]
 }
