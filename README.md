@@ -3,13 +3,25 @@
 [![Tests](https://github.com/agrilearningpoint/yt-daily-shorts/actions/workflows/tests.yml/badge.svg)](https://github.com/agrilearningpoint/yt-daily-shorts/actions/workflows/tests.yml)
 [![Daily Production](https://github.com/agrilearningpoint/yt-daily-shorts/actions/workflows/daily_shorts.yml/badge.svg)](https://github.com/agrilearningpoint/yt-daily-shorts/actions/workflows/daily_shorts.yml)
 
-Researches, writes, fact-checks, voices, edits and publishes **2 Hindi YouTube Shorts every day** on
-GitHub Actions using free tiers only.
+Researches, writes, fact-checks, voices, edits and publishes a **daily Hindi news Short** (channel
+BHARAT KI SOCH) on GitHub Actions using free tiers only. The knowledge Short is built but **paused** until the
+news Short is perfect.
 
 | Video | Time (IST) | Cron (UTC) | Content |
 |---|---|---|---|
-| News | 05:30 | `0 0 * * *` | **"60 सेकंड में 15 बड़ी खबरें"** — 25+ fast headlines of the last 24h, each with its own photo (PIB, BBC Hindi, The Hindu, NDTV, Amar Ujala…) |
-| Knowledge | 14:30 | `0 9 * * *` | 7-day editorial calendar (105 curated topics + LLM-suggested fresh topics, never repeated) |
+| News | 05:30 | `0 0 * * *` | ~2-minute bulletin: up to 30 national + 6 international stories from the **last 24 h only** (dated, verified), every spoken line with a real photo of that same story |
+| Knowledge | paused | `0 9 * * *` (commented out) | 7-day editorial calendar (105 curated topics + LLM-suggested fresh topics) |
+
+### Reliability rules (2026-11-08)
+* **Fresh news only**: undated, older-than-24h or future-dated items are rejected; fewer fresh stories = a
+  shorter video (minimum 12), never old news.
+* **Claim-level fact check**: each used story's article text is fetched; unsupported stories are dropped.
+* **One duration rule** (`core/duration.py`) shared by script writer, quality gate and post-render check (15-179 s).
+* **No duplicate uploads**: every video carries a tag `bks-<type>-<YYYYMMDD IST>`; the channel is checked before
+  uploading and after any failed upload. `force_upload` workflow input overrides.
+* **Auto-retry** once on failure; **permanent state** (history, editor memory, DB) on the `state` branch.
+* **Editor Director**: daily look, Gemini review of a contact sheet, flagged pictures replaced and re-rendered.
+* **Health workflow**: 08:00 IST daily check (upload live, token, LLM keys) + Sunday weekly report on Telegram.
 
 ## Pipeline
 

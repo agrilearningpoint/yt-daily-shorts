@@ -213,7 +213,9 @@ class MediaCollector:
         """The story's own photo (og:image), only from copyright-safe government sources."""
         try:
             host = re.sub(r"^https?://", "", article_url or "").split("/")[0].lower()
-            if not any(host == d or host.endswith("." + d) for d in self.SAFE_ARTICLE_DOMAINS):
+            safe = any(host == d or host.endswith("." + d) for d in self.SAFE_ARTICLE_DOMAINS)
+            # the story's own article photo is the most exact match (owner's choice 2026-11-08: real news photos)
+            if not safe and (not self.use_news_photos or "news.google." in host or self._SOCIAL_HOST.search(host)):
                 return None
             r = requests.get(article_url, headers=_UA, timeout=self.timeout)
             m = (re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', r.text, re.I)
@@ -224,6 +226,8 @@ class MediaCollector:
                 url = m2.group(1) if m2 else ""
             if url and not url.startswith("http"):
                 url = "https://" + host + "/" + url.lstrip("/")
+            if url and self._BAD_IMG.search(url.split("?")[0]):
+                return None
             if url and self._download(url, dest):
                 return MediaAsset(str(dest), "article", f"Image: {host}", article_url)
         except Exception as exc:
@@ -487,10 +491,12 @@ class MediaCollector:
         if mode == "news" and spec.get("news_query"):
             # Real photos first: a different real photo of the same story for each part; when the
             # story has fewer real photos than parts, the person/place photo, then reuse a real one.
-            steps.append(("news", lambda: self._news_photo(spec["news_query"], dest, part, cycle=False)))
+            steps.append(("news", self._checked(
+                lambda: self._news_photo(spec["news_query"], dest, part, cycle=False), desc)))
             steps += ent
             ent = []
-            steps.append(("news-reuse", lambda: self._news_photo(spec["news_query"], dest, part, cycle=True)))
+            steps.append(("news-reuse", self._checked(
+                lambda: self._news_photo(spec["news_query"], dest, part, cycle=True), desc)))
         stock = []
         if self.pexels_key:
             stock.append(("pexels", self._checked(lambda: search and self._pexels(search, dest), desc)))

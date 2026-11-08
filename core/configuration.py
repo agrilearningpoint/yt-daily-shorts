@@ -137,7 +137,7 @@ class MediaConfig:
     hf_token: str = ""
     agnes_api_key: str = ""
     agnes_model: str = "agnes-image-2.5-flash"
-    use_publisher_images: bool = False   # news-site photos are copyrighted -> claims; keep off
+    use_publisher_images: bool = True    # story's own RSS photo (owner chose real news photos, 2026-11-08)
     use_news_photos: bool = True         # real photo of the same event from the latest news articles (Bing News)
     cf_api_token: str = ""               # Cloudflare Workers AI (free FLUX images) - backup AI artist
     cf_account_id: str = ""

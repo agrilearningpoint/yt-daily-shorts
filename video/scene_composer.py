@@ -242,6 +242,11 @@ def compose_frame(composer: "SceneComposer", out_path: str, badge: str, index: i
     """Transparent 1080x1920 frame: top progress bar, badge, counter pill, watermark."""
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
+    # contrast scrims: top for badge/counter, bottom for lower-third + ticker (readable on bright photos)
+    for yy in range(0, 300):
+        d.line([(0, yy), (W, yy)], fill=(0, 0, 0, int(150 * (1 - yy / 300))))
+    for yy in range(1050, H):
+        d.line([(0, yy), (W, yy)], fill=(0, 0, 0, int(170 * (yy - 1050) / (H - 1050))))
     # progress bar (continuous, not segmented: works for 28 beats)
     d.rounded_rectangle([60, 92, W - 60, 102], radius=5, fill=(255, 255, 255, 80))
     if total > 0:
@@ -279,22 +284,42 @@ def compose_frame(composer: "SceneComposer", out_path: str, badge: str, index: i
     return out_path
 
 
-def compose_chip(composer: "SceneComposer", out_path: str, text: str, size: int = 92) -> str:
-    """Headline chip (RGBA, cropped to content) that the renderer slides in."""
+def compose_chip(composer: "SceneComposer", out_path: str, text: str, size: int = 78) -> str:
+    """Premium lower-third (RGBA, cropped): dark glass panel, accent bar + small 'BREAKING' tag, crisp white text.
+    Readable on bright photos (editor review 2026-11-08: white boxes looked cheap, contrast was weak)."""
     f = font(size)
+    tag_f = font(34, "Bold")
     probe = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
-    lines = wrap_text(probe, text.strip(), f, W - 200, 2)
-    line_h = int(size * 1.32)
-    width = int(max(probe.textlength(ln, font=f) for ln in lines)) + 90
-    height = line_h * len(lines) + 50
-    img = Image.new("RGBA", (width + 24, height + 24), (0, 0, 0, 0))
+    lines = wrap_text(probe, text.strip(), f, W - 230, 2)
+    line_h = int(size * 1.30)
+    width = min(W - 120, int(max(probe.textlength(ln, font=f) for ln in lines)) + 110)
+    tag = getattr(composer, "chip_tag", "") or "ताज़ा खबर"
+    tag_w = int(probe.textlength(tag, font=tag_f)) + 40
+    tag_h = 60
+    height = line_h * len(lines) + 44
+    img = Image.new("RGBA", (width + 30, height + tag_h + 30), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle([12, 18, width + 12, height + 18], radius=26, fill=(0, 0, 0, 120))  # shadow
-    d.rounded_rectangle([0, 0, width, height], radius=26, fill=(255, 255, 255, 245))
-    d.rectangle([0, 18, 14, height - 18], fill=composer.primary + (255,))
-    y = 18
+    top = tag_h - 6
+    # soft shadow
+    d.rounded_rectangle([10, top + 14, width + 10, top + height + 14], radius=18, fill=(0, 0, 0, 110))
+    # glass panel with vertical gradient
+    panel = Image.new("RGBA", (width, height))
+    pd = ImageDraw.Draw(panel)
+    for yy in range(height):
+        a = int(232 - 40 * yy / max(height, 1))
+        pd.line([(0, yy), (width, yy)], fill=(8, 10, 22, a))
+    mask = Image.new("L", (width, height), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, width - 1, height - 1], radius=18, fill=255)
+    img.paste(panel, (0, top), mask)
+    d.rounded_rectangle([0, top, 16, top + height], radius=6, fill=composer.primary + (255,))
+    d.line([(24, top + height - 3), (width - 24, top + height - 3)], fill=composer.primary + (200,), width=3)
+    # tag
+    d.rounded_rectangle([0, 0, tag_w, tag_h], radius=10, fill=composer.primary + (255,))
+    d.text((20, 9), tag, font=tag_f, fill=(255, 255, 255, 255))
+    y = top + 18
     for ln in lines:
-        d.text((48, y - int(size * 0.12)), ln, font=f, fill=(12, 12, 20, 255))
+        d.text((44, y - int(size * 0.12)), ln, font=f, fill=(255, 255, 255, 255),
+               stroke_width=2, stroke_fill=(0, 0, 0, 200))
         y += line_h
     img.save(out_path, "PNG")
     return out_path

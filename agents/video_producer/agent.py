@@ -224,6 +224,7 @@ class VideoProducerAgent(BaseAgent):
         n_items = sum(1 for b in beats if b["kind"] == "item")
         total_clips = len(seg_owner)
         clips: List[SceneClip] = []
+        clip_meta: List[Dict[str, Any]] = []
         credits: List[str] = []
         first_image = None
         ci = 0
@@ -267,6 +268,8 @@ class VideoProducerAgent(BaseAgent):
                 fx = "dip" if b["kind"] in ("section", "outro") else fx_cycle[ci % len(fx_cycle)]
                 clips.append(SceneClip(bg, frame, pdur, chip=chip, story_start=(k == 0), fx=fx,
                                        ticker=bool(ticker_y) and b["kind"] == "item"))
+                clip_meta.append({"beat": i, "part": k, "kind": b["kind"], "bg": bg, "chip": b["chip"],
+                                  "spec": dict(p, _part=k), "asset": asset})
                 ci += 1
 
         # ---- 4. render ---------------------------------------------------------
@@ -275,9 +278,19 @@ class VideoProducerAgent(BaseAgent):
                              music_volume=vcfg.music_volume, tempo=tempo, sfx=vcfg.sound_effects)
 
         try:
-            review = editor.review(final_path, recipe, str(out_dir))
+            review = editor.review(final_path, recipe, str(out_dir), learn=False)
         except Exception as exc:
-            review = {"score": None, "notes": [str(exc)[:100]]}
+            review = {"score": None, "notes": [str(exc)[:100]], "bad_tiles": []}
+        # ---- 5. scene-level re-edit: replace the pictures the editor flagged, render once more ----
+        try:
+            final_path, review = self._reedit(editor, recipe, review, clips, clip_meta, composer, voice, vcfg,
+                                              tempo, final_path, out_dir)
+        except Exception as exc:
+            self.logger.warning("re-edit skipped: %s", exc)
+        try:
+            editor._learn(recipe, review)
+        except Exception:
+            pass
         duration = probe_duration(final_path)
         ok = Path(final_path).exists() and Path(final_path).stat().st_size > 200_000 and duration >= 10
         return AgentResult(
@@ -290,3 +303,60 @@ class VideoProducerAgent(BaseAgent):
                   "ai_images": sum(1 for a in assets.values() if a and a.source == "ai")},
             errors=[] if ok else ["rendered video missing or too small"],
         )
+
+    def _reedit(self, editor, recipe, review, clips, clip_meta, composer, voice, vcfg, tempo, final_path, out_dir):
+        score, bad = review.get("score"), review.get("bad_tiles") or []
+        if not score or score >= 7.5 or not bad:
+            return final_path, review
+        starts, t = [], 0.0
+        for c in clips:
+            starts.append(t)
+            t += c.duration / (tempo or 1.0)
+        targets = set()
+        for tile in bad:
+            sec = tile * 3.0 + 0.5
+            idx = max(j for j, st in enumerate(starts) if st <= sec) if starts else 0
+            if clip_meta[idx]["kind"] == "item":
+                targets.add(idx)
+        targets = sorted(targets)[:8]
+        if not targets:
+            return final_path, review
+        replaced = 0
+        for idx in targets:
+            m = clip_meta[idx]
+            spec = m["spec"]
+            dest = Path(out_dir) / f"fix_{idx:03d}.jpg"
+            old_src = getattr(m["asset"], "path", "")
+            alt = None
+            for fn in (lambda: spec.get("news_query") and self.media._news_photo(spec["news_query"], dest,
+                                                                                int(spec.get("_part", 0)) + 3,
+                                                                                cycle=False),
+                       lambda: spec.get("entity") and self.media._wikipedia_exact(spec["entity"], dest),
+                       lambda: self.media._cloudflare(spec.get("visual") or spec.get("search", ""), dest, "news")):
+                try:
+                    alt = fn()
+                except Exception:
+                    alt = None
+                if alt and alt.path != old_src:
+                    break
+                alt = None
+            if not alt:
+                continue
+            composer.compose_background(alt.path, m["bg"], seed=idx)
+            if alt.source == "ai":
+                _stamp(m["bg"], "सांकेतिक चित्र (AI)")
+            replaced += 1
+        if not replaced:
+            return final_path, review
+        self.logger.info("Re-edit: replaced %d flagged pictures, rendering again", replaced)
+        second = str(Path(out_dir) / "final_short_v2.mp4")
+        self.renderer.render(clips, voice.audio_path, second, music=vcfg.background_music,
+                             music_volume=vcfg.music_volume, tempo=tempo, sfx=vcfg.sound_effects)
+        if not Path(second).exists():
+            return final_path, review
+        review2 = editor.review(second, recipe, str(out_dir), learn=False)
+        self.logger.info("Re-edit score %s -> %s", score, review2.get("score"))
+        if (review2.get("score") or 0) >= score:
+            review2["reedited"] = replaced
+            return second, review2
+        return final_path, review

@@ -35,7 +35,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write  # permanent state is saved to the 'state' branch
   actions: write   # needed to save the state cache
 
 jobs:
@@ -122,11 +122,42 @@ jobs:
           key: yt-state-${{ github.run_id }}
           restore-keys: yt-state-
 
-      - name: Produce & publish
+      - name: Restore permanent state (state branch wins over cache)
+        if: github.event.inputs.llm_check != 'true'
+        run: |
+          mkdir -p data
+          if git fetch -q origin state 2>/dev/null; then
+            for f in history.json editor_memory.json yt_shorts.db; do
+              git show "FETCH_HEAD:$f" > "/tmp/$f" 2>/dev/null && [ -s "/tmp/$f" ] && mv "/tmp/$f" "data/$f" && echo "restored $f"
+            done
+          else
+            echo "no state branch yet (first run)"
+          fi
+
+      - name: Produce & publish (auto-retry once)
         if: github.event.inputs.llm_check != 'true'
         env:
           YT_DRY_RUN: ${{ steps.mode.outputs.dry }}
-        run: python main.py --video-type ${{ steps.mode.outputs.type }}
+        run: |
+          # A retry can never double-upload: the publisher checks the channel for today's publish key first.
+          python main.py --video-type ${{ steps.mode.outputs.type }} && exit 0
+          echo "::warning::first attempt failed, retrying in 90s"
+          sleep 90
+          python main.py --video-type ${{ steps.mode.outputs.type }}
+
+      - name: Save permanent state (state branch)
+        if: always() && github.event.inputs.llm_check != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          W="$GITHUB_WORKSPACE"; D=$(mktemp -d); cd "$D"
+          git init -q
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          if git fetch -q origin state 2>/dev/null; then git checkout -q -b state FETCH_HEAD; else git checkout -q --orphan state; fi
+          for f in history.json editor_memory.json yt_shorts.db; do [ -s "$W/data/$f" ] && cp "$W/data/$f" .; done
+          git add -A
+          git -c user.name=yt-shorts-bot -c user.email=yt-shorts-bot@users.noreply.github.com \
+            commit -qm "state after run ${{ github.run_id }}" && git push -q origin state || echo "state unchanged"
 
       - name: Save pipeline state
         if: always() && github.event.inputs.llm_check != 'true'

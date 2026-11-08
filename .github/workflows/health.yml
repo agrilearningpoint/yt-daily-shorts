@@ -1,0 +1,44 @@
+name: Channel Health & Weekly Report
+
+on:
+  schedule:
+    - cron: '30 2 * * *'    # 08:00 IST daily: was today's news Short uploaded? token + APIs OK?
+    - cron: '30 3 * * 0'    # 09:00 IST Sunday: weekly performance report
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'daily or weekly'
+        required: true
+        default: daily
+        type: choice
+        options: [daily, weekly]
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      YT_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      YT_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      YT_OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      YT_TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      YT_TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      YT_YOUTUBE_CLIENT_SECRET_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRET_JSON }}
+      YT_YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -q -r requirements.txt
+      - name: Run check
+        run: |
+          MODE="${{ github.event.inputs.mode }}"
+          if [ -z "$MODE" ]; then
+            if [ "${{ github.event.schedule }}" = "30 3 * * 0" ]; then MODE=weekly; else MODE=daily; fi
+          fi
+          python scripts/health_report.py "$MODE"

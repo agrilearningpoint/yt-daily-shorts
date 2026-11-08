@@ -3,10 +3,12 @@ on Aaj Tak, ABP, Zee): a confident anchor rattles off many headlines, each one s
 
 CANDIDATE STORIES from the last 24 hours (region in brackets; use ONLY these facts, never invent numbers,
 names, dates or quotes):
-{% for item in items %}[{{ loop.index }}] ({{ 'WORLD' if item.region == 'international' else 'INDIA' }}) {{ item.title }} — {{ (item.summary or '')[:160] }} ({{ item.source_name }})
+{% for item in items %}[{{ loop.index }}] ({{ 'WORLD' if item.region == 'international' else 'INDIA' }}) {{ item.title }} — {{ (item.summary or '')[:160] }} ({{ item.source_name }}{% if item.coverage %}, +{{ item.coverage }} outlets{% endif %})
 {% endfor %}
 
 TASK: build ONE bulletin with exactly TWO sections:
+  Prefer stories confirmed by other outlets ("+N outlets"); use single-source stories only if from an official/major source.
+  Use ONLY facts written in the candidate line: never add numbers, names or dates from memory.
   1. "national": {{ national }} DIFFERENT Indian stories (national politics, government, states, economy,
      markets, sports, science/space, defence, weather, education, railways, courts…), biggest first.
   2. "international": {{ international }} DIFFERENT world stories (world leaders, wars/diplomacy, global economy,

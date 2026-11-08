@@ -32,6 +32,14 @@ class FactVerifierAgent(BaseAgent):
         if self.llm is None:
             return AgentResult(success=False, errors=["No LLM configured for fact check"])
 
+        if script.get("video_type") == "news" and len(items) <= 70:
+            # claim-level evidence: the real article body for every story actually used
+            try:
+                from research.article_text import fetch_many
+                ev = fetch_many(i.get("source_url", "") for i in items)
+                items = [dict(i, evidence=ev.get(i.get("source_url", ""), "")) for i in items]
+            except Exception as exc:
+                self.logger.warning("evidence fetch failed: %s", exc)
         prompt = render_prompt("verification/fact_check.j2", {"script": script, "research_items": items})
         try:
             result = await self.llm.generate_json(prompt)
@@ -51,6 +59,20 @@ class FactVerifierAgent(BaseAgent):
                 sc["narration"] = new
                 from agents.script_manager.agent import resplit_parts
                 sc["parts"] = resplit_parts(sc.get("parts") or [], new)
+        drop = {int(x) for x in (result.get("drop_scenes") or []) if str(x).strip().isdigit()}
+        if drop and script.get("video_type") == "news":
+            from core.duration import MIN_NEWS_STORIES
+            keep = [s for s in script.get("scenes", []) if int(s.get("scene_number", 0)) not in drop]
+            if len(keep) >= MIN_NEWS_STORIES:
+                self.logger.info("Dropping %d unsupported stories: %s", len(drop), sorted(drop))
+                script["scenes"] = keep
+                for n, s in enumerate(keep, 1):
+                    s["scene_number"] = n
+                if verdict == "fail" and len(drop) <= 6:
+                    verdict = "fixed"
+            else:
+                verdict = "fail"
+                issues.append(f"too many unsupported stories ({len(drop)})")
         if (result.get("corrected_hook") or "").strip():
             script["hook"] = result["corrected_hook"].strip()
 

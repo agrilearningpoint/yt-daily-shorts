@@ -101,12 +101,19 @@ class EditorDirector:
         return t
 
     # ---------------------------------------------------------------- review
-    def review(self, video_path: str, recipe: Dict[str, Any], out_dir: str) -> Dict[str, Any]:
-        result: Dict[str, Any] = {"score": None, "notes": []}
+    def review(self, video_path: str, recipe: Dict[str, Any], out_dir: str, learn: bool = True) -> Dict[str, Any]:
+        result: Dict[str, Any] = {"score": None, "notes": [], "bad_tiles": []}
         sheet = str(Path(out_dir) / "editor_sheet.jpg")
         try:
+            try:
+                dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of",
+                                            "csv=p=0", video_path], capture_output=True, text=True,
+                                           timeout=30).stdout.strip() or 120)
+            except Exception:
+                dur = 120.0
+            rows = max(1, -(-int(dur // 3 + 1) // 8))
             subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", video_path, "-vf",
-                            "fps=1/3,scale=200:-1,tile=8x5", "-frames:v", "1", sheet],
+                            f"fps=1/3,scale=200:-1,tile=8x{rows}", "-frames:v", "1", sheet],
                            capture_output=True, timeout=120)
         except Exception:
             pass
@@ -114,8 +121,10 @@ class EditorDirector:
             prompt = ("You are the senior video editor of a top Indian TV news channel. This is a contact sheet "
                       "(one frame every 3 s) of today's vertical Hindi news Short. Judge it like a pro: "
                       "eye-catching? professional motion graphics? images relevant and varied? text readable? "
-                      "boring or repetitive? Reply JSON only: {\"score\": 1-10, \"notes\": [3 short concrete "
-                      "improvement instructions for tomorrow's edit]}")
+                      "boring or repetitive? Tiles are numbered left-to-right, top-to-bottom from 0 (tile n = second 3n). "
+                      "List tiles whose PICTURE is irrelevant, generic (random building/plane/stock), repeated, "
+                      "blurry or a screenshot. Reply JSON only: {\"score\": 1-10, \"bad_tiles\": [numbers], "
+                      "\"notes\": [3 short concrete improvement instructions for tomorrow's edit]}")
             body = {"contents": [{"parts": [{"text": prompt}, {"inline_data": {
                 "mime_type": "image/jpeg", "data": base64.b64encode(Path(sheet).read_bytes()).decode()}}]}],
                 "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}}
@@ -127,11 +136,13 @@ class EditorDirector:
                         continue
                     txt = "".join(p.get("text", "") for p in r.json()["candidates"][0]["content"]["parts"])
                     data = json.loads(txt[txt.find("{"): txt.rfind("}") + 1])
-                    result = {"score": float(data.get("score", 0)) or None, "notes": data.get("notes", [])[:3]}
+                    result = {"score": float(data.get("score", 0)) or None, "notes": data.get("notes", [])[:3],
+                              "bad_tiles": [int(x) for x in (data.get("bad_tiles") or []) if str(x).isdigit()][:12]}
                     break
                 except Exception as exc:
                     logger.debug("editor review %s failed: %s", m, exc)
-        self._learn(recipe, result)
+        if learn:
+            self._learn(recipe, result)
         logger.info("Editor review: score=%s notes=%s", result["score"], result["notes"])
         return result
 

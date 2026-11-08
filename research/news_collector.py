@@ -32,6 +32,7 @@ class ProcessedNewsItem:
     importance_score: float
     image_url: str = ""
     region: str = "national"     # national (India) | international (world)
+    coverage: int = 0            # other outlets reporting the same story (independent corroboration)
 
 
 def _fallback_items(n: int = 3) -> List[ProcessedNewsItem]:
@@ -128,7 +129,8 @@ class NewsCollector:
                 title=a.title, summary=a.summary, source_url=a.link,
                 source_name=a.publisher or a.source_name, region=a.region or "national",
                 published_at=a.published_at.isoformat() if a.published_at else "",
-                reliability_score=reliability, importance_score=round(importance, 3), image_url=a.image_url))
+                reliability_score=reliability, importance_score=round(importance, 3), image_url=a.image_url,
+                coverage=coverage))
 
         processed.sort(key=lambda x: x.importance_score, reverse=True)
 

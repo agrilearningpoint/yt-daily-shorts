@@ -85,3 +85,24 @@ class _FakeYT:
 def test_duplicate_detected():
     assert find_existing_upload(_FakeYT(), "bks-news-20261108") == "b"
     assert find_existing_upload(_FakeYT(), "bks-news-20261109") is None
+
+
+def test_fact_check_drops_unsupported_stories(monkeypatch):
+    import asyncio
+    from agents.fact_verifier.agent import FactVerifierAgent
+    from core.configuration import load_config
+
+    class FakeLLM:
+        async def generate_json(self, prompt, system=None):
+            return {"verdict": "fixed", "issues": ["scene 2 unsupported"], "drop_scenes": [2],
+                    "corrected_scenes": []}
+
+    monkeypatch.setattr("research.article_text.fetch_many", lambda urls, workers=8: {})
+    agent = FactVerifierAgent(load_config(), None, llm=FakeLLM())
+    scenes = [{"scene_number": i, "narration": f"खबर संख्या {i} का पूरा वाक्य", "parts": []} for i in range(1, 15)]
+    script = {"video_type": "news", "hook": "आज की खबरें", "scenes": scenes, "sources": ["https://a.com"]}
+    res = asyncio.run(agent.execute(script=script, research_data={"items": []}))
+    out = res.data["script"]["scenes"]
+    assert res.success and len(out) == 13
+    assert all("संख्या 2 " not in s["narration"] for s in out)
+    assert [s["scene_number"] for s in out] == list(range(1, 14))
