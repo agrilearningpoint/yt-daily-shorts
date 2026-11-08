@@ -240,6 +240,26 @@
     "flash_color": "white"
    },
    "score": 5.0
+  },
+  {
+   "at": "2026-11-08T17:33",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "whip"
+    ],
+    "motion": "kenburns_mix",
+    "grade": "warm_film",
+    "zoom": 1.18,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 6.0
   }
  ],
  "option_scores": {
@@ -252,8 +272,8 @@
    "n": 4
   },
   "motion=\"kenburns_mix\"": {
-   "sum": 21.0,
-   "n": 3
+   "sum": 27.0,
+   "n": 4
   },
   "grade=\"neutral\"": {
    "sum": 21.0,
@@ -268,16 +288,16 @@
    "n": 5
   },
   "ticker=true": {
-   "sum": 55.0,
-   "n": 9
+   "sum": 61.0,
+   "n": 10
   },
   "flash_color=\"white\"": {
-   "sum": 37.0,
-   "n": 6
+   "sum": 43.0,
+   "n": 7
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 16.0,
-   "n": 3
+   "sum": 22.0,
+   "n": 4
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -288,16 +308,16 @@
    "n": 3
   },
   "grade=\"warm_film\"": {
-   "sum": 5.0,
-   "n": 1
+   "sum": 11.0,
+   "n": 2
   },
   "zoom=1.14": {
    "sum": 21.0,
    "n": 4
   },
   "vignette=false": {
-   "sum": 24.0,
-   "n": 4
+   "sum": 30.0,
+   "n": 5
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -308,8 +328,8 @@
    "n": 1
   },
   "zoom=1.18": {
-   "sum": 7.0,
-   "n": 1
+   "sum": 13.0,
+   "n": 2
   },
   "cut_fx=[\"flash\", \"punch\", \"glitch\"]": {
    "sum": 7.0,
@@ -350,12 +370,13 @@
   "cut_fx=[\"punch\", \"whip\"]": {
    "sum": 5.0,
    "n": 1
+  },
+  "cut_fx=[\"whip\"]": {
+   "sum": 6.0,
+   "n": 1
   }
  },
  "notes": [
-  "Reduce the height of lower-third graphics and remove the bottom ticker bar to free up vertical screen real estate.",
-  "Replace static stock photos and still portraits (e.g., building, plane, static headshots) with dynamic, high-energy motion video clips.",
-  "Upgrade the end-screen Call-To-Action (Like + Subscribe) from flat static text to dynamic kinetic typography with animated channel branding.",
   "Fix blank or failed-to-render asset frames (such as tiles 16 and 17) before finalizing the visual edit.",
   "Avoid using repetitive building visuals and generic stock footage like abstract clock close-ups.",
   "Filter out motion-blurred and out-of-focus visual clips (tiles 25 and 33) to keep the broadcast looking sharp and professional.",
@@ -364,6 +385,9 @@
   "Maintain consistent lower-third text styling and avoid cluttered split screens.",
   "Replace generic stock city buildings and architectural shots with story-specific on-ground visuals.",
   "Ensure higher image variety to avoid repetitive silhouettes and candle graphics in consecutive segments.",
-  "Maintain strict adherence to high-resolution news assets instead of blurry screenshots."
+  "Maintain strict adherence to high-resolution news assets instead of blurry screenshots.",
+  "Avoid using repetitive stock photos and direct plain screenshots across consecutive frames.",
+  "Ensure each tile features highly relevant, dynamic visuals matching the news ticker precisely.",
+  "Maintain strict pacing with faster visual cuts to keep the vertical Short engaging and reduce visual fatigue."
  ]
 }
