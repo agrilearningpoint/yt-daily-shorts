@@ -197,6 +197,28 @@
     "flash_color": "white"
    },
    "score": 5.0
+  },
+  {
+   "at": "2026-11-08T11:08",
+   "recipe": {
+    "palette": [
+     "#7C3AED",
+     "#120B2E",
+     "#FACC15"
+    ],
+    "cut_fx": [
+     "dip",
+     "punch",
+     "light"
+    ],
+    "motion": "kenburns_mix",
+    "grade": "neutral",
+    "zoom": 1.1,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 6.0
   }
  ],
  "option_scores": {
@@ -209,28 +231,28 @@
    "n": 4
   },
   "motion=\"kenburns_mix\"": {
-   "sum": 15.0,
-   "n": 2
-  },
-  "grade=\"neutral\"": {
-   "sum": 15.0,
-   "n": 2
-  },
-  "zoom=1.1": {
    "sum": 21.0,
    "n": 3
+  },
+  "grade=\"neutral\"": {
+   "sum": 21.0,
+   "n": 3
+  },
+  "zoom=1.1": {
+   "sum": 27.0,
+   "n": 4
   },
   "vignette=true": {
    "sum": 26.0,
    "n": 4
   },
   "ticker=true": {
-   "sum": 44.0,
-   "n": 7
+   "sum": 50.0,
+   "n": 8
   },
   "flash_color=\"white\"": {
-   "sum": 26.0,
-   "n": 4
+   "sum": 32.0,
+   "n": 5
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
    "sum": 11.0,
@@ -253,8 +275,8 @@
    "n": 3
   },
   "vignette=false": {
-   "sum": 18.0,
-   "n": 3
+   "sum": 24.0,
+   "n": 4
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -281,8 +303,8 @@
    "n": 3
   },
   "palette=[\"#7C3AED\", \"#120B2E\", \"#FACC15\"]": {
-   "sum": 6.0,
-   "n": 1
+   "sum": 12.0,
+   "n": 2
   },
   "grade=\"punchy\"": {
    "sum": 6.0,
@@ -299,12 +321,13 @@
   "palette=[\"#FF7A00\", \"#101828\", \"#FFFFFF\"]": {
    "sum": 5.0,
    "n": 1
+  },
+  "cut_fx=[\"dip\", \"punch\", \"light\"]": {
+   "sum": 6.0,
+   "n": 1
   }
  },
  "notes": [
-  "Replace static headshots with active video clips or dynamic pan-and-zoom motion to boost engagement.",
-  "Add animated keyword highlighting within text overlays to improve visual hierarchy and readability on mobile.",
-  "Vary the lower-third template across topics to prevent visual monotony over rapid news transitions.",
   "Replace repetitive generic building stock images (frames 09, 10, 16, 17) with dynamic video clips or specific subject cutouts.",
   "Upgrade the plain white box lower-thirds to branded animated graphics with gradient accents to look like top-tier TV channels.",
   "Improve framing and visual contrast on text overlays so headlines stand out better against bright or cluttered background imagery.",
@@ -313,6 +336,9 @@
   "Upgrade the end-screen Call-To-Action (Like + Subscribe) from flat static text to dynamic kinetic typography with animated channel branding.",
   "Fix blank or failed-to-render asset frames (such as tiles 16 and 17) before finalizing the visual edit.",
   "Avoid using repetitive building visuals and generic stock footage like abstract clock close-ups.",
-  "Filter out motion-blurred and out-of-focus visual clips (tiles 25 and 33) to keep the broadcast looking sharp and professional."
+  "Filter out motion-blurred and out-of-focus visual clips (tiles 25 and 33) to keep the broadcast looking sharp and professional.",
+  "Ensure every visual directly matches the spoken news beat instead of using generic stock footage.",
+  "Eliminate duplicate or heavily blurred celebrity images across consecutive frames.",
+  "Maintain consistent lower-third text styling and avoid cluttered split screens."
  ]
 }
