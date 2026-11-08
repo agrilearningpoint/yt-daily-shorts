@@ -20,7 +20,7 @@ on:
         default: true
         type: boolean
       force_upload:
-        description: 'Upload even if today\'s video of this type is already on the channel'
+        description: 'Upload even if today video of this type is already on the channel'
         required: false
         default: false
         type: boolean
