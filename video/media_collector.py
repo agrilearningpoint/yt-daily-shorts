@@ -148,7 +148,7 @@ class MediaCollector:
             for v in r.json().get("videos", []):
                 if not 3 <= int(v.get("duration", 0) or 0) <= 40:
                     continue
-                if not self._relevant(query, v.get("url", "").replace("-", " ")):
+                if not self._relevant(query, v.get("url", "").replace("-", " "), share=0.5):
                     continue
                 files = [f for f in v.get("video_files", []) if f.get("file_type") == "video/mp4"
                          and 960 <= int(f.get("height") or 0) <= 1920]
@@ -169,7 +169,7 @@ class MediaCollector:
             for h in r.json().get("hits", []):
                 if not 3 <= int(h.get("duration", 0) or 0) <= 40:
                     continue
-                if not self._relevant(query, h.get("tags", "")):
+                if not self._relevant(query, h.get("tags", ""), share=0.5):
                     continue
                 url = ((h.get("videos") or {}).get("medium") or {}).get("url", "")
                 a = self._clip(url, dest, "pixabay-video", f"Video: {h.get('user', '')} (Pixabay)", h.get("pageURL", ""))
