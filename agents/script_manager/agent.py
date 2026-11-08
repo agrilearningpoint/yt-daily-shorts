@@ -247,8 +247,8 @@ class ScriptManagerAgent(BaseAgent):
                 self.logger.error("Script generation failed: %s", exc)
                 return AgentResult(success=False, errors=[str(exc)])
             script = parse_script(data, video_type, fallback_sources, research_data.get("items", []))
-            if video_type == "news":
-                self.fit_news(script, int(max_w * 1.2))
+            if video_type == "news":  # trim to the quality-gate limit before judging (saves LLM retries)
+                self.fit_news(script, int(bounds(self.config.video, "news", self.targets)[1] * WORDS_PER_SEC["news"]))
             last_problems = self.validate(script, min_w, max_w)
             if not last_problems:
                 break
