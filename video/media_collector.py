@@ -491,8 +491,9 @@ class MediaCollector:
         if mode == "news" and spec.get("news_query"):
             # Real photos first: a different real photo of the same story for each part; when the
             # story has fewer real photos than parts, the person/place photo, then reuse a real one.
-            steps.append(("news", self._checked(
-                lambda: self._news_photo(spec["news_query"], dest, part, cycle=False), desc)))
+            # fresh same-story photos are already matched by headline: a literal vision check against the
+            # line's scene description wrongly rejected real photos (run 42471690616: 14 rejected), so skip it
+            steps.append(("news", lambda: self._news_photo(spec["news_query"], dest, part, cycle=False)))
             steps += ent
             ent = []
             steps.append(("news-reuse", self._checked(
