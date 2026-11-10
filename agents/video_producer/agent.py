@@ -67,6 +67,7 @@ class VideoProducerAgent(BaseAgent):
                                     use_news_photos=getattr(config.media, "use_news_photos", True),
                                     cf_token=getattr(config.media, "cf_api_token", ""),
                                     cf_account=getattr(config.media, "cf_account_id", ""),
+                                    hf_token=getattr(config.media, "hf_token", ""),
                                     vision=(make_vision_check(config.llm.gemini_api_key)
                                             if getattr(config.media, "vision_check", True) else None))
         self.renderer = VideoRenderer(config.video.width, config.video.height, config.video.fps)

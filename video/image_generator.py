@@ -25,7 +25,7 @@ class AIImageGenerator:
         out_file = Path(output_path)
         out_file.parent.mkdir(parents=True, exist_ok=True)
 
-        url = f"https://api-inference.huggingface.co/models/{self.model_id}"
+        url = f"https://router.huggingface.co/hf-inference/models/{self.model_id}"
         headers = {"Authorization": f"Bearer {self.hf_token}"}
         payload = {"inputs": f"{prompt}, 9:16 vertical ratio, highly detailed, photorealistic, 4k"}
 

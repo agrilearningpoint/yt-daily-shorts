@@ -17,7 +17,7 @@ general:
 llm:
   # Tried in order. Providers without a key are skipped; a failing
   # provider/model falls through to the next one.
-  provider_order: ["gemini", "groq", "nvidia", "mistral", "openrouter", "ollama"]
+  provider_order: ["gemini", "groq", "nvidia", "mistral", "agnes", "openrouter", "ollama"]
   # "auto" = ask the provider's /models API at run time and pick the best
   # current free model, so retired models never break the pipeline.
   # Ids listed before "auto" are preferred while the provider still lists them.
@@ -28,9 +28,13 @@ llm:
     gemini: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "auto"]
     groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "auto"]
     openrouter: ["auto"]
+    agnes: ["agnes-2.5-flash", "auto"]   # free OpenAI-compatible gateway (text + images)
     mistral: ["mistral-small-latest", "auto"]
     nvidia: ["auto"]
     ollama: []   # Ollama Cloud returned HTTP 402 (paid credits needed); set ["auto"] after subscribing
+  # Extra failover keys per provider come from YT_<PROVIDER>_API_KEY_2..9 secrets.
+  # Chain length = models x keys, so keep this small (2 = primary + 1 spare).
+  max_keys_per_provider: 2
   temperature: 0.7
   max_tokens: 12000
   timeout_sec: 90

@@ -35,7 +35,7 @@ class MediaCollector:
                  use_wikimedia: bool = True, use_openverse: bool = True, timeout: int = 15,
                  agnes_key: str = "", agnes_model: str = "agnes-image-2.5-flash",
                  use_publisher_images: bool = False, use_news_photos: bool = True,
-                 cf_token: str = "", cf_account: str = "", vision=None):
+                 cf_token: str = "", cf_account: str = "", vision=None, hf_token: str = ""):
         self.pexels_key = pexels_key
         self.pixabay_key = pixabay_key
         self.cache_dir = Path(cache_dir)
@@ -49,6 +49,7 @@ class MediaCollector:
         self.use_publisher_images = use_publisher_images
         self.use_news_photos = use_news_photos
         self.cf_token, self.cf_account = cf_token, cf_account
+        self.hf_token = hf_token
         self.vision = vision  # callable(image_path, description) -> bool, or None
 
     # ------------------------------------------------------------------
@@ -524,6 +525,29 @@ class MediaCollector:
             logger.warning("Cloudflare AI error: %s", exc)
             return None
 
+    def _huggingface(self, visual: str, dest: Path, mode: str = "news") -> Optional[MediaAsset]:
+        """Free AI picture from Hugging Face Inference Providers (FLUX.1-schnell)."""
+        if not (self.hf_token and visual) or getattr(self, "_hf_dead", False):
+            return None
+        style = ("editorial news illustration, realistic setting, natural light. Show places, objects, crowds from behind "
+                 "or silhouettes only: NEVER a recognisable real person's face (no fake photos of real people)"
+                 if mode == "news" else "cinematic, historically accurate, documentary illustration")
+        prompt = (f"{visual}. {style}. Vertical composition, subject centred. "
+                  "No text, no letters, no watermark, no logos.")
+        try:
+            from video.image_generator import AIImageGenerator
+            gen = AIImageGenerator(self.hf_token)
+            out = gen.generate(prompt, str(dest))
+            if not out:
+                self._hf_dead = True   # stop hammering for the rest of this run
+                return None
+            Image.open(out).convert("RGB").save(dest, "JPEG", quality=92)
+            return MediaAsset(str(dest), "ai", "AI-generated illustration (Hugging Face, FLUX)", "")
+        except Exception as exc:
+            logger.warning("Hugging Face AI image error: %s", exc)
+            self._hf_dead = True
+            return None
+
     def _checked(self, fn, description: str):
         """Wrap a stock/commons step: Gemini vision must agree the photo shows the described scene."""
         def run():
@@ -581,7 +605,8 @@ class MediaCollector:
         if self.pixabay_key:
             clips.append(("pixabay-video", self._checked(lambda: search and self._pixabay_video(search, dest), desc)))
         ai = [("ai", lambda: self._agnes(visual or search, dest, mode)),
-              ("ai-cf", lambda: self._cloudflare(visual or search, dest, mode))]
+              ("ai-cf", lambda: self._cloudflare(visual or search, dest, mode)),
+              ("ai-hf", lambda: self._huggingface(visual or search, dest, mode))]
         if hint == "stock":
             order = ent + clips + stock + ai
         else:  # real photo of the person/thing first, then a matching real clip, else an AI picture for this line

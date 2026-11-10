@@ -37,7 +37,7 @@ class GeneralConfig:
 class LLMConfig:
     # Providers are tried in this order; any provider without a key is skipped.
     provider_order: List[str] = field(default_factory=lambda: [
-        "gemini", "groq", "nvidia", "mistral", "openrouter", "ollama",
+        "gemini", "groq", "nvidia", "mistral", "agnes", "openrouter", "ollama",
     ])
     models: Dict[str, List[str]] = field(default_factory=dict)
     gemini_api_key: str = ""
@@ -46,6 +46,11 @@ class LLMConfig:
     openrouter_api_key: str = ""
     nvidia_api_key: str = ""
     ollama_api_key: str = ""
+    # Agnes AI (OpenAI-compatible, free tier) reuses the media key unless overridden.
+    agnes_api_key: str = ""
+    # Failover pools: provider -> extra keys from YT_<PROVIDER>_API_KEY_2..9
+    extra_keys: Dict[str, List[str]] = field(default_factory=dict)
+    max_keys_per_provider: int = 2   # caps chain length per provider
     temperature: float = 0.7
     max_tokens: int = 4096
     timeout_sec: int = 90
@@ -59,7 +64,24 @@ class LLMConfig:
             "openrouter": self.openrouter_api_key,
             "nvidia": self.nvidia_api_key,
             "ollama": self.ollama_api_key,
+            "agnes": self.agnes_api_key,
         }
+
+    def key_pool(self) -> Dict[str, List[str]]:
+        """Primary + extra keys for every provider (duplicates removed)."""
+        pool: Dict[str, List[str]] = {}
+        for provider, primary in self.keys().items():
+            values: List[str] = []
+            if primary:
+                values.append(primary)
+            for extra in self.extra_keys.get(provider, []) or []:
+                if extra and extra not in values:
+                    values.append(extra)
+            pool[provider] = values
+        return pool
+
+    def key_count(self) -> int:
+        return sum(len(v) for v in self.key_pool().values())
 
     def has_any_key(self) -> bool:
         return any(v for v in self.keys().values())
@@ -214,6 +236,7 @@ _ENV_MAP: Dict[str, tuple] = {
     "YT_PEXELS_API_KEY": ("media", "pexels_api_key"),
     "YT_PIXABAY_API_KEY": ("media", "pixabay_api_key"),
     "YT_AGNES_API_KEY": ("media", "agnes_api_key"),
+    "YT_MAX_KEYS_PER_PROVIDER": ("llm", "max_keys_per_provider"),
     "YT_CF_API_TOKEN": ("media", "cf_api_token"),
     "YT_CF_ACCOUNT_ID": ("media", "cf_account_id"),
     "YT_HF_TOKEN": ("media", "hf_token"),
@@ -280,6 +303,31 @@ def _apply_env(cfg: AppConfig) -> None:
             continue
         target = sections[section]
         setattr(target, name, _coerce(getattr(target, name), value.strip()))
+
+    # Failover pools: YT_<PROVIDER>_API_KEY_<n>  (n = 2..9) -> llm.extra_keys
+    pools: Dict[str, List[str]] = {}
+    for env_key, raw in os.environ.items():
+        if not env_key.startswith("YT_") or "_API_KEY_" not in env_key:
+            continue
+        head, _, tail = env_key[len("YT_"):].partition("_API_KEY_")
+        if not tail.isdigit() or not raw.strip():
+            continue
+        provider = head.lower()
+        bucket = pools.setdefault(provider, [])
+        if raw.strip() not in bucket:
+            bucket.append(raw.strip())
+    if pools:
+        for provider, values in pools.items():
+            existing = list(cfg.llm.extra_keys.get(provider, []) or [])
+            for value in values:
+                if value not in existing and value != cfg.llm.keys().get(provider):
+                    existing.append(value)
+            cfg.llm.extra_keys[provider] = existing
+
+    # Agnes is one key used for both text (llm) and images (media).
+    if not cfg.llm.agnes_api_key:
+        cfg.llm.agnes_api_key = cfg.media.agnes_api_key
+
     # Keep the two dry-run flags in lock-step.
     cfg.youtube.dry_run = cfg.general.dry_run
     if not cfg.general.dry_run:
