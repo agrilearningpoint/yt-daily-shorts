@@ -56,7 +56,7 @@ class LongFormPipeline:
 
         logger.info("=== long-form: %s (%d chapters, ~%d min) ===", topic, chapters, minutes)
         self._checkpoint_restore()
-        writer = ScriptWriter(self.llm, words_per_chapter=max(260, int(minutes * 145 / chapters)))
+        writer = ScriptWriter(self.llm, words_per_chapter=max(280, int(minutes * 158 / chapters)))
         script = await writer.build(topic, angle, minutes, chapters, self.out)
         title = script["title"]
         chs = script["chapters"]
@@ -217,7 +217,7 @@ class LongFormPipeline:
                "-shortest", str(tail_av)], "outro")
         parts.append(str(tail_av))
 
-        joined = R.concat(parts, str(self.work / "joined.mp4"), self.work)
+        joined = R.concat(parts, str(self.work / "joined.mp4"), self.work, reencode=True)
         self._merge_srt(chs)
         R.run([R.ff(), "-y", "-i", joined, "-c", "copy", "-movflags", "+faststart", str(film)],
               "finalise film")
@@ -319,9 +319,11 @@ class LongFormPipeline:
     # ------------------------------------------------------------- upload
     def _upload(self, film: str, thumb: str, meta: Dict[str, Any], privacy: str) -> Dict[str, Any]:
         try:
-            from youtube.oauth_manager import YouTubeOAuthManager
+            from youtube.oauth import YouTubeOAuthManager
             from youtube.uploader import YouTubeUploader
-            oauth = YouTubeOAuthManager(self.config.youtube)
+            yt = self.config.youtube
+            oauth = YouTubeOAuthManager(getattr(yt, "client_secret_json", ""),
+                                        getattr(yt, "token_json", ""))
             up = YouTubeUploader(oauth, dry_run=self.config.general.dry_run, strict=False)
             res = up.upload_video(
                 video_path=film, title=meta["title"], description=meta["description"],

@@ -284,10 +284,20 @@ def render_still(img: str, dur: float, out_path: str, seed: int = 0, fps: int = 
     return out_path
 
 
-def concat(videos: List[str], out_path: str, work: Path) -> str:
+def concat(videos: List[str], out_path: str, work: Path, reencode: bool = False) -> str:
+    """Join clips. Stream-copy is fine for identical pieces; a film-level join
+    re-encodes because stream-copy silently loses seconds when the parts differ
+    by a frame or two (measured: 19.0 min of chapters came out as 17.3 min)."""
     lst = work / "concat.txt"
     lst.write_text("".join(f"file '{Path(v).resolve()}'\n" for v in videos), encoding="utf-8")
-    run([ff(), "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", out_path], "concat")
+    cmd = [ff(), "-y", "-f", "concat", "-safe", "0", "-i", str(lst)]
+    if reencode:
+        cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart"]
+    else:
+        cmd += ["-c", "copy"]
+    cmd.append(out_path)
+    run(cmd, "concat")
     return out_path
 
 
