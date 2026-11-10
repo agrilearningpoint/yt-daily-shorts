@@ -61,7 +61,7 @@ models:
   mistral    ministral-14b-latest, open-mistral-nemo
   groq       openai/gpt-oss-120b, openai/gpt-oss-20b, qwen/qwen3.8-27b
   agnes      agnes-2.5-flash
-  nvidia     nvidia/nemotron-3-ultra-550b-a55b, deepseek-ai/deepseek-v4.1-flash
+  nvidia     nvidia/nemotron-3-ultra-550b-a55b
   openrouter nvidia/nemotron-3-ultra-550b-a55b:free, nvidia/nemotron-3.5-lightning:free,
              dots-studio/dots-3-note-preview:free, liquid/lfm-3-1.7b:free,
              recursive/flint-v1.0:free
@@ -95,6 +95,39 @@ Six Gemini keys inside one Google Cloud project still share 20 RPD. To turn the
 6 keys into 6× quota, each key must live in its **own** Google Cloud project.
 
 ---
+
+## 3b. Stage routing (set 2026-11-10)
+
+The flagship's quota is tiny, so it is spent only where quality is visible:
+
+| Stage | Tier | Why |
+|---|---|---|
+| `script_manager` — narration | `quality` | this is what the viewer hears |
+| `seo_manager` — title / tags | `quality` | decides whether anyone clicks |
+| `research_manager`, `script_manager` hooks, `fact_verifier` | default chain | cheap; flash-lite or another provider serves them |
+
+```
+tiers:
+  quality:
+    gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
+```
+
+A tier **reorders** the chain — the default ordering stays after the preferred
+pairs, so a `quality` call can never have fewer fallbacks. One `FallbackLLM`
+object is shared, so the run-wide dead/strike bookkeeping applies to both paths.
+
+### Cost of a sick model inside one run
+
+| Situation | Behaviour |
+|---|---|
+| Key hangs (ReadTimeout) | key parked for the run after one timeout |
+| Model hangs | model parked for the run (it already cost a full timeout) |
+| Model answers 503 "high demand" twice | parked for the run |
+| Model 429s with "exceeded your current quota" | parked — a daily quota cannot refill mid-run |
+| Model 429s with a plain rate limit | transient, key ring rotates and retries later |
+
+Measured: six mixed tier calls with 3.8-flash out of quota = **16.4 s total**,
+flagship attempted once then parked.
 
 ## 4. Recommended routing
 
