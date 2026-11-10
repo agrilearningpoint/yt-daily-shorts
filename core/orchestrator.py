@@ -11,6 +11,7 @@ from __future__ import annotations
 from core.duration import SHORTS_HARD_LIMIT
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -161,6 +162,7 @@ class DailyOrchestrator:
                 script=script, production=production))
             thumb = await self._stage(vid, "thumbnail_design", lambda: self.thumbnail_agent.execute(
                 video_id=vid, script=script, creative_brief=creative, production=production), require_success=False)
+            self._upload_artifact_to_hf(vid, thumb.get("thumbnail_path"), "thumbnail.jpg")
 
             self.state.update_state(vid, state=PipelineState.PUBLISHING, title=seo.get("title", ""))
             pub = await self._stage(vid, "publishing", lambda: self.publisher_agent.execute(
@@ -249,6 +251,22 @@ class DailyOrchestrator:
         logger.info("=== Run completed: %d ok, %d failed ===", len(completed), len(results) - len(completed))
         self._backup_state_to_hf()
         return results
+
+    def _upload_artifact_to_hf(self, video_id: str, local_path: Any, name: str) -> None:
+        """Add one late artefact (thumbnail, SEO json, ...) to the video's HF folder."""
+        if not local_path or not Path(str(local_path)).exists():
+            return
+        try:
+            from core.hf_storage import store_from_config
+
+            store = store_from_config(self.config)
+            if not store.enabled:
+                return
+            url = store.upload_file(local_path, f"videos/{self._now():%Y-%m-%d}/{video_id}/{name}")
+            if url:
+                logger.info("HF storage: %s -> %s", name, url)
+        except Exception as exc:  # noqa: BLE001 — storage must never break a run
+            logger.warning("HF artefact upload skipped (%s): %s", name, exc)
 
     def _backup_state_to_hf(self) -> None:
         """Mirror SQLite DB + history to the free HF dataset repo (survives runner resets)."""
