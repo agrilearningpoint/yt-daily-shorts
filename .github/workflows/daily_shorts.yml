@@ -2,9 +2,10 @@ name: Daily YouTube Shorts Production
 
 on:
   schedule:
-    # Morning News Short: 05:30 AM IST (00:00 UTC)
-    - cron: '17 22 * * *'   # 03:47 IST (off the busy top-of-hour; GitHub delayed 00:00 UTC runs by ~6h)
-    - cron: '47 1 * * *'    # 07:17 IST backup: duplicate guard skips it if the first run already uploaded
+    # Morning News Short. Primary trigger = Hark daily task (04:00 IST dispatch + 06:15 IST check/retry),
+    # because GitHub cron can run hours late. This cron is only a backup; the gate job skips it
+    # when today's live video already succeeded.
+    - cron: '17 23 * * *'   # 04:47 IST backup
     # Knowledge / Explainer Short: PAUSED 2026-11-08 (focus on news). Re-enable:
     # - cron: '0 9 * * *'   # 02:30 PM IST (09:00 UTC)
   workflow_dispatch:
@@ -31,6 +32,8 @@ on:
         default: false
         type: boolean
 
+run-name: "${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') && 'dry-run' || 'live' }} ${{ github.event.inputs.video_type || 'news' }} (${{ github.event_name }})"
+
 concurrency:
   group: daily-shorts-production
   cancel-in-progress: false
@@ -40,7 +43,31 @@ permissions:
   actions: write   # needed to save the state cache
 
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Skip backup cron if today's live video is already done
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SKIP=false
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            TODAY=$(TZ=Asia/Kolkata date +%Y-%m-%d)
+            N=$(gh api "repos/${{ github.repository }}/actions/workflows/daily_shorts.yml/runs?per_page=20" \
+              --jq "[.workflow_runs[] | select(.id != ${{ github.run_id }}) | select(.conclusion == \"success\")
+                     | select(.display_title | startswith(\"live\"))
+                     | select((.created_at | fromdateiso8601 + 19800 | strftime(\"%Y-%m-%d\")) == \"$TODAY\")] | length")
+            if [ "${N:-0}" -gt 0 ]; then SKIP=true; fi
+          fi
+          echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
+          echo "skip=$SKIP"
+
   produce-and-publish:
+    needs: gate
+    if: needs.gate.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 100
     env:
