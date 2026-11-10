@@ -43,7 +43,7 @@ llm:
     mistral: ["ministral-14b-latest", "open-mistral-nemo"]
     groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
     agnes: ["agnes-2.5-flash"]           # 30 RPM, no hard usage cap
-    nvidia: ["nvidia/nemotron-3-ultra-550b-a55b", "deepseek-ai/deepseek-v4.1-flash"]
+    nvidia: ["nvidia/nemotron-3-ultra-550b-a55b"]   # deepseek-v4.1-flash timed out in CI
     openrouter: ["nvidia/nemotron-3-ultra-550b-a55b:free",
                  "nvidia/nemotron-3.5-lightning:free",
                  "dots-studio/dots-3-note-preview:free",

@@ -126,6 +126,8 @@ def test_settings_models_are_the_probed_ones():
     assert not any("inkling" in m for m in models["openrouter"])
     assert all(m.endswith(":free") for m in models["openrouter"])
     assert models["ollama"] == []
+    # nvidia deepseek-v4.1-flash hung in CI (ReadTimeout) — one model is enough
+    assert all("deepseek" not in m for m in models["nvidia"])
 
 
 def test_transport_timeout_rotates_to_the_next_key():
