@@ -159,6 +159,8 @@ class MediaConfig:
     pexels_api_key: str = ""
     pixabay_api_key: str = ""
     hf_token: str = ""
+    hf_repo_id: str = ""            # HF dataset repo for artefact storage (free)
+    hf_storage_private: bool = True
     agnes_api_key: str = ""
     agnes_model: str = "agnes-image-2.5-flash"
     use_publisher_images: bool = True    # story's own RSS photo (owner chose real news photos, 2026-11-08)
@@ -240,6 +242,8 @@ _ENV_MAP: Dict[str, tuple] = {
     "YT_CF_API_TOKEN": ("media", "cf_api_token"),
     "YT_CF_ACCOUNT_ID": ("media", "cf_account_id"),
     "YT_HF_TOKEN": ("media", "hf_token"),
+    "YT_HF_REPO_ID": ("media", "hf_repo_id"),
+    "YT_HF_STORAGE_PRIVATE": ("media", "hf_storage_private"),
     "YT_MONGODB_URI": ("database", "mongodb_uri"),
     "YT_CLOUDFLARE_R2_ACCESS_KEY": ("media", "r2_access_key"),
     "YT_CLOUDFLARE_R2_SECRET_KEY": ("media", "r2_secret_key"),

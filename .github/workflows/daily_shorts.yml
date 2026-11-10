@@ -96,6 +96,7 @@ jobs:
       YT_UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
       YT_FORCE_UPLOAD: ${{ github.event.inputs.force_upload || 'false' }}
       YT_HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      YT_HF_REPO_ID: ${{ vars.YT_HF_REPO_ID || 'Rajaagri/yt-daily-shorts-artifacts' }}
       # Failover key pools: provider -> YT_<PROVIDER>_API_KEY_2..9
       # (a quota-exhausted or revoked key falls through to the next one)
       YT_GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}

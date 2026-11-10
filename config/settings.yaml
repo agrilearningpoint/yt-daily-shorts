@@ -51,6 +51,10 @@ video:
   news_national_count: 16     # section 1: India (fewer, fuller stories - Satyam 2026-11-08)
   news_international_count: 4 # section 2: world
   output_format: "mp4"
+  # Free Hugging Face dataset repo for artefact + state storage
+  # (GitHub artifacts expire after 7 days; long renders outgrow them)
+  hf_repo_id: ""          # e.g. "Rajaagri/yt-daily-shorts-artifacts" (override: YT_HF_REPO_ID)
+  hf_storage_private: true
   background_music: true
   music_volume: 0.10
   news_headline_count: 20     # 16 national + 4 international, 2 sentences each (what + result)

@@ -315,6 +315,30 @@ class VideoProducerAgent(BaseAgent):
         qa = _render_qa(final_path)
         self.logger.info("Render QA: %s", qa)
         ok = Path(final_path).exists() and Path(final_path).stat().st_size > 200_000 and duration >= 10
+        storage_urls: Dict[str, str] = {}
+        try:  # free HF dataset storage (long videos outgrow GitHub artifacts)
+            from core.hf_storage import store_from_config
+
+            store = store_from_config(self.config)
+            if store.enabled and ok:
+                out_dir_path = Path(out_dir)
+                candidates = {
+                    "final_short.mp4": str(final_path),
+                    "captions.srt": srt_path or "",
+                    "thumbnail.jpg": str(out_dir_path / "thumbnail.jpg"),
+                }
+                storage_urls = store.upload_video(
+                    video_id=kwargs.get("video_id", out_dir_path.name),
+                    files={k: v for k, v in candidates.items() if v and Path(v).exists()},
+                    meta={"title": (script.get("title") or "")[:200],
+                          "duration_sec": round(duration, 1),
+                          "voice_provider": voice.provider},
+                )
+                if storage_urls:
+                    self.logger.info("HF storage: %d artefact(s) mirrored", len(storage_urls))
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning("HF storage skipped: %s", exc)
+
         return AgentResult(
             success=ok,
             data={"video_path": final_path, "audio_path": voice.audio_path, "captions_srt": srt_path, "duration": round(duration, 1),
@@ -322,7 +346,8 @@ class VideoProducerAgent(BaseAgent):
                   "voice_provider": voice.provider, "editor_recipe": {k: v for k, v in recipe.items() if k != "notes"},
                   "editor_review": review, "render_qa": qa, "beats": len(beats), "visual_parts": len(clips),
                   "images_found": sum(1 for a in assets.values() if a),
-                  "ai_images": sum(1 for a in assets.values() if a and a.source == "ai")},
+                  "ai_images": sum(1 for a in assets.values() if a and a.source == "ai"),
+                  "storage_urls": storage_urls},
             errors=[] if ok else ["rendered video missing or too small"],
         )
 

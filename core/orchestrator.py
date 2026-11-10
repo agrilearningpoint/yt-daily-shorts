@@ -247,4 +247,21 @@ class DailyOrchestrator:
             completed, failed_count=len(results) - len(completed), dry_run=self.config.general.dry_run,
             failures=self.failures, insights=insights))
         logger.info("=== Run completed: %d ok, %d failed ===", len(completed), len(results) - len(completed))
+        self._backup_state_to_hf()
         return results
+
+    def _backup_state_to_hf(self) -> None:
+        """Mirror SQLite DB + history to the free HF dataset repo (survives runner resets)."""
+        try:
+            from core.hf_storage import store_from_config
+
+            store = store_from_config(self.config)
+            if not store.enabled:
+                return
+            paths = [getattr(self.config.database, "sqlite_path", ""),
+                     getattr(self.config.database, "history_path", "")]
+            urls = store.backup_state([p for p in paths if p])
+            if urls:
+                logger.info("HF storage: state backup %s", ", ".join(urls))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("HF state backup skipped: %s", exc)
