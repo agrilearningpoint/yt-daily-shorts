@@ -135,6 +135,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Cache 3D photo depth model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bks-depth
+          key: depth-anything-v2-small-onnx-v1
+
       - name: LLM provider check
         if: github.event.inputs.llm_check == 'true'
         run: python main.py --llm-check

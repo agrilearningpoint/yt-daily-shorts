@@ -100,6 +100,7 @@ class VideoConfig:
     news_headline_count: int = 20
     show_headline_chips: bool = True
     burn_captions: bool = True        # word-synced Hindi captions (audit 2026-11-08)
+    depth_motion: bool = True         # real news photos play with 3D depth motion (2026-11-10)
     sound_effects: bool = True
 
 

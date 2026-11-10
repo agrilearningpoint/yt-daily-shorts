@@ -76,6 +76,7 @@ class SceneComposer:
     def compose_background(self, image_path: Optional[str], out_path: str, seed: int = 0,
                            card_text: str = "") -> str:
         bw, bh = int(W * ZOOM_PAD), int(H * ZOOM_PAD)
+        box = ""
         if image_path and Path(image_path).exists():
             src = Image.open(image_path).convert("RGB")
             # blurred cover fill
@@ -103,6 +104,7 @@ class SceneComposer:
             y = max(0, min(y, bh - fg.height))
             fill.paste(fg, (x, y))
             canvas = fill
+            box = f"{x},{y},{fg.width},{fg.height}"
         else:
             canvas = self._designed_card((bw, bh), seed, card_text)
         # vignette top/bottom for text legibility
@@ -119,6 +121,11 @@ class SceneComposer:
         canvas = Image.composite(Image.new("RGB", (bw, bh), (0, 0, 0)), canvas, shade)
         Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         canvas.save(out_path, "JPEG", quality=92)
+        side = Path(out_path + ".box")   # where the sharp photo sits (used by the 3D photo motion)
+        if box:
+            side.write_text(box)
+        elif side.exists():
+            side.unlink()
         return out_path
 
     def _designed_card(self, size, seed: int, text: str) -> Image.Image:

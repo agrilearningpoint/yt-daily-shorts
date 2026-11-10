@@ -50,6 +50,7 @@ video:
   background_music: true
   music_volume: 0.10
   news_headline_count: 20     # 16 national + 4 international, 2 sentences each (what + result)
+  depth_motion: true          # real news photo of each line plays with gentle 3D camera motion (free, CPU)
   show_headline_chips: true   # short 2-4 word title chip per story (NOT subtitles)
   sound_effects: true         # whoosh/pop on every cut
 

@@ -70,6 +70,7 @@ class VideoProducerAgent(BaseAgent):
                                     vision=(make_vision_check(config.llm.gemini_api_key)
                                             if getattr(config.media, "vision_check", True) else None))
         self.renderer = VideoRenderer(config.video.width, config.video.height, config.video.fps)
+        self.renderer.depth_motion = bool(getattr(config.video, "depth_motion", True))
 
     def _date_label(self) -> str:
         now = datetime.now(pytz.timezone(self.config.general.timezone))
@@ -276,7 +277,8 @@ class VideoProducerAgent(BaseAgent):
                 clips.append(SceneClip(bg, frame, pdur, chip=chip, story_start=(k == 0), fx=fx,
                                        ticker=bool(ticker_y) and b["kind"] == "item",
                                        video=(asset.video if asset and b["kind"] == "item"
-                                              and getattr(asset, "video", "") else "")))
+                                              and getattr(asset, "video", "") else ""),
+                                       depth=bool(asset and b["kind"] == "item" and asset.source != "ai")))
                 clip_meta.append({"beat": i, "part": k, "kind": b["kind"], "bg": bg, "chip": b["chip"],
                                   "spec": dict(p, _part=k), "asset": asset})
                 ci += 1

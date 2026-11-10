@@ -39,6 +39,7 @@ class SceneClip:
     fx: str = "flash"            # cut effect chosen by the Editor Director
     ticker: bool = False         # show the scrolling headline ticker on this clip
     video: str = ""              # real-motion clip used instead of the still background
+    depth: bool = False          # real photo: play it with 3D depth motion (video/parallax.py)
 
 
 def _run(cmd: List[str], timeout: int = 600) -> None:
@@ -79,6 +80,41 @@ class VideoRenderer:
         self.ticker: Optional[str] = None
         self.ticker_y = 1726
         self._t0 = 0.0
+        self.depth_motion = True
+        self._depth_clips: dict = {}
+
+    def _prepare_depth(self, clips: List[SceneClip], durs: List[float], work: Path) -> None:
+        """Turn each real-photo beat into a short 3D-motion clip (parallel, cached across re-renders)."""
+        self._depth_clips = {}
+        if not self.depth_motion:
+            return
+        try:
+            from video.parallax import make_clip
+        except Exception as exc:
+            logger.warning("3D photo motion unavailable: %s", exc)
+            return
+        jobs = []
+        for i, c in enumerate(clips):
+            if c.depth and not c.video and Path(c.background).exists():
+                st = Path(c.background).stat()
+                key = f"{Path(c.background).stem}_{int(st.st_mtime)}_{st.st_size}_{durs[i]:.2f}_{i % 6}"
+                jobs.append((i, c.background, str(work / f"depth_{key}.mp4"), durs[i]))
+        if not jobs:
+            return
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+        t0 = time.time()
+
+        def one(job):
+            i, bg, out, d = job
+            if Path(out).exists() and Path(out).stat().st_size > 1000:
+                return i, out
+            return i, make_clip(bg, out, d + 0.1, self.width, self.height, self.fps, style=i % 6)
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            for i, out in ex.map(one, jobs):
+                if out:
+                    self._depth_clips[i] = out
+        logger.info("3D photo motion: %d/%d real photos in %.0fs", len(self._depth_clips), len(jobs), time.time() - t0)
 
     def _motion(self, idx: int, frames: int) -> tuple:
         zmax = float(self.recipe.get("zoom", 1.12))
@@ -126,7 +162,11 @@ class VideoRenderer:
         except Exception:
             pass
         vig = ",vignette=PI/5" if self.recipe.get("vignette") else ""
-        if clip.video and Path(clip.video).exists():
+        depth_clip = self._depth_clips.get(idx)
+        if depth_clip and not clip.video:
+            inputs = ["-i", depth_clip, "-i", clip.overlay]
+            fc = f"[0:v]fps={self.fps},setsar=1{grade}{vig}{self._fx(clip.fx)}[bg]"
+        elif clip.video and Path(clip.video).exists():
             W, H = self.width, self.height
             inputs = ["-stream_loop", "-1", "-ss", "0.5", "-i", clip.video, "-i", clip.overlay]
             fc = (f"[0:v]fps={self.fps},split[va][vb];"
@@ -179,6 +219,7 @@ class VideoRenderer:
         durs = [c.duration / tempo for c in clips]
         durs[-1] += TAIL
         # frame-accurate lengths so cuts stay in sync with the voice
+        self._prepare_depth(clips, durs, work)
         paths = []
         self._t0 = 0.0
         for i, c in enumerate(clips):
