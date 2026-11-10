@@ -3,7 +3,8 @@ name: Daily YouTube Shorts Production
 on:
   schedule:
     # Morning News Short: 05:30 AM IST (00:00 UTC)
-    - cron: '0 0 * * *'
+    - cron: '17 22 * * *'   # 03:47 IST (off the busy top-of-hour; GitHub delayed 00:00 UTC runs by ~6h)
+    - cron: '47 1 * * *'    # 07:17 IST backup: duplicate guard skips it if the first run already uploaded
     # Knowledge / Explainer Short: PAUSED 2026-11-08 (focus on news). Re-enable:
     # - cron: '0 9 * * *'   # 02:30 PM IST (09:00 UTC)
   workflow_dispatch:
