@@ -77,6 +77,9 @@ jobs:
       YT_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       YT_MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
       YT_OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      YT_GEMINI_API_KEYS_EXTRA: ${{ secrets.GEMINI_API_KEYS_EXTRA }}
+      YT_GROQ_API_KEYS_EXTRA: ${{ secrets.GROQ_API_KEYS_EXTRA }}
+      YT_OPENROUTER_API_KEYS_EXTRA: ${{ secrets.OPENROUTER_API_KEYS_EXTRA }}
       YT_NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       YT_OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
       YT_TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

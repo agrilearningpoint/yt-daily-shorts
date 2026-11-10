@@ -10,6 +10,8 @@ falls through to the next one. The mock provider is used ONLY when
 from __future__ import annotations
 
 import asyncio
+import os
+import threading
 import json
 import logging
 import re
@@ -28,6 +30,50 @@ class LLMError(RuntimeError):
 # ---------------------------------------------------------------------------
 # JSON helpers
 # ---------------------------------------------------------------------------
+
+ROTATE_ON = ("HTTP 429", "HTTP 413", "HTTP 401", "HTTP 403", "HTTP 503", "quota", "RESOURCE_EXHAUSTED")
+
+
+def split_keys(value: str) -> List[str]:
+    """'k1,k2' -> ['k1', 'k2'] (spaces/quotes/newlines ignored, duplicates dropped)."""
+    out = []
+    for k in str(value or "").replace("\n", ",").replace(";", ",").split(","):
+        k = k.strip().strip('"').strip("'").strip()
+        if k and k not in out:
+            out.append(k)
+    return out
+
+
+class _KeyRing:
+    """Several API keys for one provider: on quota/limit/overload errors the next key is tried."""
+
+    def _init_keys(self, api_key) -> None:
+        self.keys = api_key if isinstance(api_key, list) else split_keys(api_key)
+        self.api_key = self.keys[0] if self.keys else ""
+        self._ki = 0
+        self._tl = threading.local()
+
+    def _key(self) -> str:
+        return getattr(self._tl, "key", None) or self.api_key
+
+    def _rotating(self, fn, *args):
+        if len(self.keys) <= 1:
+            self._tl.key = self.api_key
+            return fn(*args)
+        last = None
+        for step in range(len(self.keys)):
+            self._tl.key = self.keys[(self._ki + step) % len(self.keys)]
+            try:
+                out = fn(*args)
+                self._ki = (self._ki + step) % len(self.keys)
+                return out
+            except LLMError as exc:
+                last = exc
+                if not any(c in str(exc) for c in ROTATE_ON):
+                    raise
+                logger.info("%s key #%d hit a limit, trying the next key", self.name, (self._ki + step) % len(self.keys) + 1)
+        raise last
+
 
 def extract_json(text: str) -> Dict[str, Any]:
     """Parse the first JSON object in *text* (tolerates fences / chatter)."""
@@ -75,7 +121,7 @@ class BaseLLMProvider(ABC):
         return extract_json(text)
 
 
-class GeminiProvider(BaseLLMProvider):
+class GeminiProvider(_KeyRing, BaseLLMProvider):
     """Google Gemini via the v1beta REST API (no deprecated SDK)."""
 
     name = "gemini"
@@ -83,7 +129,7 @@ class GeminiProvider(BaseLLMProvider):
 
     def __init__(self, api_key: str, model_name: str, temperature: float = 0.7,
                  max_tokens: int = 4096, timeout: int = 90):
-        self.api_key = api_key
+        self._init_keys(api_key)
         self.model_name = model_name
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -100,7 +146,7 @@ class GeminiProvider(BaseLLMProvider):
             body["systemInstruction"] = {"parts": [{"text": system_prompt}]}
         resp = requests.post(
             self.URL.format(model=self.model_name),
-            headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
+            headers={"x-goog-api-key": self._key(), "Content-Type": "application/json"},
             json=body, timeout=self.timeout,
         )
         if resp.status_code != 200:
@@ -113,10 +159,10 @@ class GeminiProvider(BaseLLMProvider):
         return "".join(p.get("text", "") for p in parts if not p.get("thought"))
 
     async def generate_text(self, prompt, system_prompt=None, json_mode=False) -> str:
-        return await asyncio.to_thread(self._call, prompt, system_prompt, json_mode)
+        return await asyncio.to_thread(self._rotating, self._call, prompt, system_prompt, json_mode)
 
 
-class OpenAICompatProvider(BaseLLMProvider):
+class OpenAICompatProvider(_KeyRing, BaseLLMProvider):
     """Any OpenAI-compatible /chat/completions endpoint."""
 
     BASE_URLS = {
@@ -131,14 +177,14 @@ class OpenAICompatProvider(BaseLLMProvider):
                  max_tokens: int = 4096, timeout: int = 90):
         self.name = provider
         self.base_url = self.BASE_URLS[provider]
-        self.api_key = api_key
+        self._init_keys(api_key)
         self.model_name = model_name
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.timeout = timeout
 
     def _headers(self) -> Dict[str, str]:
-        h = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        h = {"Authorization": f"Bearer {self._key()}", "Content-Type": "application/json"}
         if self.name == "openrouter":
             h["HTTP-Referer"] = "https://github.com/agrilearningpoint/yt-daily-shorts"
             h["X-Title"] = "yt-daily-shorts"
@@ -173,7 +219,7 @@ class OpenAICompatProvider(BaseLLMProvider):
         return content
 
     async def generate_text(self, prompt, system_prompt=None, json_mode=False) -> str:
-        return await asyncio.to_thread(self._call, prompt, system_prompt, json_mode)
+        return await asyncio.to_thread(self._rotating, self._call, prompt, system_prompt, json_mode)
 
 
 class MockLLMProvider(BaseLLMProvider):
@@ -346,19 +392,30 @@ class FallbackLLM(BaseLLMProvider):
         return await self._run("generate_json", prompt, system_prompt)
 
 
+def provider_keys(provider: str, main_key: str = "") -> List[str]:
+    """Main secret + YT_<PROVIDER>_API_KEYS_EXTRA (comma list), de-duplicated."""
+    extra = os.getenv(f"YT_{provider.upper()}_API_KEYS_EXTRA", "")
+    return split_keys(f"{main_key},{extra}")
+
+
 def build_llm(llm_cfg, allow_mock: bool = False) -> FallbackLLM:
     """Build the provider chain from an ``LLMConfig``."""
     keys = llm_cfg.keys()
     candidates: List[BaseLLMProvider] = []
     for provider in llm_cfg.provider_order:
-        key = keys.get(provider, "")
-        if not key:
+        ring = provider_keys(provider, keys.get(provider, ""))
+        if not ring:
             continue
+        key = ring[0]
         configured = list((llm_cfg.models or {}).get(provider) or ["auto"])
         preferred = [m for m in configured if m not in ("auto", "auto-free")]
         models = list(preferred)
         if any(m in ("auto", "auto-free") for m in configured):
-            discovered = discover_models(provider, key)
+            discovered = []
+            for k in ring:   # a dead/limited key must not hide the provider's models
+                discovered = discover_models(provider, k)
+                if discovered:
+                    break
             if discovered and preferred and provider != "openrouter":
                 # keep preferred ids only if the provider still lists them
                 still = [m for m in preferred if m in discovered]
@@ -373,23 +430,30 @@ def build_llm(llm_cfg, allow_mock: bool = False) -> FallbackLLM:
             kwargs = dict(temperature=llm_cfg.temperature, max_tokens=llm_cfg.max_tokens,
                           timeout=llm_cfg.timeout_sec)
             if provider == "gemini":
-                candidates.append(GeminiProvider(key, model, **kwargs))
+                candidates.append(GeminiProvider(list(ring), model, **kwargs))
             else:
-                candidates.append(OpenAICompatProvider(provider, key, model, **kwargs))
+                candidates.append(OpenAICompatProvider(provider, list(ring), model, **kwargs))
     return FallbackLLM(candidates, allow_mock=allow_mock or llm_cfg.allow_mock)
 
 
 async def health_check(llm_cfg) -> List[Tuple[str, bool, str]]:
-    """Ping every configured provider/model once. Used by ``main.py --llm-check``."""
+    """Ping every key of every provider once (best model), then the model chain. ``main.py --llm-check``."""
     chain = build_llm(llm_cfg)
     results = []
+    seen = set()
     for cand in chain.candidates:
-        label = f"{cand.name}/{getattr(cand, 'model_name', '')}"
-        try:
-            data = await cand.generate_json('Return {"ok": true, "lang": "hi"} as JSON.')
-            results.append((label, bool(data.get("ok")), "ok"))
-        except Exception as exc:
-            results.append((label, False, str(exc)[:160]))
+        if cand.name in seen:
+            continue
+        seen.add(cand.name)
+        for i, k in enumerate(getattr(cand, "keys", []) or [], 1):
+            one = type(cand)(k, cand.model_name, timeout=60) if cand.name == "gemini" else \
+                OpenAICompatProvider(cand.name, k, cand.model_name, timeout=60)
+            label = f"{cand.name} key#{i} (...{k[-4:]}) {cand.model_name}"
+            try:
+                data = await one.generate_json('Return {"ok": true, "lang": "hi"} as JSON.')
+                results.append((label, bool(data.get("ok")), "ok"))
+            except Exception as exc:
+                results.append((label, False, str(exc)[:160]))
     return results
 
 
