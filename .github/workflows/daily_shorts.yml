@@ -78,7 +78,7 @@ jobs:
         id: mode
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then
-            if [ "${{ github.event.schedule }}" = "0 0 * * *" ]; then TYPE=news; else TYPE=knowledge; fi
+            if [ "${{ github.event.schedule }}" = "0 9 * * *" ]; then TYPE=knowledge; else TYPE=news; fi
             DRY=false
           else
             TYPE="${{ github.event.inputs.video_type }}"
