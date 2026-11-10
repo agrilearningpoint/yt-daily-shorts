@@ -235,19 +235,39 @@ class MockLLMProvider(BaseLLMProvider):
     async def generate_json(self, prompt: str, system_prompt: Optional[str] = None) -> Dict[str, Any]:
         if "FACT_CHECK" in prompt:
             return {"verdict": "pass", "confidence": 0.9, "issues": [], "corrected_scenes": []}
-        m = re.search(r"(\d+) बड़ी खबरें", prompt)
-        if m and "candidate number" in prompt:
-            topics = ["डिजिटल इंडिया", "इसरो मिशन", "किसान योजना", "रेलवे विस्तार", "निर्यात वृद्धि", "शिक्षा नीति"]
+        # v2 news schema: the prompt asks for "national"/"international" story buckets.
+        if '"national"' in prompt and '"international"' in prompt:
+            def _count(pattern: str, default: int) -> int:
+                hit = re.search(pattern, prompt)
+                return int(hit.group(1)) if hit else default
 
-            def story(i, sec):
-                return {"on_screen_text": topics[i % 6], "src": (i % 3) + 1,
-                        "parts": [{"say": f"सरकार ने {topics[i % 6]} पर", "visual": "Indian parliament building",
-                                   "entity": "Parliament House (India)", "search": "india parliament", "source": "entity"},
-                                  {"say": "नया फैसला लिया, लाखों को फायदा।", "visual": "happy indian families",
-                                   "entity": "", "search": "indian family", "source": "stock"}]}
-            return {"title": "आज की बड़ी खबरें", "hook": "देखिए आज की 36 बड़ी खबरें, फटाफट!",
-                    "national": [story(i, "n") for i in range(30)],
-                    "international": [story(i, "i") for i in range(6)]}
+            n_nat = _count(r"(\d+)\s+DIFFERENT Indian stories", 16)
+            n_int = _count(r"(\d+)\s+DIFFERENT world stories", 4)
+            topics = ["डिजिटल इंडिया", "इसरो मिशन", "किसान योजना", "रेलवे विस्तार",
+                      "निर्यात वृद्धि", "शिक्षा नीति"]
+
+            def story(i: int, _section: str) -> Dict[str, Any]:
+                topic = topics[i % len(topics)]
+                return {
+                    "on_screen_text": topic,
+                    "src": (i % 6) + 1,
+                    "parts": [
+                        {"say": f"सरकार ने {topic} पर बड़ा फैसला लिया है",
+                         "visual": "Indian parliament building", "entity": "Parliament House (India)",
+                         "search": "india parliament", "source": "entity"},
+                        {"say": "इससे लाखों लोगों को सीधा फायदा मिलेगा",
+                         "visual": "happy indian families", "entity": "",
+                         "search": "indian family", "source": "stock"},
+                    ],
+                }
+
+            return {
+                "title": "आज की बड़ी खबरें",
+                "hook": f"आज की सबसे बड़ी खबर: {topics[0]} पर सरकार का बड़ा फैसला",
+                "national": [story(i, "national") for i in range(max(n_nat, 4))],
+                "international": [story(i, "international") for i in range(max(n_int, 2))],
+                "sources": ["https://pib.gov.in", "https://ddnews.gov.in"],
+            }
         if "SEO_METADATA" in prompt:
             return {"title": "भारत की बड़ी उपलब्धि | 60 सेकंड में", "tags": ["india", "hindi news"],
                     "description_hook": "जानिए आज की सबसे अहम बात।"}
