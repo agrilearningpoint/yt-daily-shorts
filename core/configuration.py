@@ -41,6 +41,9 @@ class LLMConfig:
         "gemini", "mistral", "groq", "agnes", "nvidia", "openrouter",
     ])
     models: Dict[str, List[str]] = field(default_factory=dict)
+    # Stage routing: {"quality": {"gemini": ["gemini-3.8-flash"]}} — the
+    # listed (provider, model) pairs go first for calls made with tier="quality".
+    tiers: Dict[str, Dict[str, List[str]]] = field(default_factory=dict)
     gemini_api_key: str = ""
     groq_api_key: str = ""
     mistral_api_key: str = ""

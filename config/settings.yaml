@@ -50,6 +50,16 @@ llm:
                  "liquid/lfm-3-1.7b:free",
                  "recursive/flint-v1.0:free"]
     ollama: []   # HTTP 402 — paid credits required; re-enable with ["auto"] after subscribing
+  # Stage routing — the flagship's daily quota is tiny (3.8-flash ≈ 20 RPD), so
+  # it is spent only where quality is visible in the finished video:
+  #   script  -> the narration the viewer hears
+  #   seo     -> the title / tags that decide whether anyone clicks
+  # Everything else (research, hook picking, fact-check) uses the normal chain,
+  # where gemini-3.5-flash-lite (500 RPD) or another provider serves the call.
+  tiers:
+    quality:
+      gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
+
   # Extra failover keys per provider come from YT_<PROVIDER>_API_KEY_2..9 secrets.
   # Chain length = models x keys, so keep this small (2 = primary + 1 spare).
   max_keys_per_provider: 2

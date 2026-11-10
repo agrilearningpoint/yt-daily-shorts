@@ -45,8 +45,10 @@ class SEOManagerAgent(BaseAgent):
         date_hi = f"{now.day} {HINDI_MONTHS[now.month - 1]} {now.year}"
         if self.llm is not None:
             try:
+                # titles/tags decide the click-through rate — best model first
                 meta = await self.llm.generate_json(render_prompt("seo/metadata.j2", {
-                    "script": script, "video_type": video_type, "date_en": date_en, "date_hi": date_hi}))
+                    "script": script, "video_type": video_type, "date_en": date_en,
+                    "date_hi": date_hi}), tier="quality")
                 cands = [str(t) for t in (meta.get("titles") or []) if str(t).strip()]
                 if meta.get("title"):
                     cands.append(str(meta["title"]))

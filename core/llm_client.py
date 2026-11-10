@@ -254,12 +254,13 @@ class MockLLMProvider(BaseLLMProvider):
 
     name = "mock"
 
-    async def generate_text(self, prompt, system_prompt=None, json_mode=False) -> str:
+    async def generate_text(self, prompt, system_prompt=None, json_mode=False, tier="") -> str:
         if json_mode:
             return json.dumps(await self.generate_json(prompt))
         return "यह एक परीक्षण उत्तर है।"
 
-    async def generate_json(self, prompt: str, system_prompt: Optional[str] = None) -> Dict[str, Any]:
+    async def generate_json(self, prompt: str, system_prompt: Optional[str] = None,
+                            tier: str = "") -> Dict[str, Any]:
         if "FACT_CHECK" in prompt:
             return {"verdict": "pass", "confidence": 0.9, "issues": [], "corrected_scenes": []}
         # v2 news schema: the prompt asks for "national"/"international" story buckets.
@@ -390,8 +391,11 @@ class FallbackLLM(BaseLLMProvider):
 
     name = "fallback"
 
-    def __init__(self, candidates: List[BaseLLMProvider], allow_mock: bool = False):
+    def __init__(self, candidates: List[BaseLLMProvider], allow_mock: bool = False,
+                 tiers: Optional[Dict[str, List[BaseLLMProvider]]] = None):
         self.candidates = candidates
+        # Stage routing: {"quality": [preferred candidates..., rest of the chain]}
+        self.tiers: Dict[str, List[BaseLLMProvider]] = tiers or {}
         self.allow_mock = allow_mock
         self.last_used: str = ""
         self.errors: List[str] = []
@@ -402,9 +406,14 @@ class FallbackLLM(BaseLLMProvider):
     def is_mock(self) -> bool:
         return not self.candidates and self.allow_mock
 
-    async def _run(self, method: str, prompt: str, system_prompt: Optional[str]) -> Any:
+    def order_for(self, tier: str = "") -> List[BaseLLMProvider]:
+        """Candidates for one call — a tier reorders the chain, never shrinks it."""
+        return self.tiers.get(tier) or self.candidates
+
+    async def _run(self, method: str, prompt: str, system_prompt: Optional[str],
+                   tier: str = "") -> Any:
         self.errors = []
-        for cand in self.candidates:
+        for cand in self.order_for(tier):
             label = f"{cand.name}/{getattr(cand, 'model_name', '')}"
             if label in self.dead:
                 continue
@@ -422,7 +431,16 @@ class FallbackLLM(BaseLLMProvider):
                     logger.warning("LLM %s failed (attempt %d): %s", label, attempt + 1, msg[:200])
                     if any(c in msg for c in ("HTTP 404", "HTTP 410", "HTTP 402", "HTTP 401", "HTTP 403")):
                         self.dead.add(label)  # model retired / no access: skip for the rest of the run
-                    if any(c in msg for c in ("HTTP 503", "high demand", "overloaded")):
+                    if "exceeded your current quota" in msg or "billing" in msg:
+                        # daily quota spent (gemini free tier is 20 RPD) — it will
+                        # not come back inside this run, so stop paying for it
+                        self.dead.add(label)
+                        logger.warning("LLM %s is out of daily quota — parked for the rest of the run", label)
+                    elif "timeout" in msg or "timed out" in msg:
+                        # a hung model already cost one full timeout — never again
+                        self.dead.add(label)
+                        logger.warning("LLM %s hung (timeout) — parked for the rest of the run", label)
+                    elif any(c in msg for c in ("HTTP 503", "high demand", "overloaded")):
                         self.strikes[label] = self.strikes.get(label, 0) + 1
                         if self.strikes[label] >= 2:      # twice is enough — don't stall every call
                             self.dead.add(label)
@@ -437,11 +455,11 @@ class FallbackLLM(BaseLLMProvider):
             return await getattr(MockLLMProvider(), method)(prompt, system_prompt)
         raise LLMError("All LLM providers failed: " + " | ".join(self.errors[-6:]))
 
-    async def generate_text(self, prompt, system_prompt=None, json_mode=False) -> str:
-        return await self._run("generate_text", prompt, system_prompt)
+    async def generate_text(self, prompt, system_prompt=None, json_mode=False, tier="") -> str:
+        return await self._run("generate_text", prompt, system_prompt, tier=tier)
 
-    async def generate_json(self, prompt, system_prompt=None) -> Dict[str, Any]:
-        return await self._run("generate_json", prompt, system_prompt)
+    async def generate_json(self, prompt, system_prompt=None, tier="") -> Dict[str, Any]:
+        return await self._run("generate_json", prompt, system_prompt, tier=tier)
 
 
 def provider_keys(provider: str, main_key: str = "") -> List[str]:
@@ -450,10 +468,20 @@ def provider_keys(provider: str, main_key: str = "") -> List[str]:
     return split_keys(f"{main_key},{extra}")
 
 
+def _make_candidate(provider: str, ring: List[str], model: str, llm_cfg) -> BaseLLMProvider:
+    kwargs = dict(temperature=llm_cfg.temperature, max_tokens=llm_cfg.max_tokens,
+                  timeout=llm_cfg.timeout_sec)
+    if provider == "gemini":
+        return GeminiProvider(list(ring), model, **kwargs)
+    return OpenAICompatProvider(provider, ring, model, **kwargs)
+
+
 def build_llm(llm_cfg, allow_mock: bool = False) -> FallbackLLM:
     """Build the provider chain from an ``LLMConfig``."""
     keys = llm_cfg.keys()
+    cap = max(1, int(getattr(llm_cfg, "max_keys_per_provider", 2) or 1))
     candidates: List[BaseLLMProvider] = []
+    rings: Dict[str, List[str]] = {}
     for provider in llm_cfg.provider_order:
         # config-driven pool first (it already merges YT_<P>_API_KEY_<n> and
         # YT_<P>_API_KEYS_EXTRA); fall back to the env-only reader
@@ -464,6 +492,7 @@ def build_llm(llm_cfg, allow_mock: bool = False) -> FallbackLLM:
         ring = ring[:max(1, int(getattr(llm_cfg, "max_keys_per_provider", 2) or 1))]
         if not ring:
             continue
+        rings[provider] = ring
         key = ring[0]
         configured = list((llm_cfg.models or {}).get(provider) or ["auto"])
         preferred = [m for m in configured if m not in ("auto", "auto-free")]
@@ -485,13 +514,32 @@ def build_llm(llm_cfg, allow_mock: bool = False) -> FallbackLLM:
             continue
         logger.info("LLM %s models: %s", provider, models)
         for model in models:
-            kwargs = dict(temperature=llm_cfg.temperature, max_tokens=llm_cfg.max_tokens,
-                          timeout=llm_cfg.timeout_sec)
-            if provider == "gemini":
-                candidates.append(GeminiProvider(list(ring), model, **kwargs))
-            else:
-                candidates.append(OpenAICompatProvider(provider, list(ring), model, **kwargs))
-    return FallbackLLM(candidates, allow_mock=allow_mock or llm_cfg.allow_mock)
+            candidates.append(_make_candidate(provider, ring, model, llm_cfg))
+
+    # ---- stage routing -----------------------------------------------------
+    # Categories such as "quality" get the small-quota flagship first, then the
+    # normal chain as fallback. A tier only REORDERS the chain, so a stage can
+    # never end up with fewer options than the default path.
+    tiers: Dict[str, List[BaseLLMProvider]] = {}
+    for tier, per_provider in (getattr(llm_cfg, "tiers", None) or {}).items():
+        if not isinstance(per_provider, dict):
+            continue
+        preferred_c: List[BaseLLMProvider] = []
+        for provider, models in per_provider.items():
+            ring = rings.get(provider) or provider_keys(provider, keys.get(provider, ""))
+            ring = ring[:cap]
+            if not ring:
+                logger.warning("LLM tier %s wants %s but there is no key for it", tier, provider)
+                continue
+            for model in (models or []):
+                preferred_c.append(_make_candidate(provider, ring, model, llm_cfg))
+        if preferred_c:
+            taken = {f"{c.name}/{c.model_name}" for c in preferred_c}
+            tiers[tier] = preferred_c + [
+                c for c in candidates if f"{c.name}/{c.model_name}" not in taken]
+            logger.info("LLM tier %s prefers: %s", tier,
+                        [f"{c.name}/{c.model_name}" for c in preferred_c])
+    return FallbackLLM(candidates, allow_mock=allow_mock or llm_cfg.allow_mock, tiers=tiers)
 
 
 async def health_check(llm_cfg) -> List[Tuple[str, bool, str]]:

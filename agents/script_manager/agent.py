@@ -242,7 +242,8 @@ class ScriptManagerAgent(BaseAgent):
         script = None
         for attempt in range(3):
             try:
-                data = await self.llm.generate_json(attempt_prompt, SYSTEM_PROMPT)
+                # the narration is the product: give it the best model first
+                data = await self.llm.generate_json(attempt_prompt, SYSTEM_PROMPT, tier="quality")
             except Exception as exc:
                 self.logger.error("Script generation failed: %s", exc)
                 return AgentResult(success=False, errors=[str(exc)])
