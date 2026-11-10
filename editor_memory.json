@@ -320,6 +320,26 @@
     "flash_color": "white"
    },
    "score": 6.0
+  },
+  {
+   "at": "2026-11-10T10:59",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "flash"
+    ],
+    "motion": "kenburns_mix",
+    "grade": "punchy",
+    "zoom": 1.14,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 5.0
   }
  ],
  "option_scores": {
@@ -332,8 +352,8 @@
    "n": 4
   },
   "motion=\"kenburns_mix\"": {
-   "sum": 27.0,
-   "n": 4
+   "sum": 32.0,
+   "n": 5
   },
   "grade=\"neutral\"": {
    "sum": 33.0,
@@ -348,16 +368,16 @@
    "n": 7
   },
   "ticker=true": {
-   "sum": 79.0,
-   "n": 13
+   "sum": 84.0,
+   "n": 14
   },
   "flash_color=\"white\"": {
-   "sum": 61.0,
-   "n": 10
+   "sum": 66.0,
+   "n": 11
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 40.0,
-   "n": 7
+   "sum": 45.0,
+   "n": 8
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -372,12 +392,12 @@
    "n": 2
   },
   "zoom=1.14": {
-   "sum": 27.0,
-   "n": 5
+   "sum": 32.0,
+   "n": 6
   },
   "vignette=false": {
-   "sum": 36.0,
-   "n": 6
+   "sum": 41.0,
+   "n": 7
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -408,8 +428,8 @@
    "n": 2
   },
   "grade=\"punchy\"": {
-   "sum": 12.0,
-   "n": 2
+   "sum": 17.0,
+   "n": 3
   },
   "cut_fx=[\"glitch\", \"whip\", \"flash\"]": {
    "sum": 6.0,
@@ -440,14 +460,11 @@
    "n": 1
   },
   "cut_fx=[\"flash\"]": {
-   "sum": 6.0,
-   "n": 1
+   "sum": 11.0,
+   "n": 2
   }
  },
  "notes": [
-  "Avoid using repetitive stock photos and direct plain screenshots across consecutive frames.",
-  "Ensure each tile features highly relevant, dynamic visuals matching the news ticker precisely.",
-  "Maintain strict pacing with faster visual cuts to keep the vertical Short engaging and reduce visual fatigue.",
   "Avoid repetitive stock images of buildings and oil barrels across consecutive tiles.",
   "Ensure text overlays have stronger contrast against background visuals for better readability.",
   "Replace generic stock footage with specific news-related action shots.",
@@ -456,6 +473,9 @@
   "Ensure image cutaways strictly correspond to current graphics and lower thirds to maintain visual relevance.",
   "Reduce duplicate B-roll frames for the same news segment to maintain high visual variety.",
   "Ensure lower-third text contrast is sharp against background footage for instant readability.",
-  "Remove repetitive talking head shots and replace them with dynamic infographics or on-location visuals."
+  "Remove repetitive talking head shots and replace them with dynamic infographics or on-location visuals.",
+  "Cut duplicate consecutive frames to maintain fast visual pacing.",
+  "Replace static text-heavy graphic cards with relevant b-roll footage.",
+  "Remove generic outro subscribe cards and create a seamless audio/visual loop."
  ]
 }
