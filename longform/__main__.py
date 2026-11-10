@@ -19,6 +19,8 @@ def parse() -> argparse.Namespace:
     p.add_argument("--upload", action="store_true", help="upload to YouTube")
     p.add_argument("--privacy", default="unlisted", choices=["unlisted", "private", "public"])
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--rebuild-visuals", action="store_true",
+                   help="re-fetch visuals and re-render chapters (keeps the script)")
     return p.parse_args()
 
 
@@ -33,7 +35,8 @@ async def main() -> int:
 
     pipe = LongFormPipeline(cfg)
     res = await pipe.run(topic=args.topic, angle=args.angle, minutes=args.minutes,
-                         chapters=args.chapters, upload=args.upload, privacy=args.privacy)
+                         chapters=args.chapters, upload=args.upload, privacy=args.privacy,
+                         rebuild_visuals=args.rebuild_visuals)
     log.info("=== DONE ===")
     print(f"\nfile      : {res['path']}")
     print(f"duration  : {res['duration_sec'] / 60:.1f} min")

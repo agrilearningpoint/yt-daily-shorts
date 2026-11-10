@@ -102,12 +102,13 @@ class VisualSourcer:
                              params={"action": "query", "format": "json", "generator": "search",
                                      "gsrnamespace": 6, "gsrsearch": f"{query} filetype:bitmap",
                                      "gsrlimit": 12, "prop": "imageinfo",
-                                     "iiprop": "url|size|mime", "iiurlwidth": 1920})
+                                     "iiprop": "url|size|mime|extmetadata", "iiurlwidth": 1920})
             pages = r.json().get("query", {}).get("pages", {}) or {}
         except Exception as exc:
             logger.debug("commons '%s' failed: %s", query, exc)
             return []
         out = []
+        terms = {t for t in _tokens(query)}
         for page in sorted(pages.values(), key=lambda p: p.get("index", 99)):
             if len(out) >= k:
                 break
@@ -117,7 +118,19 @@ class VisualSourcer:
             w, h = info.get("width", 0), info.get("height", 0)
             if w < MIN_W or h < MIN_H:
                 continue
-            # documentary look: prefer landscape-ish frames, but keep tall art too
+            # Relevance gate. Commons search is fuzzy: "Pashupati seal" happily
+            # returns a photo of someone rock climbing. Require the file title or
+            # its description to share meaningful vocabulary with the query.
+            meta = info.get("extmetadata") or {}
+            blob = " ".join([
+                str(page.get("title", "")),
+                str(meta.get("ImageDescription", {}).get("value", "")),
+                str(meta.get("Categories", {}).get("value", "")),
+                str(meta.get("ObjectName", {}).get("value", "")),
+            ])
+            if terms and not (terms & set(_tokens(blob))):
+                logger.debug("rejected off-topic: %s (query '%s')", page.get("title", "")[:50], query)
+                continue
             url = info.get("thumburl") or info.get("url")
             if not url:
                 continue
@@ -246,6 +259,15 @@ class VisualSourcer:
         except Exception:
             pass
         return True
+
+
+_STOP = {"the", "a", "an", "of", "and", "in", "on", "at", "to", "for", "with", "photo", "image",
+         "file", "jpg", "jpeg", "png", "commons", "wikimedia", "museum", "collection"}
+
+
+def _tokens(text: str) -> List[str]:
+    import re
+    return [t for t in re.findall(r"[a-z]{3,}", str(text).lower()) if t not in _STOP]
 
 
 def since_needed(want: int) -> int:

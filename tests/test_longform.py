@@ -165,3 +165,14 @@ def test_error_analyst_agent_runs_without_state(tmp_path, monkeypatch):
     res = asyncio.run(ErrorAnalystAgent(StubConfig(), StubState()).execute())
     assert res.success is True
     assert "report_path" in res.data
+
+
+def test_visual_relevance_rejects_offtopic_titles():
+    """Commons search is fuzzy: 'Pashupati seal' once returned a rock climber."""
+    from longform.media import _tokens
+
+    query = "Pashupati seal Mohenjo-daro"
+    good = "Pashupati seal from Mohenjo-daro.jpg The so-called Pashupati seal"
+    bad = "Rock climbing in Yosemite.jpg Climber on granite"
+    assert _tokens(query) & set(_tokens(good))
+    assert not (_tokens(query) & set(_tokens(bad)))

@@ -46,7 +46,8 @@ class LongFormPipeline:
 
     # ------------------------------------------------------------------ public
     async def run(self, topic: str, angle: str = "", minutes: int = 22, chapters: int = 9,
-                  upload: bool = True, privacy: str = "unlisted") -> Dict[str, Any]:
+                  upload: bool = True, privacy: str = "unlisted",
+                  rebuild_visuals: bool = False) -> Dict[str, Any]:
         t0 = time.time()
         self.video_id = f"{_slug(topic)}-{time.strftime('%Y%m%d')}"
         self.out = Path("output") / "long" / self.video_id
@@ -55,6 +56,12 @@ class LongFormPipeline:
         self.work.mkdir(parents=True, exist_ok=True)
 
         logger.info("=== long-form: %s (%d chapters, ~%d min) ===", topic, chapters, minutes)
+        if rebuild_visuals:
+            for d in sorted(self.out.glob("ch*")):
+                for f in d.glob("*"):
+                    if f.suffix in (".mp4", ".json"):
+                        f.unlink(missing_ok=True)
+            logger.info("rebuild-visuals: chapters cleared, script kept")
         self._checkpoint_restore()
         writer = ScriptWriter(self.llm, words_per_chapter=max(280, int(minutes * 158 / chapters)))
         script = await writer.build(topic, angle, minutes, chapters, self.out)
@@ -115,7 +122,7 @@ class LongFormPipeline:
                      for w in distribute_words(ch["narration"], dur)]
 
         # 2. visuals
-        images = self.sourcer.fetch_chapter(idx, ch["visual_queries"], want=max(8, int(dur / 16)))
+        images = self.sourcer.fetch_chapter(idx, ch["visual_queries"], want=max(12, int(dur / 9)))
         cues = R.sentence_cues(split_sentences(ch["narration"]), words, dur)
 
         # 3. one clip per subtitle cue: sentence-boundary cuts, text burned in by PIL
@@ -263,35 +270,54 @@ class LongFormPipeline:
 
     # ------------------------------------------------------------ extras
     def _thumbnail(self, title: str, chs: List[Dict]) -> str:
+        """1280x720-safe thumbnail: a real photograph + one clean title block."""
         out = self.out / "thumbnail.jpg"
-        card = R.make_card(title, "हिंदू धर्म · उत्पत्ति से आज तक", self.work / "thumb_bg.jpg")
         try:
             from PIL import Image, ImageDraw, ImageFont
-            base = Image.open(card).convert("RGB")
-            hero = None
-            for p in sorted((self.out / "ch01").glob("*.jpg"))[:1]:
-                hero = p
-            src = hero or next(iter(sorted((self.out / "ch02").glob("*.jpg"))), None)
-            if src:
-                pic = Image.open(src).convert("RGB")
-                scale = max(R.W / pic.width, R.H / pic.height) * 1.0
-                pic = pic.resize((int(pic.width * scale), int(pic.height * scale)))
-                left = (pic.width - R.W) // 2
-                top = (pic.height - R.H) // 2
-                pic = pic.crop((left, top, left + R.W, top + R.H)).convert("L")
-                pic = pic.point(lambda v: int(v * 0.55))
-                base = Image.blend(pic.convert("RGB"), base, 0.45)
+
+            # pick a strong photograph: biggest downloaded photo from the first chapters,
+            # never the generated card (that already carries the title) or a subtitle png
+            photos = []
+            for i in (1, 2, 3):
+                d = self.out / f"ch{i:02d}"
+                if not d.exists():
+                    continue
+                for f in d.iterdir():
+                    if f.suffix.lower() in (".jpg", ".jpeg") and f.name not in ("card.jpg",) \
+                            and not f.name.startswith(("sub_", "thumb")):
+                        photos.append((f.stat().st_size, f))
+            photos.sort(reverse=True)
+            if not photos:
+                raise RuntimeError("no photographs available for the thumbnail")
+            pic = Image.open(photos[0][1]).convert("RGB")
+            scale = max(R.W / pic.width, R.H / pic.height)
+            pic = pic.resize((max(1, int(pic.width * scale)), max(1, int(pic.height * scale))))
+            left = (pic.width - R.W) // 2
+            top = (pic.height - R.H) // 2
+            base = pic.crop((left, top, left + R.W, top + R.H))
+
+            # left-side scrim so the type stays readable on any photo
+            shade = Image.new("L", (R.W, R.H), 0)
+            sd = ImageDraw.Draw(shade)
+            for x in range(R.W):
+                sd.line([(x, 0), (x, R.H)], fill=int(215 * max(0.0, 1 - x / (R.W * 0.78)) ** 1.25))
+            black = Image.new("RGB", (R.W, R.H), (6, 8, 12))
+            base = Image.composite(black, base, shade)
+
             d = ImageDraw.Draw(base)
-            f = ImageFont.truetype(str(R.FONT_DIR / "Mukta-ExtraBold.ttf"), 96)
-            d.rectangle([100, 150, 210, 158], fill=(212, 175, 55))
-            y = 210
-            for line in R._wrap(d, title, f, R.W - 240)[:3]:
-                d.text((100, y), line, font=f, fill=(248, 248, 252))
-                y += 112
-            base.save(out, "JPEG", quality=90)
+            f_big = ImageFont.truetype(str(R.FONT_DIR / "Mukta-ExtraBold.ttf"), 104)
+            f_small = ImageFont.truetype(str(R.FONT_DIR / "Mukta-Bold.ttf"), 38)
+            d.rectangle([96, 150, 208, 158], fill=(212, 175, 55))
+            y = 196
+            for line in R._wrap(d, title, f_big, int(R.W * 0.62))[:3]:
+                d.text((96, y), line, font=f_big, fill=(248, 248, 252))
+                y += 118
+            channel = getattr(self.config.general, "channel_name", "") or "BHARAT KI SOCH"
+            d.text((100, y + 26), channel, font=f_small, fill=(212, 175, 55))
+            base.save(out, "JPEG", quality=92)
         except Exception as exc:
-            logger.warning("thumbnail art failed (%s) — using the plain card", exc)
-            shutil.copy(card, out)
+            logger.warning("thumbnail art failed (%s) — using a plain card", exc)
+            R.make_card(title, "हिंदू धर्म", out)
         return str(out)
 
     def _metadata(self, title: str, chs: List[Dict], film: str) -> Dict[str, Any]:
