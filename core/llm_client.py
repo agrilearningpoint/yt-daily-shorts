@@ -31,7 +31,8 @@ class LLMError(RuntimeError):
 # JSON helpers
 # ---------------------------------------------------------------------------
 
-ROTATE_ON = ("HTTP 429", "HTTP 413", "HTTP 401", "HTTP 403", "HTTP 503", "quota", "RESOURCE_EXHAUSTED")
+ROTATE_ON = ("HTTP 429", "HTTP 413", "HTTP 401", "HTTP 403", "HTTP 503", "quota",
+             "RESOURCE_EXHAUSTED", "timeout", "timed out")
 
 
 def split_keys(value: str) -> List[str]:
@@ -57,21 +58,37 @@ class _KeyRing:
         return getattr(self._tl, "key", None) or self.api_key
 
     def _rotating(self, fn, *args):
-        if len(self.keys) <= 1:
-            self._tl.key = self.api_key
+        """Try the keys in ring order; a hung key is retired for the whole run.
+
+        A 429/503 is per-request and worth retrying later, but a timeout means
+        the key's endpoint is stalling — retrying it on every model would add
+        minutes to a run, so it is parked in ``_bad``.
+        """
+        usable = [k for k in self.keys if k not in getattr(self, "_bad", ())] or list(self.keys)
+        if len(usable) <= 1:
+            self._tl.key = usable[0]
             return fn(*args)
         last = None
-        for step in range(len(self.keys)):
-            self._tl.key = self.keys[(self._ki + step) % len(self.keys)]
+        for step in range(len(usable)):
+            key = usable[(self._ki + step) % len(usable)]
+            self._tl.key = key
             try:
                 out = fn(*args)
-                self._ki = (self._ki + step) % len(self.keys)
+                self._ki = (self._ki + step) % len(usable)
                 return out
             except LLMError as exc:
                 last = exc
-                if not any(c in str(exc) for c in ROTATE_ON):
+                msg = str(exc)
+                if "timeout" in msg or "timed out" in msg:
+                    if not hasattr(self, "_bad"):
+                        self._bad = set()
+                    self._bad.add(key)
+                    logger.warning("%s key %s…%s is stalling — parked for this run",
+                                   self.name, key[:6], key[-4:])
+                if not any(c in msg for c in ROTATE_ON):
                     raise
-                logger.info("%s key #%d hit a limit, trying the next key", self.name, (self._ki + step) % len(self.keys) + 1)
+                logger.info("%s key #%d hit a limit, trying the next key", self.name,
+                            (self._ki + step) % len(usable) + 1)
         raise last
 
 
@@ -144,11 +161,14 @@ class GeminiProvider(_KeyRing, BaseLLMProvider):
             body["generationConfig"]["responseMimeType"] = "application/json"
         if system_prompt:
             body["systemInstruction"] = {"parts": [{"text": system_prompt}]}
-        resp = requests.post(
-            self.URL.format(model=self.model_name),
-            headers={"x-goog-api-key": self._key(), "Content-Type": "application/json"},
-            json=body, timeout=self.timeout,
-        )
+        try:
+            resp = requests.post(
+                self.URL.format(model=self.model_name),
+                headers={"x-goog-api-key": self._key(), "Content-Type": "application/json"},
+                json=body, timeout=self.timeout,
+            )
+        except requests.RequestException as exc:   # hang / reset: rotate to the next key
+            raise LLMError(f"gemini/{self.model_name} timeout: {type(exc).__name__}") from exc
         if resp.status_code != 200:
             raise LLMError(f"gemini/{self.model_name} HTTP {resp.status_code}: {resp.text[:300]}")
         data = resp.json()
@@ -191,6 +211,14 @@ class OpenAICompatProvider(_KeyRing, BaseLLMProvider):
             h["X-Title"] = "yt-daily-shorts"
         return h
 
+    def _post(self, payload: Dict[str, Any]):
+        """POST with transport errors converted into rotatable LLMErrors."""
+        try:
+            return requests.post(f"{self.base_url}/chat/completions", headers=self._headers(),
+                                 json=payload, timeout=self.timeout)
+        except requests.RequestException as exc:
+            raise LLMError(f"{self.name}/{self.model_name} timeout: {type(exc).__name__}") from exc
+
     def _call(self, prompt: str, system_prompt: Optional[str], json_mode: bool) -> str:
         messages = []
         if system_prompt:
@@ -204,12 +232,10 @@ class OpenAICompatProvider(_KeyRing, BaseLLMProvider):
         }
         if json_mode and self.name in ("groq", "mistral", "openrouter", "agnes"):
             payload["response_format"] = {"type": "json_object"}
-        resp = requests.post(f"{self.base_url}/chat/completions", headers=self._headers(),
-                             json=payload, timeout=self.timeout)
+        resp = self._post(payload)
         if resp.status_code == 400 and "response_format" in payload:
             payload.pop("response_format")
-            resp = requests.post(f"{self.base_url}/chat/completions", headers=self._headers(),
-                                 json=payload, timeout=self.timeout)
+            resp = self._post(payload)
         if resp.status_code != 200:
             raise LLMError(f"{self.name}/{self.model_name} HTTP {resp.status_code}: {resp.text[:300]}")
         data = resp.json()
@@ -370,6 +396,7 @@ class FallbackLLM(BaseLLMProvider):
         self.last_used: str = ""
         self.errors: List[str] = []
         self.dead: set = set()
+        self.strikes: Dict[str, int] = {}
 
     @property
     def is_mock(self) -> bool:
@@ -395,7 +422,11 @@ class FallbackLLM(BaseLLMProvider):
                     logger.warning("LLM %s failed (attempt %d): %s", label, attempt + 1, msg[:200])
                     if any(c in msg for c in ("HTTP 404", "HTTP 410", "HTTP 402", "HTTP 401", "HTTP 403")):
                         self.dead.add(label)  # model retired / no access: skip for the rest of the run
-                    transient = any(c in msg for c in ("HTTP 500", "HTTP 502", "HTTP 504", "timed out", "invalid JSON"))
+                    if any(c in msg for c in ("HTTP 503", "high demand", "overloaded")):
+                        self.strikes[label] = self.strikes.get(label, 0) + 1
+                        if self.strikes[label] >= 2:      # twice is enough — don't stall every call
+                            self.dead.add(label)
+                    transient = any(c in msg for c in ("HTTP 500", "HTTP 502", "HTTP 504", "invalid JSON"))
                     if transient and attempt == 0:
                         await asyncio.sleep(4)
                         continue

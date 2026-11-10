@@ -28,13 +28,17 @@ llm:
   # Flash-Lite, 2.5 Flash; Groq gpt-oss-120b/20b; NVIDIA "Free Endpoint" models;
   # OpenRouter ":free" models; Mistral Free mode (low limits).
   # Probed live 2026-11-10 (see KEY_VERIFICATION_REPORT.md):
-  #   gemini-3.8-flash -> 503 high demand (dropped); 3.6-flash / flash-lite -> 200
+  #   gemini-3.8-flash -> 503/timeouts in bursts, 429 once the 20 RPD is spent
+  #   3.5-flash-lite   -> 6/6 keys 200, avg 2.4 s (the reliable volume tier)
   #   mistral-small|medium -> 429 with limit_req_minute=0; ministral-14b and
   #   open-mistral-nemo -> 200 with 2 RPM / 40K TPM (the real free allowance)
   #   openrouter inkling/gemma -> 403/429; nemotron + dots + lfm + flint -> 200
   models:
-    # 3.6-flash = 20 RPD/project (best quality); flash-lite = 500 RPD for volume.
-    gemini: ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+    # Latest free flagships first: 3.8-flash (20 RPD/project) then 3.5-flash-lite
+    # (500 RPD/project). 3.8 answers 503 "high demand" in bursts and its daily
+    # quota is tiny, so the next two entries are the volume workhorses — the
+    # chain skips a model for the rest of the run after two 503s.
+    gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
     # 2 RPM but 40,000 TPM — the most generous token ceiling of the free tiers.
     mistral: ["ministral-14b-latest", "open-mistral-nemo"]
     groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
@@ -51,7 +55,7 @@ llm:
   max_keys_per_provider: 2
   temperature: 0.7
   max_tokens: 12000
-  timeout_sec: 90
+  timeout_sec: 60          # a hung key is parked after one timeout
 
 video:
   width: 1080
