@@ -26,6 +26,7 @@ OUTRO_SECONDS = 7.0
 class LongFormPipeline:
     def __init__(self, config, llm=None) -> None:
         self.config = config
+        # stable id per (topic, day) so a re-run can restore its own checkpoints
         self.video_id = time.strftime("%Y%m%d-%H%M%S")
         self.out = Path("output") / "long" / self.video_id
         self.work = self.out / "_work"
@@ -47,10 +48,14 @@ class LongFormPipeline:
     async def run(self, topic: str, angle: str = "", minutes: int = 22, chapters: int = 9,
                   upload: bool = True, privacy: str = "unlisted") -> Dict[str, Any]:
         t0 = time.time()
+        self.video_id = f"{_slug(topic)}-{time.strftime('%Y%m%d')}"
+        self.out = Path("output") / "long" / self.video_id
+        self.work = self.out / "_work"
         self.out.mkdir(parents=True, exist_ok=True)
         self.work.mkdir(parents=True, exist_ok=True)
 
         logger.info("=== long-form: %s (%d chapters, ~%d min) ===", topic, chapters, minutes)
+        self._checkpoint_restore()
         writer = ScriptWriter(self.llm, words_per_chapter=max(260, int(minutes * 145 / chapters)))
         script = await writer.build(topic, angle, minutes, chapters, self.out)
         title = script["title"]
@@ -64,6 +69,7 @@ class LongFormPipeline:
             ch_path = await self._chapter(i, ch, len(chs), tts, title)
             if ch_path:
                 self.chapter_files.append(ch_path)
+                self._checkpoint_save(i, ch, ch_path)
 
         if not self.chapter_files:
             raise RuntimeError("no chapters rendered")
@@ -133,6 +139,56 @@ class LongFormPipeline:
         ch["_start_sec"] = 0.0
         return out
 
+    # ------------------------------------------------------------ checkpoints
+    _CK_REPO = None
+
+    def _hf(self):
+        """Best-effort HF handle for chapter checkpoints (never fatal)."""
+        if self._CK_REPO is None:
+            try:
+                from core.hf_storage import store_from_config
+                self._store = store_from_config(self.config)
+                self._CK_REPO = bool(getattr(self._store, "enabled", False))
+            except Exception:
+                self._CK_REPO = False
+        return getattr(self, "_store", None) if self._CK_REPO else None
+
+    def _checkpoint_save(self, idx: int, ch: Dict, path: str) -> None:
+        st = self._hf()
+        if not st:
+            return
+        try:
+            remote = f"long/{self.video_id}"
+            st.upload_file(path, f"{remote}/ch{idx + 1:02d}.mp4")
+            st.upload_file(self.out / "script.json", f"{remote}/script.json")
+            logger.info("checkpoint ch%02d -> HF", idx + 1)
+        except Exception as exc:
+            logger.debug("checkpoint skipped: %s", exc)
+
+    def _checkpoint_restore(self) -> None:
+        """Pull finished chapters back so a re-run does not re-render 25 minutes of film."""
+        st = self._hf()
+        if not st:
+            return
+        try:
+            from huggingface_hub import snapshot_download
+            local = snapshot_download(repo_id=st.repo_id, repo_type="dataset",
+                                      allow_patterns=[f"long/{self.video_id}/*"],
+                                      local_dir=str(self.work / "_ckpt"))
+            src = Path(local) / "long" / self.video_id
+            if not src.exists():
+                logger.info("no checkpoint for %s — starting fresh", self.video_id)
+                return
+            if (src / "script.json").exists():
+                shutil.copy(src / "script.json", self.out / "script.json")
+            for mp4 in sorted(src.glob("ch*.mp4")):
+                d = self.out / mp4.stem / f"chapter_{mp4.stem[2:]}.mp4"
+                d.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(mp4, d)
+            logger.info("checkpoint restored: %d chapters", len(list(src.glob("ch*.mp4"))))
+        except Exception as exc:
+            logger.info("checkpoint restore skipped: %s", exc)
+
     # ----------------------------------------------------------------- film
     def _assemble_film(self, chs: List[Dict], title: str) -> str:
         film = self.out / "film_1080p.mp4"
@@ -151,7 +207,8 @@ class LongFormPipeline:
                "-shortest", str(head_av)], "intro")
 
         parts = [str(head_av)] + list(self.chapter_files)
-        tail = R.make_outro(self.work / "outro.jpg", self.config.youtube.channel_name or "BHARAT KI SOCH",
+        channel = getattr(self.config.general, "channel_name", "") or "BHARAT KI SOCH"
+        tail = R.make_outro(self.work / "outro.jpg", channel,
                             "धन्यवाद", "अगली कड़ी में मिलते हैं")
         tail_clip = R.render_still(tail, OUTRO_SECONDS, str(self.work / "p_outro.mp4"), seed=3)
         tail_av = self.work / "outro.mp4"
@@ -285,3 +342,11 @@ class LongFormPipeline:
         path = self.out / "manifest.json"
         path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         logger.info("manifest: %s", path)
+
+
+def _slug(text: str) -> str:
+    """Filesystem/HF-safe slug that survives Devanagari input."""
+    import hashlib
+    import re
+    keep = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:40]
+    return keep or "film-" + hashlib.sha1(text.encode()).hexdigest()[:8]
