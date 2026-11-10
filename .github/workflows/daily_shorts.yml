@@ -97,15 +97,6 @@ jobs:
       YT_FORCE_UPLOAD: ${{ github.event.inputs.force_upload || 'false' }}
       YT_HF_TOKEN: ${{ secrets.HF_TOKEN }}
       YT_HF_REPO_ID: ${{ vars.YT_HF_REPO_ID || 'Rajaagri/yt-daily-shorts-artifacts' }}
-      # Failover key pools: provider -> YT_<PROVIDER>_API_KEY_2..9
-      # (a quota-exhausted or revoked key falls through to the next one)
-      YT_GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
-      YT_GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
-      YT_GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
-      YT_GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
-      YT_GEMINI_API_KEY_6: ${{ secrets.GEMINI_API_KEY_6 }}
-      YT_GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 }}
-      YT_OPENROUTER_API_KEY_2: ${{ secrets.OPENROUTER_API_KEY_2 }}
       YT_MAX_KEYS_PER_PROVIDER: ${{ vars.YT_MAX_KEYS_PER_PROVIDER || '2' }}
       # Optional repository variables (Settings -> Secrets and variables -> Variables)
       YT_YOUTUBE_PRIVACY: ${{ vars.YT_YOUTUBE_PRIVACY }}

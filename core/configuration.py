@@ -320,6 +320,14 @@ def _apply_env(cfg: AppConfig) -> None:
         bucket = pools.setdefault(provider, [])
         if raw.strip() not in bucket:
             bucket.append(raw.strip())
+    # Comma-list form used by the runtime chain: YT_<PROVIDER>_API_KEYS_EXTRA
+    for env_key, raw in os.environ.items():
+        if not env_key.startswith("YT_") or not env_key.endswith("_API_KEYS_EXTRA"):
+            continue
+        provider = env_key[len("YT_"):-len("_API_KEYS_EXTRA")].lower()
+        for value in (v.strip() for v in raw.split(",") if v.strip()):
+            pools.setdefault(provider, []).append(value)
+
     if pools:
         for provider, values in pools.items():
             existing = list(cfg.llm.extra_keys.get(provider, []) or [])

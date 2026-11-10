@@ -171,6 +171,7 @@ class OpenAICompatProvider(_KeyRing, BaseLLMProvider):
         "openrouter": "https://openrouter.ai/api/v1",
         "nvidia": "https://integrate.api.nvidia.com/v1",
         "ollama": "https://ollama.com/v1",
+        "agnes": "https://apihub.agnes-ai.com/v1",   # free tier, text + images
     }
 
     def __init__(self, provider: str, api_key: str, model_name: str, temperature: float = 0.7,
@@ -201,7 +202,7 @@ class OpenAICompatProvider(_KeyRing, BaseLLMProvider):
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
         }
-        if json_mode and self.name in ("groq", "mistral", "openrouter"):
+        if json_mode and self.name in ("groq", "mistral", "openrouter", "agnes"):
             payload["response_format"] = {"type": "json_object"}
         resp = requests.post(f"{self.base_url}/chat/completions", headers=self._headers(),
                              json=payload, timeout=self.timeout)
@@ -423,7 +424,13 @@ def build_llm(llm_cfg, allow_mock: bool = False) -> FallbackLLM:
     keys = llm_cfg.keys()
     candidates: List[BaseLLMProvider] = []
     for provider in llm_cfg.provider_order:
-        ring = provider_keys(provider, keys.get(provider, ""))
+        # config-driven pool first (it already merges YT_<P>_API_KEY_<n> and
+        # YT_<P>_API_KEYS_EXTRA); fall back to the env-only reader
+        pool = []
+        if hasattr(llm_cfg, "key_pool"):
+            pool = [k for k in (llm_cfg.key_pool().get(provider) or []) if k]
+        ring = pool or provider_keys(provider, keys.get(provider, ""))
+        ring = ring[:max(1, int(getattr(llm_cfg, "max_keys_per_provider", 2) or 1))]
         if not ring:
             continue
         key = ring[0]

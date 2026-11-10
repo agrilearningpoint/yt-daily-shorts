@@ -37,11 +37,12 @@ def test_build_llm_uses_every_pooled_key(monkeypatch):
     cfg.max_keys_per_provider = 2
 
     chain = build_llm(cfg)
-    keys = [c.api_key for c in chain.candidates]
-    # gemini: 1 model x 2 keys, groq: 1 model x 2 keys, agnes: 1 model x 1 key
-    assert keys == ["g1", "g2", "groq1", "groq2", "ag1"]
-    names = [c.name for c in chain.candidates]
-    assert names[-1] == "agnes"
+    # one candidate per (provider, model); each carries a key RING that rotates
+    # on quota errors, so a dead key no longer removes the provider from the chain
+    rings = {c.name: c.keys for c in chain.candidates}
+    assert rings == {"gemini": ["g1", "g2"], "groq": ["groq1", "groq2"], "agnes": ["ag1"]}
+    assert [c.name for c in chain.candidates][-1] == "agnes"
+    assert chain.candidates[0].api_key == "g1"
 
 
 def test_max_keys_per_provider_caps_chain(monkeypatch):
@@ -52,7 +53,9 @@ def test_max_keys_per_provider_caps_chain(monkeypatch):
     cfg.extra_keys = {"gemini": ["g2", "g3", "g4"]}
     cfg.max_keys_per_provider = 3
     chain = build_llm(cfg)
-    assert len(chain.candidates) == 6   # 2 models x 3 keys (not 4 keys)
+    # 2 models, and the ring is capped at 3 keys (g1..g3) — g4 is ignored
+    assert len(chain.candidates) == 2
+    assert all(c.keys == ["g1", "g2", "g3"] for c in chain.candidates)
 
 
 def test_env_extras_are_picked_up(monkeypatch):
@@ -76,3 +79,22 @@ def test_hf_source_is_wired_but_optional():
     # no token -> no attempt, no crash
     mc = MediaCollector()
     assert mc._huggingface("test visual", __import__("pathlib").Path("/tmp/x.jpg")) is None
+
+
+def test_env_extra_comma_list_feeds_pool(monkeypatch, tmp_path):
+    # isolate from the developer's real .env / ambient secrets
+    monkeypatch.setattr("core.configuration.load_dotenv", lambda *a, **k: False)
+    for i in range(2, 10):
+        monkeypatch.delenv(f"YT_GEMINI_API_KEY_{i}", raising=False)
+    monkeypatch.setenv("YT_GEMINI_API_KEY", "g1")
+    monkeypatch.setenv("YT_GEMINI_API_KEYS_EXTRA", "g2, g3")
+    cfg = load_config()
+    assert cfg.llm.key_pool()["gemini"] == ["g1", "g2", "g3"]
+    # and the runtime chain really builds a rotating ring from it
+    llm = cfg.llm
+    llm.provider_order = ["gemini"]
+    llm.models = {"gemini": ["m1"]}
+    llm.max_keys_per_provider = 3
+    monkeypatch.setattr("core.llm_client.discover_models", lambda *a, **k: [])
+    ring = build_llm(llm).candidates[0].keys
+    assert ring == ["g1", "g2", "g3"]
