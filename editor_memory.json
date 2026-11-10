@@ -300,6 +300,26 @@
     "flash_color": "white"
    },
    "score": 6.0
+  },
+  {
+   "at": "2026-11-10T04:44",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "whip"
+    ],
+    "motion": "slow_push",
+    "grade": "neutral",
+    "zoom": 1.1,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 6.0
   }
  ],
  "option_scores": {
@@ -316,28 +336,28 @@
    "n": 4
   },
   "grade=\"neutral\"": {
-   "sum": 27.0,
-   "n": 4
-  },
-  "zoom=1.1": {
    "sum": 33.0,
    "n": 5
   },
-  "vignette=true": {
-   "sum": 37.0,
+  "zoom=1.1": {
+   "sum": 39.0,
    "n": 6
+  },
+  "vignette=true": {
+   "sum": 43.0,
+   "n": 7
   },
   "ticker=true": {
-   "sum": 73.0,
-   "n": 12
+   "sum": 79.0,
+   "n": 13
   },
   "flash_color=\"white\"": {
-   "sum": 55.0,
-   "n": 9
+   "sum": 61.0,
+   "n": 10
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 34.0,
-   "n": 6
+   "sum": 40.0,
+   "n": 7
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -396,8 +416,8 @@
    "n": 1
   },
   "motion=\"slow_push\"": {
-   "sum": 12.0,
-   "n": 2
+   "sum": 18.0,
+   "n": 3
   },
   "palette=[\"#FF7A00\", \"#101828\", \"#FFFFFF\"]": {
    "sum": 5.0,
@@ -412,8 +432,8 @@
    "n": 1
   },
   "cut_fx=[\"whip\"]": {
-   "sum": 6.0,
-   "n": 1
+   "sum": 12.0,
+   "n": 2
   },
   "cut_fx=[\"punch\"]": {
    "sum": 6.0,
@@ -425,9 +445,6 @@
   }
  },
  "notes": [
-  "Replace generic stock city buildings and architectural shots with story-specific on-ground visuals.",
-  "Ensure higher image variety to avoid repetitive silhouettes and candle graphics in consecutive segments.",
-  "Maintain strict adherence to high-resolution news assets instead of blurry screenshots.",
   "Avoid using repetitive stock photos and direct plain screenshots across consecutive frames.",
   "Ensure each tile features highly relevant, dynamic visuals matching the news ticker precisely.",
   "Maintain strict pacing with faster visual cuts to keep the vertical Short engaging and reduce visual fatigue.",
@@ -436,6 +453,9 @@
   "Replace generic stock footage with specific news-related action shots.",
   "Avoid using generic architectural stock photos like Parliament or random office buildings that do not match the specific spoken news context.",
   "Eliminate repetitive B-roll shots, especially duplicate warning stamps and government document close-ups appearing back-to-back.",
-  "Ensure image cutaways strictly correspond to current graphics and lower thirds to maintain visual relevance."
+  "Ensure image cutaways strictly correspond to current graphics and lower thirds to maintain visual relevance.",
+  "Reduce duplicate B-roll frames for the same news segment to maintain high visual variety.",
+  "Ensure lower-third text contrast is sharp against background footage for instant readability.",
+  "Remove repetitive talking head shots and replace them with dynamic infographics or on-location visuals."
  ]
 }

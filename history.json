@@ -812,7 +812,7 @@
    "theme": "Midnight Desk",
    "duration": 123.7,
    "at": "2026-11-09T06:01:57.364323+00:00",
-   "views": 46,
+   "views": 51,
    "likes": 0,
    "comments": 1
   },
@@ -823,7 +823,10 @@
    "youtube_id": "RuOhMRdkH8o",
    "theme": "Saffron Bulletin",
    "duration": 123.7,
-   "at": "2026-11-10T04:19:18.077595+00:00"
+   "at": "2026-11-10T04:19:18.077595+00:00",
+   "views": 0,
+   "likes": 0,
+   "comments": 1
   }
  ]
 }
