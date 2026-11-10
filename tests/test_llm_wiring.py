@@ -98,3 +98,31 @@ def test_env_extra_comma_list_feeds_pool(monkeypatch, tmp_path):
     monkeypatch.setattr("core.llm_client.discover_models", lambda *a, **k: [])
     ring = build_llm(llm).candidates[0].keys
     assert ring == ["g1", "g2", "g3"]
+
+
+def test_provider_order_drops_ollama_and_keeps_mistral():
+    from core.configuration import LLMConfig
+
+    order = LLMConfig().provider_order
+    assert "ollama" not in order          # free tier is HTTP 402 — pure latency
+    assert "mistral" in order             # 2 RPM / 40K TPM free tier works
+    assert order.index("agnes") < order.index("openrouter")   # uncapped before the 50/day tier
+
+
+def test_settings_models_are_the_probed_ones():
+    import yaml
+    from pathlib import Path
+
+    cfg = yaml.safe_load(Path("config/settings.yaml").read_text())["llm"]
+    models = cfg["models"]
+    # 3.8-flash answered 503; the lite tiers answered 200
+    assert "gemini-3.8-flash" not in models["gemini"]
+    assert models["gemini"][0] == "gemini-3.6-flash"
+    assert "gemini-3.5-flash-lite" in models["gemini"]
+    # mistral-small/medium are capped at 0 req/min on the free tier
+    assert not any("small" in m or "medium" in m for m in models["mistral"])
+    assert models["mistral"][0] == "ministral-14b-latest"
+    # inkling is 403 (agentic-harness only); every listed id was probed 200
+    assert not any("inkling" in m for m in models["openrouter"])
+    assert all(m.endswith(":free") for m in models["openrouter"])
+    assert models["ollama"] == []

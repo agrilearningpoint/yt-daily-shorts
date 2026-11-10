@@ -17,21 +17,35 @@ general:
 llm:
   # Tried in order. Providers without a key are skipped; a failing
   # provider/model falls through to the next one.
-  provider_order: ["gemini", "groq", "nvidia", "mistral", "agnes", "openrouter", "ollama"]
+  # Quality first, then the uncapped free fallback. Ollama is removed: its free
+  # tier answers HTTP 402 (credits/subscription required), so it only wasted a
+  # round-trip on every run. Re-add it after subscribing to Ollama Cloud.
+  provider_order: ["gemini", "mistral", "groq", "agnes", "nvidia", "openrouter"]
   # "auto" = ask the provider's /models API at run time and pick the best
   # current free model, so retired models never break the pipeline.
   # Ids listed before "auto" are preferred while the provider still lists them.
   # Verified free on official pages (Nov 2026): Gemini 3.8/3.6 Flash, 3.5/3.1
   # Flash-Lite, 2.5 Flash; Groq gpt-oss-120b/20b; NVIDIA "Free Endpoint" models;
   # OpenRouter ":free" models; Mistral Free mode (low limits).
+  # Probed live 2026-11-10 (see KEY_VERIFICATION_REPORT.md):
+  #   gemini-3.8-flash -> 503 high demand (dropped); 3.6-flash / flash-lite -> 200
+  #   mistral-small|medium -> 429 with limit_req_minute=0; ministral-14b and
+  #   open-mistral-nemo -> 200 with 2 RPM / 40K TPM (the real free allowance)
+  #   openrouter inkling/gemma -> 403/429; nemotron + dots + lfm + flint -> 200
   models:
-    gemini: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "auto"]
-    groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "auto"]
-    openrouter: ["auto"]
-    agnes: ["agnes-2.5-flash", "auto"]   # free OpenAI-compatible gateway (text + images)
-    mistral: ["mistral-small-latest", "auto"]
-    nvidia: ["auto"]
-    ollama: []   # Ollama Cloud returned HTTP 402 (paid credits needed); set ["auto"] after subscribing
+    # 3.6-flash = 20 RPD/project (best quality); flash-lite = 500 RPD for volume.
+    gemini: ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+    # 2 RPM but 40,000 TPM — the most generous token ceiling of the free tiers.
+    mistral: ["ministral-14b-latest", "open-mistral-nemo"]
+    groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
+    agnes: ["agnes-2.5-flash"]           # 30 RPM, no hard usage cap
+    nvidia: ["nvidia/nemotron-3-ultra-550b-a55b", "deepseek-ai/deepseek-v4.1-flash"]
+    openrouter: ["nvidia/nemotron-3-ultra-550b-a55b:free",
+                 "nvidia/nemotron-3.5-lightning:free",
+                 "dots-studio/dots-3-note-preview:free",
+                 "liquid/lfm-3-1.7b:free",
+                 "recursive/flint-v1.0:free"]
+    ollama: []   # HTTP 402 — paid credits required; re-enable with ["auto"] after subscribing
   # Extra failover keys per provider come from YT_<PROVIDER>_API_KEY_2..9 secrets.
   # Chain length = models x keys, so keep this small (2 = primary + 1 spare).
   max_keys_per_provider: 2

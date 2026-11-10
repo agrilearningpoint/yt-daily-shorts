@@ -37,7 +37,8 @@ class GeneralConfig:
 class LLMConfig:
     # Providers are tried in this order; any provider without a key is skipped.
     provider_order: List[str] = field(default_factory=lambda: [
-        "gemini", "groq", "nvidia", "mistral", "agnes", "openrouter", "ollama",
+        # Ollama dropped: free tier needs paid credits (HTTP 402).
+        "gemini", "mistral", "groq", "agnes", "nvidia", "openrouter",
     ])
     models: Dict[str, List[str]] = field(default_factory=dict)
     gemini_api_key: str = ""
