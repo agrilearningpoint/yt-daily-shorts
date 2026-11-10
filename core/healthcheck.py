@@ -9,12 +9,11 @@ Exit code 0 = healthy, 1 = degraded (so a workflow step can fail loudly).
 """
 from __future__ import annotations
 
-import json
 import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger("core.healthcheck")
 

@@ -16,7 +16,6 @@ import argparse
 import asyncio
 import logging
 import sys
-from pathlib import Path
 
 # Fix Windows console encoding for UTF-8 / emojis
 if sys.platform == "win32":

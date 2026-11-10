@@ -59,7 +59,7 @@ class YouTubeUploader:
         if self.dry_run:
             logger.info("⚡ [DRY_RUN] Skipping YouTube upload: %s", title)
             sim = f"mock_{Path(video_path).parent.name}"
-            return {"id": sim, "url": f"https://youtube.com/shorts/{sim}", "status": "dry_run"}
+            return {"id": sim, "url": f"https://youtu.be/{sim}", "status": "dry_run"}
 
         if not Path(video_path).exists():
             raise UploadError(f"video file missing: {video_path}")
@@ -70,7 +70,7 @@ class YouTubeUploader:
                 raise UploadError(msg)
             logger.warning(msg)
             sim = f"dry_run_{Path(video_path).parent.name}"
-            return {"id": sim, "url": f"https://youtube.com/shorts/{sim}", "status": "dry_run_missing_creds"}
+            return {"id": sim, "url": f"https://youtu.be/{sim}", "status": "dry_run_missing_creds"}
 
         from googleapiclient.discovery import build
         from googleapiclient.errors import HttpError
@@ -86,7 +86,7 @@ class YouTubeUploader:
                     raise UploadError(f"duplicate check failed, not uploading blind: {exc}") from exc
                 if existing:
                     logger.warning("Already uploaded today (%s): %s - skipping duplicate", publishing_key, existing)
-                    return {"id": existing, "url": f"https://youtube.com/shorts/{existing}",
+                    return {"id": existing, "url": f"https://youtu.be/{existing}",
                             "status": "duplicate_skipped", "privacy": privacy_status}
         body = {
             "snippet": {"title": title[:100], "description": description[:5000], "tags": tags,
@@ -143,7 +143,7 @@ class YouTubeUploader:
         logger.info("Post-upload: %s", extras)
 
         upload_status = (response.get("status") or {}).get("uploadStatus", "")
-        return {"id": video_id, "url": f"https://youtube.com/shorts/{video_id}", "status": upload_status or "uploaded",
+        return {"id": video_id, "url": f"https://youtu.be/{video_id}", "status": upload_status or "uploaded",
                 "privacy": privacy_status, "extras": extras}
 
 

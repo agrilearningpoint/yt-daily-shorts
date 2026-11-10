@@ -5,7 +5,6 @@ are all cached, so a crash or a re-run only redoes the missing part.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import shutil

@@ -11,11 +11,10 @@ Everything is cached in `script.json` so a re-run never re-pays for LLM calls.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger("longform.script")
 

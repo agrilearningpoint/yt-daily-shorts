@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 
 from core.configuration import LLMConfig, load_config
 from core.llm_client import OpenAICompatProvider, build_llm
