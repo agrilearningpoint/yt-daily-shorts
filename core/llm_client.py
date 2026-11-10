@@ -498,11 +498,15 @@ async def health_check(llm_cfg) -> List[Tuple[str, bool, str]]:
     """Ping every key of every provider once (best model), then the model chain. ``main.py --llm-check``."""
     chain = build_llm(llm_cfg)
     results = []
-    seen = set()
+    # Walk the configured model ladder, not just the first entry: when the
+    # flagship is congested (gemini-3.8-flash 503s in bursts) the report must
+    # still say whether the fallback tier the pipeline will actually use works.
+    done = set()
     for cand in chain.candidates:
-        if cand.name in seen:
+        label_model = (cand.name, cand.model_name)
+        if label_model in done:
             continue
-        seen.add(cand.name)
+        done.add(label_model)
         for i, k in enumerate(getattr(cand, "keys", []) or [], 1):
             one = type(cand)(k, cand.model_name, timeout=60) if cand.name == "gemini" else \
                 OpenAICompatProvider(cand.name, k, cand.model_name, timeout=60)
