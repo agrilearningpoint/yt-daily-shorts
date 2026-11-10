@@ -174,5 +174,5 @@ def test_visual_relevance_rejects_offtopic_titles():
     query = "Pashupati seal Mohenjo-daro"
     good = "Pashupati seal from Mohenjo-daro.jpg The so-called Pashupati seal"
     bad = "Rock climbing in Yosemite.jpg Climber on granite"
-    assert _tokens(query) & set(_tokens(good))
-    assert not (_tokens(query) & set(_tokens(bad)))
+    assert set(_tokens(query)) & set(_tokens(good))
+    assert not (set(_tokens(query)) & set(_tokens(bad)))
