@@ -1,0 +1,151 @@
+name: Long-form Documentary (20-25 min)
+
+# Renders one documentary end-to-end and uploads it UNLISTED by default.
+# A 25-minute 1080p film is ~6x the visuals and ~6x the narration of a Short, so
+# this runs as its own job with its own timeout instead of piggy-backing on the
+# daily Shorts workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: 'Film topic (Hindi or English)'
+        required: true
+        default: 'हिंदू धर्म'
+      minutes:
+        description: 'Target length in minutes'
+        required: false
+        default: '22'
+      chapters:
+        description: 'Number of chapters'
+        required: false
+        default: '9'
+      upload:
+        description: 'Upload to YouTube (unlisted)'
+        required: false
+        default: true
+        type: boolean
+      privacy:
+        description: 'Privacy status'
+        required: false
+        default: 'unlisted'
+        type: choice
+        options: [unlisted, private, public]
+
+run-name: "long-form ${{ github.event.inputs.topic }}"
+
+concurrency:
+  group: long-form-production
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  produce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      YT_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      YT_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      YT_MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+      YT_OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      YT_GEMINI_API_KEYS_EXTRA: ${{ secrets.GEMINI_API_KEYS_EXTRA }}
+      YT_GROQ_API_KEYS_EXTRA: ${{ secrets.GROQ_API_KEYS_EXTRA }}
+      YT_OPENROUTER_API_KEYS_EXTRA: ${{ secrets.OPENROUTER_API_KEYS_EXTRA }}
+      YT_NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      YT_OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+      YT_TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      YT_TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      YT_YOUTUBE_CLIENT_SECRET_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRET_JSON }}
+      YT_YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+      YT_PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      YT_PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      YT_AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
+      YT_CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      YT_CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      YT_NEWSDATA_API_KEY: ${{ secrets.NEWSDATA_API_KEY }}
+      YT_GNEWS_API_KEY: ${{ secrets.GNEWS_API_KEY }}
+      YT_UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+      YT_HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      YT_HF_REPO_ID: ${{ vars.YT_HF_REPO_ID || 'Rajaagri/yt-daily-shorts-artifacts' }}
+      YT_CHANNEL_NAME: ${{ vars.YT_CHANNEL_NAME || 'BHARAT KI SOCH' }}
+      YT_YOUTUBE_PRIVACY: ${{ github.event.inputs.privacy || 'unlisted' }}
+      YT_DRY_RUN: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System packages (ffmpeg + Devanagari fonts)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-noto-devanagari fonts-noto-core
+          ffmpeg -version | head -1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore state (so the film is listed in history)
+        continue-on-error: true
+        run: |
+          git fetch origin state 2>/dev/null || true
+          git checkout origin/state -- data 2>/dev/null || true
+          ls -la data 2>/dev/null | head
+
+      - name: Script health check (LLM chain)
+        run: python main.py --llm-check || true
+
+      - name: Produce the film
+        run: |
+          python -m longform \
+            --topic "${{ github.event.inputs.topic }}" \
+            --minutes ${{ github.event.inputs.minutes }} \
+            --chapters ${{ github.event.inputs.chapters }} \
+            --privacy ${{ github.event.inputs.privacy || 'unlisted' }} \
+            ${{ github.event.inputs.upload == 'true' && '--upload' || '--dry-run' }}
+
+      - name: Upload artefacts (video + captions + thumbnail)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: longform-${{ github.run_number }}
+          path: |
+            output/long/**/film_1080p.mp4
+            output/long/**/film.srt
+            output/long/**/thumbnail.jpg
+            output/long/**/manifest.json
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Mirror the film to the free HF dataset
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, json, glob
+          try:
+              from huggingface_hub import HfApi
+              api = HfApi(token=os.environ.get("YT_HF_TOKEN", ""))
+              repo = os.environ.get("YT_HF_REPO_ID", "")
+              if not repo or not os.environ.get("YT_HF_TOKEN"):
+                  print("storage disabled"); raise SystemExit(0)
+              for f in glob.glob("output/long/**/film_1080p.mp4", recursive=True):
+                  vid = f.split("/")[-2]
+                  api.upload_file(path_or_fileobj=f, path_in_repo=f"long/{vid}/film_1080p.mp4", repo_id=repo, repo_type="dataset")
+                  print("mirrored", vid)
+                  for extra in ("film.srt", "thumbnail.jpg", "manifest.json"):
+                      p = os.path.join(os.path.dirname(f), extra)
+                      if os.path.exists(p):
+                          api.upload_file(path_or_fileobj=p, path_in_repo=f"long/{vid}/{extra}", repo_id=repo, repo_type="dataset")
+          except Exception as e:
+              print("storage mirror skipped:", e)
+          PY
+
+      - name: Self-improvement report
+        if: always()
+        run: |
+          python -m agents.error_analyst || true
+          cat data/improvements.md 2>/dev/null | head -40 || true

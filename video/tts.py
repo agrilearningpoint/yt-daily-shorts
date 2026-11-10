@@ -65,13 +65,32 @@ class VoiceResult:
 def probe_duration(path: str) -> float:
     ffprobe = shutil.which("ffprobe")
     if not ffprobe:
+        # ffmpeg-only environments (e.g. the imageio-ffmpeg binary): read the banner
+        try:
+            ff = shutil.which("ffmpeg") or "ffmpeg"
+            out = subprocess.run([ff, "-i", str(path)], capture_output=True, text=True, timeout=30)
+            m = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.?\d*)", out.stderr or "")
+            if m:
+                return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+        except Exception:
+            pass
         return 0.0
     try:
         out = subprocess.run([ffprobe, "-v", "error", "-show_entries", "format=duration",
                               "-of", "default=nw=1:nk=1", path], capture_output=True, text=True, timeout=30)
-        return float(out.stdout.strip() or 0)
+        if out.stdout.strip():
+            return float(out.stdout.strip())
     except Exception:
-        return 0.0
+        pass
+    try:      # ffprobe missing or broken (imageio-ffmpeg ships ffmpeg only)
+        ff = shutil.which("ffmpeg") or "ffmpeg"
+        out = subprocess.run([ff, "-i", str(path)], capture_output=True, text=True, timeout=30)
+        m = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.?\d*)", out.stderr or "")
+        if m:
+            return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+    except Exception:
+        pass
+    return 0.0
 
 
 def distribute_words(text: str, duration: float, offset: float = 0.0) -> List[WordTiming]:

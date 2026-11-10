@@ -250,6 +250,7 @@ class DailyOrchestrator:
             failures=self.failures, insights=insights))
         logger.info("=== Run completed: %d ok, %d failed ===", len(completed), len(results) - len(completed))
         self._backup_state_to_hf()
+        await self._self_improve(results)
         return results
 
     def _upload_artifact_to_hf(self, video_id: str, local_path: Any, name: str) -> None:
@@ -267,6 +268,24 @@ class DailyOrchestrator:
                 logger.info("HF storage: %s -> %s", name, url)
         except Exception as exc:  # noqa: BLE001 — storage must never break a run
             logger.warning("HF artefact upload skipped (%s): %s", name, exc)
+
+    async def _self_improve(self, results) -> None:
+        """Record this run and turn its failures into next run's guidance."""
+        try:
+            from core import self_improve
+
+            errors = list(getattr(self, "failures", []) or [])
+            ok = all(getattr(r, "state", "") == "completed" for r in results) if results else False
+            self_improve.record_run("shorts", 0.0, ok, errors=errors,
+                                    extra={"videos": len(results or [])})
+            from agents.error_analyst import ErrorAnalystAgent
+
+            res = await ErrorAnalystAgent(self.config, self.state).execute()
+            data = res.data or {}
+            if data.get("classes"):
+                logger.info("self-improve: failure classes %s", data["classes"])
+        except Exception as exc:  # noqa: BLE001 — learning must never break production
+            logger.warning("self-improve skipped: %s", exc)
 
     def _backup_state_to_hf(self) -> None:
         """Mirror SQLite DB + history to the free HF dataset repo (survives runner resets)."""
