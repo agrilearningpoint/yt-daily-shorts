@@ -536,7 +536,9 @@ class MediaCollector:
                   "No text, no letters, no watermark, no logos.")
         try:
             from video.image_generator import AIImageGenerator
-            gen = AIImageGenerator(self.hf_token)
+            gen = getattr(self, "_ai_gen", None)
+            if gen is None:                     # reuse the Space connection across images
+                gen = self._ai_gen = AIImageGenerator(self.hf_token)
             out = gen.generate(prompt, str(dest))
             if not out:
                 self._hf_dead = True   # stop hammering for the rest of this run

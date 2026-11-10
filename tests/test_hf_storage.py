@@ -107,3 +107,70 @@ def test_image_generator_defaults_are_hf_recommended():
     from video.image_generator import DEFAULT_IMAGE_MODELS
     assert DEFAULT_IMAGE_MODELS[0] == "black-forest-labs/FLUX.1-Krea-dev"
     assert "Qwen/Qwen-Image" in DEFAULT_IMAGE_MODELS
+
+
+# --------------------------------------------------------------------------- #
+# Free AI image backends: credits → Space → Pollinations
+# --------------------------------------------------------------------------- #
+def test_image_backend_order_is_credits_space_pollinations():
+    from video.image_generator import AIImageGenerator
+
+    gen = AIImageGenerator("hf_dummy")
+    order = [m.__name__ for m in (gen._via_credits, gen._via_space, gen._via_pollinations)]
+    assert order == ["_via_credits", "_via_space", "_via_pollinations"]
+    assert gen.spaces[0].endswith("FLUX.1-schnell")      # fastest / cheapest quota
+
+
+def test_image_402_marks_credits_dead_but_keeps_free_backends(monkeypatch):
+    from video.image_generator import AIImageGenerator
+
+    gen = AIImageGenerator("hf_dummy")
+
+    class _Fake:
+        def text_to_image(self, *a, **k):
+            raise RuntimeError("402 Payment Required: purchase pre-paid credits")
+
+    gen._client = _Fake()
+    assert gen._via_credits("x", __import__("pathlib").Path("/tmp/none.jpg")) is False
+    assert gen.dead is True
+    assert gen._via_credits("x", __import__("pathlib").Path("/tmp/none.jpg")) is False
+    # the free route must stay available even when credits are gone
+    assert gen.space_dead is False and gen.pollinations_dead is False
+
+
+def test_image_space_failure_falls_through_to_pollinations(monkeypatch):
+    import pathlib
+    from PIL import Image
+    from video.image_generator import AIImageGenerator
+
+    gen = AIImageGenerator("hf_dummy")
+
+    def boom(text, out_file):
+        raise RuntimeError("space down")
+
+    gen._via_credits = lambda t, o: False
+    gen._via_space = boom
+    src = pathlib.Path("/tmp/_src.jpg")
+    Image.new("RGB", (32, 64), (10, 20, 30)).save(src)
+
+    def fake_poll(text, out_file):
+        AIImageGenerator._normalise_image(str(src), out_file)
+        return True
+
+    gen._via_pollinations = fake_poll
+    out = gen.generate("a scene", "/tmp/_out_free.jpg")
+    assert out == "/tmp/_out_free.jpg"
+    assert pathlib.Path(out).stat().st_size > 0
+
+
+def test_image_normalise_converts_webp_to_jpeg():
+    import pathlib
+    from PIL import Image
+    from video.image_generator import AIImageGenerator
+
+    src = pathlib.Path("/tmp/_n.webp")
+    Image.new("RGB", (48, 96), (200, 30, 30)).save(src, "WEBP")
+    dst = pathlib.Path("/tmp/_n.jpg")
+    AIImageGenerator._normalise_image(str(src), dst)
+    with Image.open(dst) as im:
+        assert im.format == "JPEG" and im.size == (48, 96)

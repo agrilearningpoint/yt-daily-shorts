@@ -18,6 +18,7 @@ feedparser>=6.0.0
 Pillow>=10.3.0
 edge-tts>=7.0.0
 huggingface_hub>=0.24.0   # free artefact storage + optional HF inference
+gradio_client>=1.0.0        # free FLUX via HF Spaces (ZeroGPU), no inference credits needed
 # 3D photo motion (Depth Anything V2 small, CPU) - optional, falls back to Ken Burns
 numpy>=1.26
 opencv-python-headless>=4.9
