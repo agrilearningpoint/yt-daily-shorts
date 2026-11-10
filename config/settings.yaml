@@ -17,7 +17,7 @@ general:
 llm:
   # Tried in order. Providers without a key are skipped; a failing
   # provider/model falls through to the next one.
-  provider_order: ["gemini", "groq", "openrouter", "mistral", "nvidia", "ollama"]
+  provider_order: ["gemini", "groq", "nvidia", "mistral", "openrouter", "ollama"]
   # "auto" = ask the provider's /models API at run time and pick the best
   # current free model, so retired models never break the pipeline.
   # Ids listed before "auto" are preferred while the provider still lists them.
