@@ -115,7 +115,10 @@ class EditorDirector:
             prompt = ("You are the senior video editor of a top Indian TV news channel. This is a contact sheet "
                       "(one frame every 3 s) of today's vertical Hindi news Short. Judge it like a pro: "
                       "eye-catching? professional motion graphics? images relevant and varied? text readable? "
-                      "boring or repetitive? Tiles are numbered left-to-right, top-to-bottom from 0 (tile n = second 3n). "
+                      "boring or repetitive? Also check Shorts editing rules: the first frame (tile 0) must hook instantly with a "
+                      "big readable headline and a strong picture (no logo/intro card first); a visual change at least every "
+                      "2-3 s; no two neighbouring tiles look the same; captions never cover faces; the last tile should loop "
+                      "back into the start. Tiles are numbered left-to-right, top-to-bottom from 0 (tile n = second 3n). "
                       "List tiles whose PICTURE is irrelevant, generic (random building/plane/stock), repeated, "
                       "blurry or a screenshot. Reply JSON only: {\"score\": 1-10, \"bad_tiles\": [numbers], "
                       "\"notes\": [3 short concrete improvement instructions for tomorrow's edit]}")

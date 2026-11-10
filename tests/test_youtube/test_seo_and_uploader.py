@@ -18,11 +18,23 @@ def test_seo_title_formatting():
     assert len(formatted) <= 100
 
 
-def test_seo_description_has_sources_and_disclosure():
+def test_seo_description_no_links_or_credits():
     desc = YouTubeSEOFormatter.format_description("क्या आप जानते हैं?", ["https://pib.gov.in/pr1"], ["#shorts"],
-                                                 media_credits=["Photo X (CC BY)", "AI-generated illustration"])
-    assert "https://pib.gov.in/pr1" in desc and "AI" in desc and "#shorts" in desc
-    assert "Photo X" not in desc  # image source links are not listed
+                                                 media_credits=["Photo X (CC BY)", "AI-generated illustration"],
+                                                 story_lines=["बिहार चुनाव नतीजे https://x.com/a"],
+                                                 keywords_paragraph="बिहार चुनाव और दिल्ली मौसम की खबर।")
+    assert "http" not in desc and "Photo X" not in desc  # no source links, no image credits
+    assert "AI" in desc and "#shorts" in desc and "बिहार चुनाव नतीजे" in desc
+
+
+def test_title_lint_and_tags():
+    from youtube.seo import build_tags, lint_title, pick_best_title, query_coverage
+    good, bad = "बिहार चुनाव 2026: नीतीश की बड़ी जीत", "क्या है ये SHOCKING CRAZY VIRAL खबर " * 3
+    assert lint_title(good)["score"] > lint_title(bad)["score"]
+    assert pick_best_title([bad, good]) == good
+    assert query_coverage(["बिहार चुनाव"], good, "") == 1.0
+    tags = build_tags(["a"] * 3 + ["bihar election " + str(i) for i in range(100)])
+    assert sum(len(t) + 3 for t in tags) <= 500 and tags.count("a") == 1
 
 
 def test_dry_run_uploader():
