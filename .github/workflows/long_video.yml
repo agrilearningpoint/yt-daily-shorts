@@ -40,6 +40,11 @@ on:
         required: false
         default: false
         type: boolean
+      fresh:
+        description: 'Discard script + chapter checkpoints (full rebuild)'
+        required: false
+        default: false
+        type: boolean
 
 run-name: "long-form ${{ github.event.inputs.topic }}"
 
@@ -123,6 +128,7 @@ jobs:
             --privacy ${{ github.event.inputs.privacy || 'unlisted' }} \
             ${{ github.event.inputs.rebuild_visuals == 'true' && '--rebuild-visuals' || '' }} \
             ${{ github.event.inputs.force_upload == 'true' && '--force-upload' || '' }} \
+            ${{ github.event.inputs.fresh == 'true' && '--fresh' || '' }} \
             ${{ github.event.inputs.upload == 'true' && '--upload' || '--dry-run' }}
 
       - name: Upload artefacts (video + captions + thumbnail)

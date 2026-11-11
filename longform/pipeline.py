@@ -42,11 +42,15 @@ class LongFormPipeline:
             llm = build_llm(config.llm)
         self.llm = llm
         self.chapter_files: List[str] = []
+        self.writer = None
+        self._chapters: List[Dict] = []
+        self.target_chapter_sec = 0.0
 
     # ------------------------------------------------------------------ public
     async def run(self, topic: str, angle: str = "", minutes: int = 22, chapters: int = 9,
                   upload: bool = True, privacy: str = "unlisted",
-                  rebuild_visuals: bool = False, force_upload: bool = False) -> Dict[str, Any]:
+                  rebuild_visuals: bool = False, force_upload: bool = False,
+                  fresh: bool = False) -> Dict[str, Any]:
         t0 = time.time()
         self.video_id = f"{_slug(topic)}-{time.strftime('%Y%m%d')}"
         self.out = Path("output") / "long" / self.video_id
@@ -58,17 +62,29 @@ class LongFormPipeline:
         self.sourcer.out_root = self.out
 
         logger.info("=== long-form: %s (%d chapters, ~%d min) ===", topic, chapters, minutes)
+        if fresh:
+            # ignore every checkpoint: new script, new voice, new visuals, new film
+            for f in list(self.out.glob("*.json")) + [self.out / "film.srt"]:
+                Path(f).unlink(missing_ok=True)
+            for d in sorted(self.out.glob("ch*")):
+                shutil.rmtree(d, ignore_errors=True)
+            logger.info("fresh run: checkpoints and script discarded")
         if rebuild_visuals:
             for d in sorted(self.out.glob("ch*")):
                 for f in d.glob("*"):
                     if f.suffix in (".mp4", ".json"):
                         f.unlink(missing_ok=True)
             logger.info("rebuild-visuals: chapters cleared, script kept")
-        self._checkpoint_restore()
+        if not fresh:
+            self._checkpoint_restore()
         writer = ScriptWriter(self.llm, words_per_chapter=max(280, int(minutes * 158 / chapters)))
+        self.writer = writer
+        # card(5s) per chapter, plus the 3s intro and 7s outro, are not narration
+        self.target_chapter_sec = max(30.0, (minutes * 60 - (CARD_SECONDS * chapters + 10)) / chapters)
         script = await writer.build(topic, angle, minutes, chapters, self.out)
         title = script["title"]
         chs = script["chapters"]
+        self._chapters = chs
 
         from video.tts import TTSEngine
         tts = TTSEngine(provider_order=["edge"], voice="hi-IN-MadhurNeural", rate="+4%",
@@ -118,6 +134,34 @@ class LongFormPipeline:
             logger.info("ch%02d voice: %.1f s", idx + 1, segment.duration)
         from video.tts import probe_duration, distribute_words
         dur = probe_duration(str(audio)) or 60.0
+
+        # Length control on the real audio, not on the LLM's word count. Chapters that
+        # come back short are rewritten longer and re-voiced (max 2 passes) so the film
+        # lands inside the requested 20-25 minute window instead of drifting to 16.
+        for attempt in range(2):
+            target = getattr(self, "target_chapter_sec", 0) or 0
+            if not target or dur >= target * 0.9 or not ch.get("narration"):
+                break
+            words_have = len(ch["narration"].split())
+            want_words = int(words_have * (target * 1.02) / max(dur, 1))
+            if want_words <= words_have * 1.05:
+                break
+            logger.warning("ch%02d short: %.0f s of %.0f s target — rewriting longer (%d -> %d words)",
+                           idx + 1, dur, target, words_have, want_words)
+            try:
+                longer = await self.writer.lengthen(video_title, ch, idx, total, want_words)
+            except Exception as exc:
+                logger.warning("ch%02d lengthen failed: %s", idx + 1, exc)
+                break
+            if len(longer.split()) <= words_have:
+                break
+            ch["narration"] = longer
+            self._save_script_cache()
+            audio.unlink(missing_ok=True)
+            segment = await tts.synthesize_segment(ch["narration"], str(audio))
+            dur = probe_duration(str(audio)) or dur
+            logger.info("ch%02d re-voiced: %.1f s", idx + 1, dur)
+        dur = dur or 60.0
         words = [{"word": w.word, "start": w.start, "end": w.end} for w in (segment.words if segment else [])]
         if not words:
             words = [{"word": w.word, "start": w.start, "end": w.end}
@@ -162,6 +206,19 @@ class LongFormPipeline:
                 self._CK_REPO = False
         return getattr(self, "_store", None) if self._CK_REPO else None
 
+    def _save_script_cache(self) -> None:
+        """Persist narration rewrites so a re-run re-uses the longer script."""
+        cache = self.out / "script.json"
+        try:
+            data = json.loads(cache.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        for cached in data.get("chapters", []):
+            mine = next((c for c in self._chapters if c.get("title") == cached.get("title")), None)
+            if mine and mine.get("narration"):
+                cached["narration"] = mine["narration"]
+        cache.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
     def _checkpoint_save(self, idx: int, ch: Dict, path: str) -> None:
         st = self._hf()
         if not st:
@@ -182,7 +239,8 @@ class LongFormPipeline:
         try:
             from huggingface_hub import snapshot_download
             local = snapshot_download(repo_id=st.repo_id, repo_type="dataset",
-                                      allow_patterns=[f"long/{self.video_id}/*"],
+                                      allow_patterns=[f"long/{self.video_id}/script.json",
+                                                      f"long/{self.video_id}/ch*.mp4"],
                                       local_dir=str(self.work / "_ckpt"))
             src = Path(local) / "long" / self.video_id
             if not src.exists():

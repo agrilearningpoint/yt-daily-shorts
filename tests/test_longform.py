@@ -261,3 +261,64 @@ def test_thumbnail_frame_fallback_is_safe_without_chapters(tmp_path):
     pipe = P.LongFormPipeline(_Cfg(), llm=object())
     pipe.out = tmp_path
     assert pipe._frame_for_thumbnail() is None
+
+
+@pytest.mark.asyncio
+async def test_script_writer_lengthens_a_short_chapter():
+    """A chapter at 60% of budget is what shrank the film to 16 minutes."""
+    from longform.script import ScriptWriter
+
+    calls = {"n": 0}
+
+    class FakeLLM:
+        async def generate_json(self, prompt, tier="quality"):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return {"narration": "छोटा अध्याय। " * 20}
+            return {"narration": "विस्तृत अध्याय। " * 90}
+
+    w = ScriptWriter(FakeLLM(), words_per_chapter=100)
+    text = await w.write_chapter("फिल्म", {"title": "अध्याय", "point": "p"}, 0, 3, "अगला")
+    assert len(text.split()) >= 92
+    assert calls["n"] >= 2
+
+
+@pytest.mark.asyncio
+async def test_lengthen_returns_a_longer_narration():
+    from longform.script import ScriptWriter
+
+    class FakeLLM:
+        async def generate_json(self, prompt, tier="quality"):
+            assert "CURRENT NARRATION" in prompt
+            return {"narration": "विस्तार। " * 120}
+
+    w = ScriptWriter(FakeLLM(), words_per_chapter=100)
+    out = await w.lengthen("फिल्म", {"title": "त", "narration": "छोटा। " * 10}, 0, 3, 200)
+    assert len(out.split()) > 100
+
+
+def test_target_chapter_seconds_fills_the_requested_window(tmp_path):
+    from longform import pipeline as P
+
+    pipe = P.LongFormPipeline(_Cfg(), llm=object())
+    minutes, chapters = 22, 9
+    pipe.target_chapter_sec = max(30.0, (minutes * 60 - (P.CARD_SECONDS * chapters + 10)) / chapters)
+    film_seconds = pipe.target_chapter_sec * chapters + P.CARD_SECONDS * chapters + 10
+    assert 20 * 60 < film_seconds <= 25 * 60
+
+
+def test_fresh_run_clears_script_and_chapters(tmp_path, monkeypatch):
+    from longform import pipeline as P
+
+    pipe = P.LongFormPipeline(_Cfg(), llm=object())
+    pipe.out = tmp_path
+    (tmp_path / "script.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "ch01").mkdir()
+    (tmp_path / "ch01" / "chapter_01.mp4").write_bytes(b"x")
+    for f in list(pipe.out.glob("*.json")):
+        f.unlink(missing_ok=True)
+    import shutil as _sh
+    for d in sorted(pipe.out.glob("ch*")):
+        _sh.rmtree(d, ignore_errors=True)
+    assert not (tmp_path / "script.json").exists()
+    assert not (tmp_path / "ch01").exists()

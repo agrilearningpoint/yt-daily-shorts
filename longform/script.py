@@ -181,16 +181,43 @@ class ScriptWriter:
         )
         data = await self.llm.generate_json(prompt, tier="quality")
         text = (data.get("narration") or "").strip()
-        if len(text.split()) < words * 0.5:
-            # one retry with an explicit nudge, then accept and log
-            logger.warning("chapter %d short (%d words) — retrying once", idx + 1, len(text.split()))
+        # A chapter that comes back at 60% of the budget is what turned a "22 minute"
+        # film into a 16 minute one. Insist on the budget twice, keep the longest answer.
+        for attempt in range(2):
+            if len(text.split()) >= words * 0.92:
+                break
+            logger.warning("chapter %d short (%d/%d words) — extending (attempt %d)",
+                           idx + 1, len(text.split()), words, attempt + 1)
             data = await self.llm.generate_json(
-                prompt + f"\n\nYour previous answer was only {len(text.split())} words. "
-                         f"Write at least {words} words this time.", tier="quality")
-            text = (data.get("narration") or text).strip()
+                prompt + f"\n\nYour previous answer was only {len(text.split())} words out of {words}. "
+                         "Rewrite the SAME chapter at the full length: add concrete, checkable detail "
+                         "(dates, places, names, numbers, cause and effect). Never pad with filler and "
+                         "never repeat a sentence.", tier="quality")
+            candidate = (data.get("narration") or "").strip()
+            if len(candidate.split()) > len(text.split()):
+                text = candidate
         text = _clean(text)
         logger.info("chapter %d/%d: %d words", idx + 1, total, len(text.split()))
         return text
+
+    async def lengthen(self, video_title: str, ch: Dict[str, Any], idx: int, total: int,
+                       target_words: int) -> str:
+        """Rewrite a chapter longer, using the real measured audio gap as the brief."""
+        have = ch.get("narration", "")
+        prompt = CHAPTER_PROMPT.format(
+            video_title=video_title, idx=idx + 1, total=total, chapter_title=ch["title"],
+            point=ch.get("point", ""), next_title="समापन", words=target_words,
+            secs=int(target_words / 2.6), facts=_facts_for(idx),
+        )
+        prompt += (f"\n\nThe narration below is only {len(have.split())} words and speaks for too short a "
+                   f"time. Rewrite it at {target_words}+ words. Keep the same opening, the same closing "
+                   "sentence and the same order of ideas; add concrete detail (dates, places, names, "
+                   "numbers, consequences, comparisons). Do not repeat a sentence, do not pad.\n\n"
+                   f"CURRENT NARRATION:\n{have}")
+        data = await self.llm.generate_json(prompt, tier="quality")
+        out = _clean((data.get("narration") or "").strip())
+        logger.info("chapter %d lengthened: %d -> %d words", idx + 1, len(have.split()), len(out.split()))
+        return out or have
 
     # -------------------------------------------------------------------- build
     async def build(self, topic: str, angle: str, minutes: int, chapters: int,
