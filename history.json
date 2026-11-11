@@ -1000,7 +1000,7 @@
    "theme": "Breaking News Pulse",
    "duration": 125.8,
    "at": "2026-11-08T05:59:59.422022+00:00",
-   "views": 1255,
+   "views": 1258,
    "likes": 12,
    "comments": 0
   },
@@ -1036,7 +1036,7 @@
    "theme": "Breaking News Pulse",
    "duration": 130.4,
    "at": "2026-11-10T22:51:32.580895+00:00",
-   "views": 0,
+   "views": 2,
    "likes": 0,
    "comments": 1
   },
@@ -1047,7 +1047,10 @@
    "youtube_id": "v_TD5nqpbB4",
    "theme": "Midnight Desk",
    "duration": 112.9,
-   "at": "2026-11-11T00:48:06.052890+00:00"
+   "at": "2026-11-11T00:48:06.052890+00:00",
+   "views": 2,
+   "likes": 0,
+   "comments": 1
   }
  ]
 }
