@@ -7,7 +7,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
-WORDS_PER_SEC = {"news": 2.3, "knowledge": 2.4}  # measured on Gemini TTS Hindi
+# Base speed measured on the Hindi neural voices, at tts.rate = +0%.
+_BASE_WORDS_PER_SEC = {"news": 2.3, "knowledge": 2.4}
+# The channel owner's voice setting (2026-11-11): 1.2x. edge-tts "+20%", Gemini style "brisk".
+VOICE_SPEED = 1.2
+# Everything that estimates length must use these, or a script the writer accepts gets rejected later.
+WORDS_PER_SEC = {k: round(v * VOICE_SPEED, 3) for k, v in _BASE_WORDS_PER_SEC.items()}
 SHORTS_HARD_LIMIT = 179.0                         # YouTube Shorts max is 180 s
 MIN_NEWS_STORIES = 12                             # below this we skip the day instead of padding with old news
 

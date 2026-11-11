@@ -103,7 +103,10 @@ class VideoProducerAgent(BaseAgent):
         topic_kw = (items[0].get("seed") or items[0].get("title", "")) if (not is_news and items) else ""
         by_url = {i.get("source_url"): i for i in items}
         beats: List[Dict[str, Any]] = []
-        if hook:
+        fig: Dict[str, Any] = {"avg_match": -1, "picture_parts": 0, "no_picture_parts": 0}
+        # Opening: the date/festival line replaces the generic hook when the script has a "today" block
+        today_scenes = [sc for sc in scenes if sc.get("section") == "today"]
+        if not today_scenes and hook:
             first = (scenes[0].get("parts") or [{}])[0] if scenes else {}
             beats.append({"kind": "hook", "text": hook, "chip": "", "category": "",
                           "parts": [{"say": hook, "visual": first.get("visual", "") or topic_kw,
@@ -114,7 +117,8 @@ class VideoProducerAgent(BaseAgent):
             parts = [dict(p) for p in (s.get("parts") or [])] or [{
                 "say": s["narration"], "visual": s.get("visual_keywords", ""), "entity": s.get("image_query", ""),
                 "search": s.get("visual_keywords", ""), "source": ""}]
-            if is_news:
+            if is_news and s.get("section") != "today":
+                # date / rashifal / trading beats carry their own visual description (no article page)
                 url = (s.get("sources") or [""])[0]
                 parts[0]["article"] = url
                 it = by_url.get(url, {})
@@ -131,15 +135,20 @@ class VideoProducerAgent(BaseAgent):
             beats.append({"kind": "item", "text": s["narration"], "chip": s.get("on_screen_text", ""),
                           "category": s.get("category", ""), "parts": parts, "n": i + 1})
         if is_news and any(s.get("section") for s in scenes):
-            # Two sections only, announced by the anchor like a TV bulletin.
+            # Three sections, announced by the anchor like a TV bulletin: आज (date/parv → rashifal →
+            # trading) → देश → दुनिया. The "today" block needs no announcement, it IS the opening.
             withsec, seen = [], set()
             for b in beats:
                 sec = scenes[b["n"] - 1].get("section", "national") if b["kind"] == "item" else ""
                 if sec and sec not in seen:
                     seen.add(sec)
+                    if sec == "today":
+                        b["section"] = sec
+                        withsec.append(b)
+                        continue
                     intl = sec == "international"
                     withsec.append({"kind": "section", "text": "अब दुनिया की बड़ी खबरें।" if intl
-                                    else "पहले देश की बड़ी खबरें।",
+                                    else "अब देश की बड़ी खबरें।",
                                     "big": "अंतरराष्ट्रीय" if intl else "राष्ट्रीय",
                                     "small": "दुनिया की खबरें" if intl else "देश की खबरें",
                                     "chip": "", "category": "", "parts": [], "section": sec})
@@ -200,12 +209,23 @@ class VideoProducerAgent(BaseAgent):
         found = self.media.find_visuals(specs, mode="news" if is_news else "knowledge")
         assets: Dict[tuple, Any] = {(sp["_beat"], sp["_part"]): a for sp, a in zip(specs, found)}
         # A part with no matching picture keeps its story's own picture (never a random one).
+        missing = 0
         for i, b in enumerate(beats):
             n = len(b["parts"])
             for k in range(n):
                 if not assets.get((i, k)):
                     near = [assets.get((i, j)) for j in sorted(range(n), key=lambda j: abs(j - k)) if j != k]
                     assets[(i, k)] = next((a for a in near if a), None)
+                    if not assets[(i, k)]:
+                        missing += 1
+        scored = [a.match for a in assets.values() if a and getattr(a, "match", -1) >= 0]
+        avg_match = sum(scored) / len(scored) if scored else -1
+        fig = {"avg_match": round(avg_match, 3), "picture_parts": len(scored), "no_picture_parts": missing}
+        self.logger.info("visual↔voice match: %d pictures, avg %.2f, %d parts without a picture",
+                         len(scored), avg_match, missing)
+        if avg_match >= 0 and avg_match < 0.34:
+            self.logger.warning("pictures are weakly matched to the narration (%.2f) — check the visual prompts",
+                                avg_match)
 
         # ---- 3. motion-graphics layers --------------------------------------
         # Editor Director: today's look (different every day, learns from yesterday's review)
@@ -347,7 +367,7 @@ class VideoProducerAgent(BaseAgent):
                   "editor_review": review, "render_qa": qa, "beats": len(beats), "visual_parts": len(clips),
                   "images_found": sum(1 for a in assets.values() if a),
                   "ai_images": sum(1 for a in assets.values() if a and a.source == "ai"),
-                  "storage_urls": storage_urls},
+                  "visual_match": fig, "storage_urls": storage_urls},
             errors=[] if ok else ["rendered video missing or too small"],
         )
 

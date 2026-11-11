@@ -28,6 +28,8 @@ class MediaAsset:
     credit: str = ""
     page_url: str = ""
     video: str = ""      # short real-motion clip (mp4); path above is a still frame of it
+    labels: str = ""     # the picture's own words: alt text, title, Wikipedia entity, search query
+    match: float = -1.0  # keyword_match() of those words against the spoken line (-1 = not scored)
 
 
 class MediaCollector:
@@ -109,7 +111,8 @@ class MediaCollector:
                 if not self._relevant(query, p.get("alt", "") + " " + p.get("url", "").replace("-", " ")):
                     continue
                 if self._download(p["src"]["large2x"], dest):
-                    return MediaAsset(str(dest), "pexels", f"Photo: {p.get('photographer', '')} (Pexels)", p.get("url", ""))
+                    return MediaAsset(str(dest), "pexels", f"Photo: {p.get('photographer', '')} (Pexels)", p.get("url", ""),
+                                      labels=f"{query} {p.get('alt', '')}")
         except Exception as exc:
             logger.warning("Pexels error: %s", exc)
         return None
@@ -213,7 +216,8 @@ class MediaCollector:
                 if not self._relevant(query, h.get("tags", "")):
                     continue
                 if self._download(h["largeImageURL"], dest):
-                    return MediaAsset(str(dest), "pixabay", f"Image: {h.get('user', '')} (Pixabay)", h.get("pageURL", ""))
+                    return MediaAsset(str(dest), "pixabay", f"Image: {h.get('user', '')} (Pixabay)", h.get("pageURL", ""),
+                                      labels=f"{query} {h.get('tags', '')}")
         except Exception as exc:
             logger.warning("Pixabay error: %s", exc)
         return None
@@ -402,7 +406,7 @@ class MediaCollector:
                     continue
                 url = ((r.json().get("data") or [{}])[0] or {}).get("url", "")
                 if url and self._download(url, dest):
-                    return MediaAsset(str(dest), "ai", "AI-generated illustration (Agnes AI)", "")
+                    return MediaAsset(str(dest), "ai", "AI-generated illustration (Agnes AI)", "", labels=visual)
                 logger.warning("Agnes AI image failed: HTTP %s %s", r.status_code, r.text[:160])
                 return None
             except Exception as exc:
@@ -487,7 +491,7 @@ class MediaCollector:
         for j in order:
             img, host, real = cands[j]
             if self._download(img, dest):
-                return MediaAsset(str(dest), "news", f"Photo: {host}", real)
+                return MediaAsset(str(dest), "news", f"Photo: {host}", real, labels=f"{query} {host}")
         return None
 
     def _news_match(self, query: str, title: str) -> bool:
@@ -520,7 +524,7 @@ class MediaCollector:
                 return None
             img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
             img.save(dest, "JPEG", quality=92)
-            return MediaAsset(str(dest), "ai", "AI-generated illustration (Cloudflare Workers AI, FLUX)", "")
+            return MediaAsset(str(dest), "ai", "AI-generated illustration (Cloudflare Workers AI, FLUX)", "", labels=visual)
         except Exception as exc:
             logger.warning("Cloudflare AI error: %s", exc)
             return None
@@ -544,24 +548,45 @@ class MediaCollector:
                 self._hf_dead = True   # stop hammering for the rest of this run
                 return None
             Image.open(out).convert("RGB").save(dest, "JPEG", quality=92)
-            return MediaAsset(str(dest), "ai", "AI-generated illustration (Hugging Face, FLUX)", "")
+            return MediaAsset(str(dest), "ai", "AI-generated illustration (Hugging Face, FLUX)", "", labels=visual)
         except Exception as exc:
             logger.warning("Hugging Face AI image error: %s", exc)
             self._hf_dead = True
             return None
 
-    def _checked(self, fn, description: str):
-        """Wrap a stock/commons step: Gemini vision must agree the photo shows the described scene."""
+    def _checked(self, fn, description: str, min_match: float = 0.34):
+        """Wrap a stock/commons step so the picture must be about the spoken line.
+
+        Layer 1 (free): the picture's own words (alt/title/entity/search) must share content words
+        with the line. Layer 2: the VLM judge. A dead quota returns None (no opinion) and we keep a
+        picture that passed layer 1 — instead of throwing real photos away and showing a generic card.
+        """
         def run():
             a = fn()
-            if a and self.vision:
+            if not a:
+                return None
+            try:
+                from video.vision_check import keyword_match
+                a.match = keyword_match(description, [a.labels, a.credit, a.page_url])
+            except Exception:
+                a.match = -1.0
+            weak = a.match >= 0 and a.match < min_match
+            if self.vision:
                 try:
-                    if not self.vision(a.path, description):
-                        logger.info("vision check rejected %s for '%s'", a.source, description[:60])
-                        return None
+                    verdict = self.vision(a.path, description)
                 except Exception as exc:
                     logger.debug("vision check error: %s", exc)
+                    verdict = None
+                if verdict is False:
+                    logger.info("vision rejected %s (%.2f) for '%s'", a.source, a.match, description[:60])
                     return None
+                if verdict is True:
+                    a.match = max(a.match, 0.8)
+                    return a
+            # no vision opinion: trust the picture only if its own words name the same thing
+            if weak:
+                logger.info("word-check rejected %s (%.2f) for '%s'", a.source, a.match, description[:60])
+                return None
             return a
         return run
 
@@ -624,8 +649,18 @@ class MediaCollector:
                 logger.debug("visual step %s failed: %s", name, exc)
                 asset = None
             if asset:
-                logger.info("Beat visual via %s (%s)", name, (visual or search or entity)[:60])
+                logger.info("Beat visual via %s (match %.2f, %s)", name, getattr(asset, "match", -1),
+                            (visual or search or entity)[:60])
                 return asset
+        # nothing passed the match test: generate the picture FROM THIS LINE, which always matches
+        try:
+            asset = self._agnes(visual or search or desc, dest, mode)
+            if asset:
+                logger.info("Beat visual via ai-fallback for '%s'", (visual or search)[:60])
+                return asset
+        except Exception as exc:
+            logger.debug("ai fallback failed: %s", exc)
+        return None
         return None
 
     def find_visuals(self, specs: List[dict], mode: str = "news", workers: int = 6) -> List[Optional[MediaAsset]]:

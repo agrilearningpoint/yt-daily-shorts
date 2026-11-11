@@ -44,11 +44,8 @@ llm:
     groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
     agnes: ["agnes-2.5-flash"]           # 30 RPM, no hard usage cap
     nvidia: ["nvidia/nemotron-3-ultra-550b-a55b"]   # deepseek-v4.1-flash timed out in CI
-    openrouter: ["nvidia/nemotron-3-ultra-550b-a55b:free",
-                 "nvidia/nemotron-3.5-lightning:free",
-                 "dots-studio/dots-3-note-preview:free",
-                 "liquid/lfm-3-1.7b:free",
-                 "recursive/flint-v1.0:free"]
+    openrouter: ["nvidia/nemotron-3-ultra-550b-a55b:free", "nvidia/nemotron-3.5-lightning:free",
+      "dots-studio/dots-3-note-preview:free", "liquid/lfm-3-1.7b:free", "recursive/flint-v1.0:free"]
     ollama: []   # HTTP 402 — paid credits required; re-enable with ["auto"] after subscribing
   # Stage routing — the flagship's daily quota is tiny (3.8-flash ≈ 20 RPD), so
   # it is spent only where quality is visible in the finished video:
@@ -105,23 +102,26 @@ tts:
   gemini_models: ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"]
   gemini_voice: "auto"        # auto = Hindi news voice from Google's voice library, else Charon
   gemini_fallback_voice: "Charon"
-  news_style: "clear, confident Hindi TV news anchor, calm medium pace so every word is understood, natural breathing, a short pause after each story"
-  knowledge_style: "warm, curious Hindi storyteller, natural conversational pace, expressive"
+  news_style: "clear, confident Hindi TV news anchor, natural breathing, a short pause
+    after each story, a brisk, fast pace — clearly quicker than normal but every word
+    still clear"
+  knowledge_style: "warm, curious Hindi storyteller, expressive, a brisk, fast pace
+    — clearly quicker than normal but every word still clear"
   provider: "edge-tts"
   voice: "hi-IN-MadhurNeural"
   fallback_voice: "hi-IN-SwaraNeural"
-  rate: "+0%"
+  rate: "+20%"      # 1.2x anchor speed (owner, 2026-11-11)
   pitch: "+0Hz"
 
 seo:
   max_title_length: 100
   max_description_length: 5000
   default_hashtags:
-    - "#shorts"
-    - "#hindi"
-    - "#india"
-    - "#facts"
-    - "#knowledge"
+  - "#shorts"
+  - "#hindi"
+  - "#india"
+  - "#facts"
+  - "#knowledge"
 
 youtube:
   default_privacy: "unlisted"     # override with repo variable YT_YOUTUBE_PRIVACY

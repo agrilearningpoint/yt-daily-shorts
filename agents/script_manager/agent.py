@@ -81,8 +81,10 @@ def parse_script(data: Dict[str, Any], video_type: str, fallback_sources: List[s
         sources = list(dict.fromkeys(sources + [s for s in fallback_sources if isinstance(s, str) and s.startswith("http")]))
     scenes = []
     raw_scenes = data.get("scenes") or []
-    if video_type == "news" and (data.get("national") or data.get("international")):
-        raw_scenes = ([{**s, "section": "national"} for s in (data.get("national") or []) if isinstance(s, dict)]
+    if video_type == "news" and (data.get("today") or data.get("national") or data.get("international")):
+        # Order is the product: today (date/parv → rashifal → trading) then national then international.
+        raw_scenes = ([{**s, "section": "today"} for s in (data.get("today") or []) if isinstance(s, dict)]
+                      + [{**s, "section": "national"} for s in (data.get("national") or []) if isinstance(s, dict)]
                       + [{**s, "section": "international"} for s in (data.get("international") or [])
                          if isinstance(s, dict)])
     for idx, sc in enumerate(raw_scenes, 1):
@@ -104,7 +106,7 @@ def parse_script(data: Dict[str, Any], video_type: str, fallback_sources: List[s
         category = str(sc.get("category", "")).strip()[:20]
         section = str(sc.get("section", "")).strip()
         if video_type == "news" and section:
-            category = "अंतरराष्ट्रीय" if section == "international" else "राष्ट्रीय"
+            category = {"international": "अंतरराष्ट्रीय", "today": "आज"}.get(section, "राष्ट्रीय")
         sc_sources = [s for s in (sc.get("sources") or []) if isinstance(s, str) and s.startswith("http")]
         src = sc.get("src")
         try:
@@ -157,7 +159,8 @@ class ScriptManagerAgent(BaseAgent):
         # very long stories first, then trailing ones, while words exceed the budget
         while script.word_count() > max_w:
             counts = {k: sum(1 for s in script.scenes if sec(s) == k) for k in need}
-            cand = [s for s in script.scenes if counts[sec(s)] > need[sec(s)]]
+            cand = [s for s in script.scenes
+                    if counts[sec(s)] > need[sec(s)] and s.section != "today"]
             if not cand:
                 break
             victim = max(cand, key=lambda s: (len(s.narration.split()) > 14, sec(s) == "national",
@@ -194,6 +197,13 @@ class ScriptManagerAgent(BaseAgent):
             no_cat = [s.scene_number for s in script.scenes if not s.category]
             if len(no_cat) > 2:
                 problems.append(f"stories {no_cat[:5]} missing \"category\" (Hindi section name)")
+            today = [s for s in script.scenes if s.section == "today"]
+            if not today and getattr(self, "require_today", False):
+                problems.append("the bulletin must open with the \"today\" block (date + festival, rashifal, "
+                                "trading) before the national/international sections")
+            elif today and len(" ".join(t.narration for t in today).split()) < 35:
+                problems.append("the \"today\" opening block is too thin: date sentence + rashifal + the "
+                                "biggest trading news, 55-75 words total")
         few_parts = [s.scene_number for s in script.scenes if len(s.parts) < 2]
         if script.video_type != "news" and len(few_parts) > max(1, len(script.scenes) // 4):
             problems.append(f"scenes {few_parts[:6]} need 2-3 \"parts\" (small visual beats), each with its own visual")
@@ -233,6 +243,8 @@ class ScriptManagerAgent(BaseAgent):
         max_w = int(kwargs.get("max_words", 135))
         fallback_sources = research_data.get("sources", [])
         self.targets = kwargs.get("targets") or None
+        # today's block is mandatory when the day facts were fetched (a dead panchang page must not block news)
+        self.require_today = bool((research_data.get("daily") or {}).get("facts"))
 
         if self.llm is None:
             return AgentResult(success=False, errors=["No LLM configured"])
@@ -282,7 +294,7 @@ class ScriptManagerAgent(BaseAgent):
 
     async def _best_hook(self, data: dict) -> None:
         """Hook Agent: write 4 scroll-stopping hooks from the top stories, keep the best factual one."""
-        scenes = data.get("scenes", [])[:5]
+        scenes = [s for s in data.get("scenes", []) if s.get("section") != "today"][:5]
         if not scenes or self.llm is None:
             return
         lines = "\n".join(f"{i + 1}. {s.get('narration', '')}" for i, s in enumerate(scenes))

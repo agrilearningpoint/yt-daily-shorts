@@ -8,6 +8,7 @@ from typing import Any, List, Optional
 import pytz
 
 from agents.base_agent import AgentResult, BaseAgent
+from research.daily_context import gather as gather_daily_context, split_market
 from research.news_collector import NewsCollector
 from research.trend_discovery import TrendDiscovery, normalize_day
 
@@ -53,6 +54,19 @@ class ResearchManagerAgent(BaseAgent):
             items = self.collector.collect_and_rank_news(target_count=max(n + 25, 60), exclude=exclude)
             data_items = [vars(i) for i in items]
             sources = [i.source_url for i in items]
+            # The bulletin opens with today: date + parv, rashifal, then trading news
+            # (index/policy first), then the rest of the day's news.
+            daily = {"facts": {}, "rashifal": [], "trading": []}
+            try:
+                daily.update(gather_daily_context(self.config.general.timezone))
+            except Exception as exc:  # a dead panchang page must never stop the news
+                self.logger.warning("daily context unavailable: %s", exc)
+            trading, rest = split_market(data_items)
+            daily["trading"] = trading
+            data_items = trading + rest
+            if daily.get("facts"):
+                sources = [daily["facts"].get("source", "")] + sources
+            sources += [h["url"] for h in daily.get("rashifal", [])[:3] if h.get("url")]
         else:
             used = self.history.used_topics() if self.history else []
             seed = self.trend.pick_seed(day_name, used)
@@ -66,6 +80,8 @@ class ResearchManagerAgent(BaseAgent):
 
         return AgentResult(
             success=bool(data_items),
-            data={"items": data_items, "sources": sources, "day_name": day_name},
+            data={"items": data_items, "sources": [s for s in sources if s], "day_name": day_name,
+                  **({"daily": daily, "trading_count": len(daily.get("trading", []))}
+                     if video_type == "news" else {})},
             metadata={"video_type": video_type, "topic_category": topic_category},
         )

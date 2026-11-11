@@ -6,7 +6,37 @@ names, dates or quotes):
 {% for item in items %}[{{ loop.index }}] ({{ 'WORLD' if item.region == 'international' else 'INDIA' }}) {{ item.title }} — {{ (item.summary or '')[:160] }} ({{ item.source_name }}{% if item.coverage %}, +{{ item.coverage }} outlets{% endif %})
 {% endfor %}
 
-TASK: build ONE bulletin with exactly TWO sections:
+{% if has_today %}
+=== TODAY'S OPENING BLOCK (always first, before any other news) ===
+TODAY IS: {{ facts.date_hi }}{% if facts.weekday_hi %} ({{ facts.weekday_hi }}){% endif %}
+PANCHANG: {% if facts.tithi %}{{ facts.tithi }}{% endif %}{% if facts.samvat %} · {{ facts.samvat }}{% endif %}
+FESTIVAL / IMPORTANT DAY TODAY (from Drik Panchang): {% if facts.festivals %}{{ facts.festivals | join(', ') }}{% else %}none listed{% endif %}
+TODAY'S RASHIFAL HEADLINES (Hindi outlets, headline text only — this is belief, not verified fact):
+{% for r in rashifal[:5] %}- {{ r.title }}
+{% endfor %}{% if not rashifal %}- (no rashifal headline available: skip astrology, do not invent it)
+{% endif %}
+TRADING NEWS of the day, already sorted highest impact first (index/RBI/policy → commodity → single stocks):
+{% for t in trading[:6] %}[T{{ loop.index }}] {{ t.title }} — {{ (t.summary or '')[:120] }}{% if t.market_score %} (impact {{ t.market_score }}/3){% endif %}
+{% endfor %}{% if not trading %}- (no market story in the last 24h: skip the trading beat, do not invent numbers)
+{% endif %}
+The bulletin MUST open in this exact order, before the national/international sections:
+  1. "today" scene — the date, the weekday and today's festival/special day in ONE warm sentence
+     (12–20 words). If a festival/vrat is listed above, name it and say in one clause why it matters.
+  2. "rashifal" scene — 15–30 words: name the 2–3 rashis that look best today and one that needs care,
+     phrased as "राशिफल के अनुसार…". NEVER promise money, health or marriage. If no rashifal headlines
+     are listed above, skip this scene completely.
+  3. "trading" scene — 15–30 words: the single biggest market story with its exact number from the
+     TRADING lines above, then one clause on what it means for a normal viewer (EMI, SIP, gold, rupee).
+  After these three, the rest of the trading news goes first inside the national list, in DESCENDING
+  order of impact (index/RBI/policy → gold/crude/rupee/crypto → single-company stories), then the other
+  national stories, then international. Sort [T1] before [T2] before [T3]… — never mix them.
+Put these three scenes in a new top-level key "today": [{"on_screen_text": ..., "parts": [...]}]
+with section "today" so they are kept in that exact order. Then write the normal
+"national" and "international" lists — national first story = the biggest REMAINING story
+(the one the hook talks about), never one of the three opening scenes.
+=== END OPENING BLOCK ===
+
+{% endif %}TASK: build ONE bulletin with exactly TWO sections:
   Prefer stories confirmed by other outlets ("+N outlets"); use single-source stories only if from an official/major source.
   Use ONLY facts written in the candidate line: never add numbers, names or dates from memory.
   1. "national": {{ national }} DIFFERENT Indian stories (national politics, government, states, economy,
@@ -24,15 +54,20 @@ STORY RULES (very important):
   Good: "पीएम मोदी ने बिहार में 12 हज़ार करोड़ की परियोजनाएं शुरू कीं। इनसे सड़क और बिजली सुधरेगी।"
   Bad (meaningless): "शेयर बाज़ार में हलचल।"  Bad (label): "खेल में, भारत जीता।"
 - Split each story into exactly 2 "parts" (sometimes 3) so the picture changes with the words.
-  Each part = 5–9 spoken words, and its picture must show what THAT part says.
+  Each part = 5–9 spoken words, and its picture must show EXACTLY what THAT part says.
+  THE PICTURE TEST (this is the channel's #1 quality rule — a photo of the wrong thing is worse than no photo):
+  read your "say" line, then name the ONE object/person/place in it. "visual" must describe that same thing.
+  If the line says "मंदिर" the picture is a temple — never a church, a generic city or a smiling stock model.
   * Each part has:
       "say":    the spoken words (Devanagari; ISRO, RBI, IPL, GDP in English letters OK; numbers as spoken)
-      "visual": one English sentence: exactly what should be on screen WHILE these words are spoken
-                (the real person/place/object of THIS story, Indian setting for Indian news)
+      "visual": one English sentence naming the ONE main subject of THIS "say" line and its action/setting
+                (e.g. "gold jewellery and coins on a shop counter, price ticker behind"), Indian setting for Indian news
       "entity": exact English Wikipedia title ONLY for a real specific person/organisation/place/vehicle
                 ("Narendra Modi", "Reserve Bank of India", "Donald Trump", "Vande Bharat Express"), else ""
-      "search": 2–4 English stock-photo words ("indian railway station crowd")
+      "search": 2–4 English stock-photo words taken FROM the "say" line's main noun
+                ("gold coins jewellery" for a gold-price line, "indian railway station crowd" for a rail line)
       "source": "entity" | "stock" | "ai"
+  Never reuse the same "search" for two different stories; never leave "visual" or "search" empty.
 - "on_screen_text": 2–4 Hindi words headline chip for the story.
 - "src": the candidate number [n].
 
@@ -43,9 +78,12 @@ ALSO WRITE:
 - The FIRST national story must be the story the hook talks about.
 - "title": Hindi YouTube title under 70 characters naming the 2–3 biggest stories.
 
-TOTAL spoken words (hook + all parts) must be {{ min_words }}–{{ max_words }} (about {{ seconds }} seconds).
+TOTAL spoken words (hook + opening block + all parts) must be {{ min_words }}–{{ max_words }}
+(about {{ seconds }} seconds). The opening block (today + rashifal + trading) is ~55–75 words of that;
+keep the national/international stories shorter if needed. Never drop the opening block to fit.
 
 Return ONE JSON object:
 {"title": "...", "hook": "...",
+ "today": [{"on_screen_text": "...", "src": null, "kind": "today|rashifal|trading", "parts": [{"say": "...", "visual": "...", "entity": "", "search": "...", "source": "stock"}]}],
  "national": [{"on_screen_text": "...", "src": 1, "parts": [{"say": "...", "visual": "...", "entity": "...", "search": "...", "source": "entity"}]}],
  "international": [{"on_screen_text": "...", "src": 7, "parts": [...]}]}
