@@ -402,6 +402,26 @@
     "flash_color": "white"
    },
    "score": 5.0
+  },
+  {
+   "at": "2026-11-11T22:51",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "flash"
+    ],
+    "motion": "slow_push",
+    "grade": "cool_studio",
+    "zoom": 1.1,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 5.0
   }
  ],
  "option_scores": {
@@ -422,24 +442,24 @@
    "n": 6
   },
   "zoom=1.1": {
-   "sum": 45.0,
-   "n": 7
+   "sum": 50.0,
+   "n": 8
   },
   "vignette=true": {
    "sum": 54.0,
    "n": 9
   },
   "ticker=true": {
-   "sum": 101.0,
-   "n": 17
+   "sum": 106.0,
+   "n": 18
   },
   "flash_color=\"white\"": {
-   "sum": 83.0,
-   "n": 14
+   "sum": 88.0,
+   "n": 15
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 62.0,
-   "n": 11
+   "sum": 67.0,
+   "n": 12
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -458,8 +478,8 @@
    "n": 7
   },
   "vignette=false": {
-   "sum": 47.0,
-   "n": 8
+   "sum": 52.0,
+   "n": 9
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -482,8 +502,8 @@
    "n": 2
   },
   "grade=\"cool_studio\"": {
-   "sum": 29.0,
-   "n": 5
+   "sum": 34.0,
+   "n": 6
   },
   "palette=[\"#7C3AED\", \"#120B2E\", \"#FACC15\"]": {
    "sum": 12.0,
@@ -498,8 +518,8 @@
    "n": 1
   },
   "motion=\"slow_push\"": {
-   "sum": 24.0,
-   "n": 4
+   "sum": 29.0,
+   "n": 5
   },
   "palette=[\"#FF7A00\", \"#101828\", \"#FFFFFF\"]": {
    "sum": 5.0,
@@ -522,14 +542,11 @@
    "n": 1
   },
   "cut_fx=[\"flash\"]": {
-   "sum": 17.0,
-   "n": 3
+   "sum": 22.0,
+   "n": 4
   }
  },
  "notes": [
-  "Cut duplicate consecutive frames to maintain fast visual pacing.",
-  "Replace static text-heavy graphic cards with relevant b-roll footage.",
-  "Remove generic outro subscribe cards and create a seamless audio/visual loop.",
   "Ensure high visual variety by avoiding repetitive use of identical stock buildings and crowded street shots across consecutive frames.",
   "Improve text readability and layout to prevent captions from overlapping important facial expressions and anchor visuals.",
   "Enhance the pacing and hook structure so that the opening tile establishes immediate impact while the final frame seamlessly loops back.",
@@ -538,6 +555,9 @@
   "Remove the static 'Like/Subscribe' end screen so the final frame loops seamlessly into the opening visual.",
   "Ensure every tile uses high-res original footage instead of blurry or repetitive stock screenshots.",
   "Add more frequent visual cuts to maintain a dynamic 2-3 second pacing throughout the short.",
-  "Place lower-third text carefully to avoid covering important facial expressions or subjects."
+  "Place lower-third text carefully to avoid covering important facial expressions or subjects.",
+  "Ensure the first tile uses a punchy headline without generic graphics.",
+  "Avoid repetitive or stock-looking illustrations on consecutive sequence frames.",
+  "Maintain smooth visual pacing with distinct and contextually relevant images for every section."
  ]
 }
