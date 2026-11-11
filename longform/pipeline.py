@@ -46,13 +46,16 @@ class LongFormPipeline:
     # ------------------------------------------------------------------ public
     async def run(self, topic: str, angle: str = "", minutes: int = 22, chapters: int = 9,
                   upload: bool = True, privacy: str = "unlisted",
-                  rebuild_visuals: bool = False) -> Dict[str, Any]:
+                  rebuild_visuals: bool = False, force_upload: bool = False) -> Dict[str, Any]:
         t0 = time.time()
         self.video_id = f"{_slug(topic)}-{time.strftime('%Y%m%d')}"
         self.out = Path("output") / "long" / self.video_id
         self.work = self.out / "_work"
         self.out.mkdir(parents=True, exist_ok=True)
         self.work.mkdir(parents=True, exist_ok=True)
+        # __init__ saw a timestamp id; point the visual sourcer at the real film dir so
+        # media.json caching and the thumbnail picker both see the downloaded photos
+        self.sourcer.out_root = self.out
 
         logger.info("=== long-form: %s (%d chapters, ~%d min) ===", topic, chapters, minutes)
         if rebuild_visuals:
@@ -93,7 +96,7 @@ class LongFormPipeline:
         logger.info("film ready: %s (%.1f min render+script)", film, result["elapsed_min"])
 
         if upload:
-            result.update(self._upload(film, thumb, meta, privacy))
+            result.update(self._upload(film, thumb, meta, privacy, force_upload))
         self._save_manifest(result)
         return result
 
@@ -277,7 +280,7 @@ class LongFormPipeline:
             # pick a strong photograph: biggest downloaded photo from the first chapters,
             # never the generated card (that already carries the title) or a subtitle png
             photos = []
-            for i in (1, 2, 3):
+            for i in list(range(1, 4)) + list(range(4, 12)):
                 d = self.out / f"ch{i:02d}"
                 if not d.exists():
                     continue
@@ -285,9 +288,36 @@ class LongFormPipeline:
                     if f.suffix.lower() in (".jpg", ".jpeg") and f.name not in ("card.jpg",) \
                             and not f.name.startswith(("sub_", "thumb")):
                         photos.append((f.stat().st_size, f))
+                if photos:
+                    break
             photos.sort(reverse=True)
-            if not photos:
-                raise RuntimeError("no photographs available for the thumbnail")
+            # keep only landscape, non-blank pictures: a portrait or a flat scan makes a
+            # poor hero image and a blank one means the download was a placeholder
+            good = []
+            for size, f in photos[:40]:
+                try:
+                    im = Image.open(f)
+                    w, h = im.size
+                    if w < 1200 or w / max(1, h) < 1.2:
+                        continue
+                    small = im.convert("L").resize((64, 36))
+                    px = list(small.get_flattened_data()) if hasattr(small, "get_flattened_data") else list(small.getdata())
+                    mean = sum(px) / max(1, len(px))
+                    var = sum((v - mean) ** 2 for v in px) / max(1, len(px))
+                    if var < 400:  # near-flat image
+                        continue
+                    good.append((size, f))
+                except Exception:
+                    continue
+            if not good:
+                # restored checkpoints bring the chapter mp4s but not the source photos:
+                # pull a clean frame out of the rendered film instead of dropping to a card
+                frame = self._frame_for_thumbnail()
+                if frame:
+                    good.append((1, frame))
+                else:
+                    raise RuntimeError("no photographs available for the thumbnail")
+            photos = good
             pic = Image.open(photos[0][1]).convert("RGB")
             scale = max(R.W / pic.width, R.H / pic.height)
             pic = pic.resize((max(1, int(pic.width * scale)), max(1, int(pic.height * scale))))
@@ -319,6 +349,37 @@ class LongFormPipeline:
             R.make_card(title, "हिंदू धर्म", out)
         return str(out)
 
+    def _frame_for_thumbnail(self) -> Optional[Path]:
+        """Grab a frame from an early chapter — the top half only, so no burned subtitles."""
+        for i in (1, 2, 3):
+            mp4 = self.out / f"ch{i:02d}" / f"chapter_{i:02d}.mp4"
+            if not mp4.exists():
+                continue
+            out = self.out / f"thumb_frame_{i:02d}.jpg"
+            try:
+                dur = R.probe_duration(str(mp4)) or 60.0
+                R.run([R.ff(), "-y", "-ss", f"{max(3.0, dur * 0.4):.2f}", "-i", str(mp4), "-frames:v", "1",
+                              "-vf", "crop=iw:ih*0.78:0:0,scale=1920:-1", "-q:v", "2", str(out)])
+                if out.exists() and out.stat().st_size > 20_000:
+                    return out
+            except Exception as exc:
+                logger.debug("thumbnail frame failed (ch%02d): %s", i, exc)
+        return None
+
+    def _publishing_key(self, film: str) -> str:
+        """Dedupe key that changes whenever the rendered film changes.
+
+        A plain `long-<slug>-<date>` key made every re-render look like a duplicate,
+        so fixed films never reached YouTube. The fingerprint (duration + size) means
+        a genuine re-render uploads, while an identical re-run is still skipped.
+        """
+        try:
+            dur = int(R.probe_duration(film) or 0)
+            mb = int(Path(film).stat().st_size / (1024 * 1024))
+        except OSError:
+            dur, mb = 0, 0
+        return f"long-{self.video_id}-{dur}s{mb}m"
+
     def _metadata(self, title: str, chs: List[Dict], film: str) -> Dict[str, Any]:
         total = R.probe_duration(film)
         stamps = []
@@ -342,7 +403,8 @@ class LongFormPipeline:
                 "duration_sec": round(total, 1), "chapter_stamps": stamps}
 
     # ------------------------------------------------------------- upload
-    def _upload(self, film: str, thumb: str, meta: Dict[str, Any], privacy: str) -> Dict[str, Any]:
+    def _upload(self, film: str, thumb: str, meta: Dict[str, Any], privacy: str,
+                force_upload: bool = False) -> Dict[str, Any]:
         try:
             from youtube.oauth import YouTubeOAuthManager
             from youtube.uploader import YouTubeUploader
@@ -357,7 +419,8 @@ class LongFormPipeline:
                 thumbnail_path=thumb,
                 captions_path=(str(Path(film).parent / "film.srt")
                                if (Path(film).parent / "film.srt").exists() else None),
-                publishing_key=f"long-{self.video_id}",
+                publishing_key=self._publishing_key(film),
+                force=force_upload,
             )
             logger.info("upload: %s", res)
             return {"upload": res, "url": (res or {}).get("url", "")}

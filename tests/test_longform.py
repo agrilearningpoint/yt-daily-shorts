@@ -176,3 +176,88 @@ def test_visual_relevance_rejects_offtopic_titles():
     bad = "Rock climbing in Yosemite.jpg Climber on granite"
     assert set(_tokens(query)) & set(_tokens(good))
     assert not (set(_tokens(query)) & set(_tokens(bad)))
+
+
+# --------------------------------------------------------------------------- #
+# regression: fixes found by reading run 42857698583's logs
+# --------------------------------------------------------------------------- #
+class _Cfg:
+    class general:
+        channel_name = "BHARAT KI SOCH"
+        dry_run = True
+
+    class media:
+        pexels_api_key = pixabay_api_key = hf_token = agnes_api_key = ""
+
+    class llm:
+        pass
+
+
+def test_visual_cache_follows_the_real_film_directory():
+    """__init__ builds a timestamp dir; run() rebuilds the slug dir. The sourcer must follow,
+    otherwise media.json is never reused and the thumbnail picker finds no photographs."""
+    import time
+
+    from longform.pipeline import LongFormPipeline
+
+    pipe = LongFormPipeline(_Cfg(), llm=object())
+    before = pipe.sourcer.out_root
+    pipe.video_id = f"film-test-{time.strftime('%Y%m%d')}"
+    pipe.out = Path("output") / "long" / pipe.video_id
+    pipe.sourcer.out_root = pipe.out
+    assert pipe.sourcer.out_root != before
+    assert pipe.sourcer.out_root.name == pipe.video_id
+
+
+def test_publishing_key_changes_when_the_film_changes(tmp_path, monkeypatch):
+    from longform import pipeline as P
+
+    pipe = P.LongFormPipeline(_Cfg(), llm=object())
+    pipe.video_id = "film-abc-20261110"
+    f = tmp_path / "film.mp4"
+    f.write_bytes(b"x" * 2048)
+    monkeypatch.setattr(P.R, "probe_duration", lambda _p: 1374.0)
+    k1 = pipe._publishing_key(str(f))
+    monkeypatch.setattr(P.R, "probe_duration", lambda _p: 1160.0)
+    k2 = pipe._publishing_key(str(f))
+    assert k1 != k2, "a re-render with a different duration must not be treated as a duplicate"
+    assert k1.startswith("long-film-abc-20261110-")
+
+
+def test_thumbnail_prefers_a_landscape_photograph(tmp_path, monkeypatch):
+    from PIL import Image, ImageDraw
+
+    from longform import pipeline as P
+    from longform import render as R
+
+    monkeypatch.setattr(R, "W", 1280)
+    monkeypatch.setattr(R, "H", 720)
+    ch = tmp_path / "ch01"
+    ch.mkdir()
+    # flat grey image: must be rejected
+    Image.new("RGB", (1600, 900), (128, 128, 128)).save(ch / "flat.jpg", quality=90)
+    # portrait photo: must be rejected
+    im = Image.new("RGB", (900, 1600))
+    d = ImageDraw.Draw(im)
+    for i in range(0, 900, 20):
+        d.line([(0, i), (900, i * 2)], fill=(i % 255, 90, 160), width=8)
+    im.save(ch / "portrait.jpg", quality=90)
+    # landscape with real detail: must win
+    im2 = Image.new("RGB", (1920, 1080))
+    d2 = ImageDraw.Draw(im2)
+    for i in range(0, 1920, 16):
+        d2.line([(i, 0), (1920 - i, 1080)], fill=(i % 255, 200 - i % 180, 60), width=10)
+    im2.save(ch / "landscape.jpg", quality=90)
+
+    pipe = P.LongFormPipeline(_Cfg(), llm=object())
+    pipe.out = tmp_path
+    out = Path(pipe._thumbnail("परीक्षण शीर्षक", []))
+    assert out.exists() and out.stat().st_size > 10_000
+
+
+def test_thumbnail_frame_fallback_is_safe_without_chapters(tmp_path):
+    from longform import pipeline as P
+
+    pipe = P.LongFormPipeline(_Cfg(), llm=object())
+    pipe.out = tmp_path
+    assert pipe._frame_for_thumbnail() is None
