@@ -45,6 +45,7 @@ class LongFormPipeline:
         self.writer = None
         self._chapters: List[Dict] = []
         self.target_chapter_sec = 0.0
+        self.run_errors: List[str] = []
 
     # ------------------------------------------------------------------ public
     async def run(self, topic: str, angle: str = "", minutes: int = 22, chapters: int = 9,
@@ -101,7 +102,7 @@ class LongFormPipeline:
 
         film = self._assemble_film(chs, title)
         thumb = self._thumbnail(title, chs)
-        meta = self._metadata(title, chs, film)
+        meta = await self._metadata(title, chs, film)
 
         result: Dict[str, Any] = {
             "video_id": self.video_id, "title": title, "path": film,
@@ -114,6 +115,14 @@ class LongFormPipeline:
         if upload:
             result.update(self._upload(film, thumb, meta, privacy, force_upload))
         self._save_manifest(result)
+        # one metrics line per film: the error analyst and data/improvements.md read this,
+        # so long-form runs finally count in the self-improvement loop
+        from longform import seo as lseo
+        errs = [e for e in [result.get("upload_error")] + list(getattr(self, "run_errors", [])) if e]
+        lseo.record_film("longform", result["elapsed_min"], not errs, errs,
+                         title=meta.get("title", "")[:120], seo=meta.get("seo", ""),
+                         minutes_film=round((result.get("duration_sec") or 0) / 60, 1),
+                         chapters=len(chs), video=result.get("url", ""))
         return result
 
     # ---------------------------------------------------------------- one chapter
@@ -152,6 +161,7 @@ class LongFormPipeline:
                 longer = await self.writer.lengthen(video_title, ch, idx, total, want_words)
             except Exception as exc:
                 logger.warning("ch%02d lengthen failed: %s", idx + 1, exc)
+                self.run_errors.append(f"lengthen ch{idx + 1:02d}: {exc}")
                 break
             if len(longer.split()) <= words_have:
                 break
@@ -333,21 +343,27 @@ class LongFormPipeline:
         """1280x720-safe thumbnail: a real photograph + one clean title block."""
         out = self.out / "thumbnail.jpg"
         try:
-            from PIL import Image, ImageDraw, ImageFont
+            from PIL import Image
 
-            # pick a strong photograph: biggest downloaded photo from the first chapters,
-            # never the generated card (that already carries the title) or a subtitle png
+            # Hero source, best first:
+            #   1. a frame from the rendered film — always on-topic
+            #   2. a downloaded photograph — keyword-matched, can be wrong (a cathedral
+            #      did once illustrate a Hindu temple query)
             photos = []
-            for i in list(range(1, 4)) + list(range(4, 12)):
-                d = self.out / f"ch{i:02d}"
-                if not d.exists():
-                    continue
-                for f in d.iterdir():
-                    if f.suffix.lower() in (".jpg", ".jpeg") and f.name not in ("card.jpg",) \
-                            and not f.name.startswith(("sub_", "thumb")):
-                        photos.append((f.stat().st_size, f))
-                if photos:
-                    break
+            frame = self._frame_for_thumbnail()
+            if frame:
+                photos = [(frame.stat().st_size, frame)]
+            else:
+                for i in list(range(1, 4)) + list(range(4, 12)):
+                    d = self.out / f"ch{i:02d}"
+                    if not d.exists():
+                        continue
+                    for f in d.iterdir():
+                        if f.suffix.lower() in (".jpg", ".jpeg") and f.name != "card.jpg" \
+                                and not f.name.startswith(("sub_", "thumb")):
+                            photos.append((f.stat().st_size, f))
+                    if photos:
+                        break
             photos.sort(reverse=True)
             # keep only landscape, non-blank pictures: a portrait or a flat scan makes a
             # poor hero image and a blank one means the download was a placeholder
@@ -368,40 +384,10 @@ class LongFormPipeline:
                 except Exception:
                     continue
             if not good:
-                # restored checkpoints bring the chapter mp4s but not the source photos:
-                # pull a clean frame out of the rendered film instead of dropping to a card
-                frame = self._frame_for_thumbnail()
-                if frame:
-                    good.append((1, frame))
-                else:
-                    raise RuntimeError("no photographs available for the thumbnail")
+                raise RuntimeError("no usable hero image (no frame, no photo)")
             photos = good
-            pic = Image.open(photos[0][1]).convert("RGB")
-            scale = max(R.W / pic.width, R.H / pic.height)
-            pic = pic.resize((max(1, int(pic.width * scale)), max(1, int(pic.height * scale))))
-            left = (pic.width - R.W) // 2
-            top = (pic.height - R.H) // 2
-            base = pic.crop((left, top, left + R.W, top + R.H))
-
-            # left-side scrim so the type stays readable on any photo
-            shade = Image.new("L", (R.W, R.H), 0)
-            sd = ImageDraw.Draw(shade)
-            for x in range(R.W):
-                sd.line([(x, 0), (x, R.H)], fill=int(215 * max(0.0, 1 - x / (R.W * 0.78)) ** 1.25))
-            black = Image.new("RGB", (R.W, R.H), (6, 8, 12))
-            base = Image.composite(black, base, shade)
-
-            d = ImageDraw.Draw(base)
-            f_big = ImageFont.truetype(str(R.FONT_DIR / "Mukta-ExtraBold.ttf"), 104)
-            f_small = ImageFont.truetype(str(R.FONT_DIR / "Mukta-Bold.ttf"), 38)
-            d.rectangle([96, 150, 208, 158], fill=(212, 175, 55))
-            y = 196
-            for line in R._wrap(d, title, f_big, int(R.W * 0.62))[:3]:
-                d.text((96, y), line, font=f_big, fill=(248, 248, 252))
-                y += 118
             channel = getattr(self.config.general, "channel_name", "") or "BHARAT KI SOCH"
-            d.text((100, y + 26), channel, font=f_small, fill=(212, 175, 55))
-            base.save(out, "JPEG", quality=92)
+            R.compose_thumbnail(str(photos[0][1]), title, out, channel=channel)
         except Exception as exc:
             logger.warning("thumbnail art failed (%s) — using a plain card", exc)
             R.make_card(title, "हिंदू धर्म", out)
@@ -409,7 +395,7 @@ class LongFormPipeline:
 
     def _frame_for_thumbnail(self) -> Optional[Path]:
         """Grab a frame from an early chapter — the top half only, so no burned subtitles."""
-        for i in (1, 2, 3):
+        for i in (2, 3, 4, 1):
             mp4 = self.out / f"ch{i:02d}" / f"chapter_{i:02d}.mp4"
             if not mp4.exists():
                 continue
@@ -438,27 +424,15 @@ class LongFormPipeline:
             dur, mb = 0, 0
         return f"long-{self.video_id}-{dur}s{mb}m"
 
-    def _metadata(self, title: str, chs: List[Dict], film: str) -> Dict[str, Any]:
+    async def _metadata(self, title: str, chs: List[Dict], film: str) -> Dict[str, Any]:
+        """Title/description/tags from the SEO module: LLM-first, deterministic fallback."""
+        from longform import seo as lseo
         total = R.probe_duration(film)
         stamps = []
-        for i, ch in enumerate(chs):
+        for ch in chs:
             sec = int(ch.get("_start_sec", 0))
             stamps.append(f"{sec // 60:02d}:{sec % 60:02d}  {ch['title']}")
-        desc = (
-            f"{title}\n\n"
-            "इस वीडियो में हम हिंदू धर्म की यात्रा को उसकी शुरुआत से आज तक समझेंगे — सिंधु घाटी से "
-            "वैदिक काल, उपनिषदों के दर्शन, महाकाव्यों, पुराणों और मंदिर परंपरा से लेकर भक्ति आंदोलन "
-            "और आधुनिक भारत तक।\n\n"
-            "⏱ अध्याय\n" + "\n".join(stamps) + "\n\n"
-            "यह वीडियो शैक्षिक उद्देश्य से बनाया गया है। तिथियाँ और तथ्य मानक इतिहास-ग्रंथों पर आधारित हैं; "
-            "जहाँ इतिहासकारों में मतभेद है, वहाँ स्पष्ट रूप से बताया गया है।\n\n"
-            f"#हिंदूधर्म #इतिहास #भारत #सनातन #documentary"
-        )
-        tags = ["हिंदू धर्म", "hindu dharma", "history of hinduism in hindi", "सिंधु घाटी सभ्यता",
-                "वैदिक काल", "उपनिषद", "भक्ति आंदोलन", "भारतीय इतिहास", "sanatan dharma explained",
-                "indian history documentary hindi", "hinduism explained", "hindu temple history"]
-        return {"title": title[:95], "description": desc[:4900], "tags": tags[:15],
-                "duration_sec": round(total, 1), "chapter_stamps": stamps}
+        return await lseo.build_metadata(self.llm, title, chs, stamps, total)
 
     # ------------------------------------------------------------- upload
     def _upload(self, film: str, thumb: str, meta: Dict[str, Any], privacy: str,

@@ -322,3 +322,42 @@ def mux_chapter(video: str, audio: str, _ass_unused: Optional[str], out_path: st
            "-shortest", "-movflags", "+faststart", out_path]
     run(cmd, f"mux {Path(out_path).name}")
     return out_path
+
+def compose_thumbnail(hero: str, title: str, out: Path, channel: str = "",
+                      subtitle: str = "") -> Path:
+    """One hero image + one title block. Shared by the pipeline and the re-touch tool."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    out = Path(out)
+    pic = Image.open(hero).convert("RGB")
+    scale = max(W / pic.width, H / pic.height)
+    pic = pic.resize((max(1, int(pic.width * scale)), max(1, int(pic.height * scale))))
+    left = (pic.width - W) // 2
+    top = (pic.height - H) // 2
+    base = pic.crop((left, top, left + W, top + H))
+
+    # left-side scrim so the type stays readable on any photo
+    shade = Image.new("L", (W, H), 0)
+    sd = ImageDraw.Draw(shade)
+    for x in range(W):
+        sd.line([(x, 0), (x, H)], fill=int(215 * max(0.0, 1 - x / (W * 0.78)) ** 1.25))
+    black = Image.new("RGB", (W, H), (6, 8, 12))
+    base = Image.composite(black, base, shade)
+
+    d = ImageDraw.Draw(base)
+    f_big = ImageFont.truetype(str(FONT_DIR / "Mukta-ExtraBold.ttf"), 104)
+    f_small = ImageFont.truetype(str(FONT_DIR / "Mukta-Bold.ttf"), 38)
+    d.rectangle([96, 150, 208, 158], fill=(212, 175, 55))
+    y = 196
+    for line in _wrap(d, title, f_big, int(W * 0.62))[:3]:
+        d.text((96, y), line, font=f_big, fill=(248, 248, 252))
+        y += 118
+    if subtitle:
+        d.text((96, y + 6), subtitle, font=ImageFont.truetype(str(FONT_DIR / "Mukta-Medium.ttf"), 34),
+               fill=(226, 226, 232))
+        y += 52
+    if channel:
+        d.text((100, y + 26), channel, font=f_small, fill=(212, 175, 55))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    base.save(out, "JPEG", quality=92)
+    return out

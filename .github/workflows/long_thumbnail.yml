@@ -1,0 +1,72 @@
+name: Re-cut a film's thumbnail
+
+# Rebuilds the thumbnail from a frame of the film itself and, with set_on_youtube,
+# pushes it to the already-published video. No re-render, no re-upload: ~4 minutes.
+on:
+  workflow_dispatch:
+    inputs:
+      video_id:
+        description: 'Film id, e.g. film-6910e004-20261111'
+        required: true
+      yt_video_id:
+        description: 'Published YouTube video id'
+        required: true
+      title:
+        description: 'Thumbnail headline (Hindi)'
+        required: true
+      set_on_youtube:
+        description: 'Push the new thumbnail to YouTube'
+        required: false
+        default: true
+        type: boolean
+
+run-name: "thumbnail ${{ github.event.inputs.video_id }}"
+
+concurrency:
+  group: long-form-thumbnail
+  cancel-in-progress: false
+
+jobs:
+  recut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      YT_YOUTUBE_CLIENT_SECRET_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRET_JSON }}
+      YT_YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+      YT_HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      YT_HF_REPO_ID: ${{ vars.YT_HF_REPO_ID || 'Rajaagri/yt-daily-shorts-artifacts' }}
+      YT_CHANNEL_NAME: ${{ vars.YT_CHANNEL_NAME || 'BHARAT KI SOCH' }}
+      YT_DRY_RUN: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System packages (ffmpeg)
+        run: |
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Rebuild the thumbnail
+        run: |
+          python -m longform.thumbnail_tool \
+            --video-id "${{ github.event.inputs.video_id }}" \
+            --yt-video-id "${{ github.event.inputs.yt_video_id }}" \
+            --title "${{ github.event.inputs.title }}" \
+            ${{ github.event.inputs.set_on_youtube == 'true' && '--set' || '' }}
+
+      - name: Upload artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: thumbnail-${{ github.run_number }}
+          path: output/long/**/thumbnail.jpg
+          retention-days: 14
+          if-no-files-found: warn

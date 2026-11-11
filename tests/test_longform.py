@@ -322,3 +322,64 @@ def test_fresh_run_clears_script_and_chapters(tmp_path, monkeypatch):
         _sh.rmtree(d, ignore_errors=True)
     assert not (tmp_path / "script.json").exists()
     assert not (tmp_path / "ch01").exists()
+
+
+def test_thumbnail_tool_picks_a_mid_tone_frame(tmp_path):
+    from PIL import Image, ImageDraw
+
+    from longform.thumbnail_tool import pick_best
+
+    def make(name, colour, detail):
+        im = Image.new("RGB", (960, 540), colour)
+        d = ImageDraw.Draw(im)
+        if detail:
+            for i in range(0, 960, 12):
+                d.line([(i, 0), (960 - i, 540)], fill=(240, 210, 90), width=6)
+        p = tmp_path / name
+        im.save(p, quality=90)
+        return p
+
+    black = make("black.jpg", (0, 0, 0), False)
+    flat = make("flat.jpg", (128, 128, 128), False)
+    good = make("good.jpg", (110, 95, 70), True)
+    assert pick_best([black, flat, good]) == good
+
+
+@pytest.mark.asyncio
+async def test_seo_metadata_falls_back_without_an_llm():
+    from longform.seo import build_metadata
+
+    meta = await build_metadata(None, "सनातन की यात्रा",
+                                [{"title": "अध्याय 1", "point": "शुरुआत"}], ["00:00  अध्याय 1"], 1320.0)
+    assert meta["title"] == "सनातन की यात्रा"
+    assert len(meta["tags"]) >= 10
+    assert "अध्याय" in meta["description"]
+    assert meta["seo"] == "fallback"
+
+
+@pytest.mark.asyncio
+async def test_seo_metadata_uses_the_llm_and_keeps_chapter_stamps():
+    from longform.seo import build_metadata
+
+    class FakeLLM:
+        async def generate_json(self, prompt, tier="quality"):
+            assert "WHAT HAS FAILED BEFORE" in prompt
+            return {"titles": ["हिंदू धर्म का पूरा इतिहास: वेदों से आधुनिक भारत तक"],
+                    "description": "हिंदू धर्म की पूरी कहानी, एक वीडियो में।\n\n" + "विस्तार से। " * 40,
+                    "tags": ["हिंदू धर्म", "hinduism history"]}
+
+    meta = await build_metadata(FakeLLM(), "सनातन", [{"title": "अध्याय 1"}], ["00:00  अध्याय 1"], 1320.0)
+    assert meta["seo"] == "llm"
+    assert "हिंदू धर्म" in meta["title"]
+    assert "00:00  अध्याय 1" in meta["description"]
+    assert "हिंदू धर्म" in meta["tags"]
+
+
+def test_record_film_writes_a_metrics_line(tmp_path, monkeypatch):
+    import core.self_improve as si
+    from longform import seo as lseo
+
+    monkeypatch.setattr(si, "DATA", tmp_path)
+    lseo.record_film("longform", 34.2, False, ["upload timeout"], title="t")
+    rows = si.load_metrics(10)
+    assert rows and rows[-1]["kind"] == "longform" and rows[-1]["ok"] is False
