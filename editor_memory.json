@@ -422,6 +422,26 @@
     "flash_color": "white"
    },
    "score": 5.0
+  },
+  {
+   "at": "2026-11-13T00:48",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "punch"
+    ],
+    "motion": "kenburns_mix",
+    "grade": "warm_film",
+    "zoom": 1.14,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 5.0
   }
  ],
  "option_scores": {
@@ -434,8 +454,8 @@
    "n": 4
   },
   "motion=\"kenburns_mix\"": {
-   "sum": 38.0,
-   "n": 6
+   "sum": 43.0,
+   "n": 7
   },
   "grade=\"neutral\"": {
    "sum": 39.0,
@@ -446,20 +466,20 @@
    "n": 8
   },
   "vignette=true": {
-   "sum": 54.0,
-   "n": 9
+   "sum": 59.0,
+   "n": 10
   },
   "ticker=true": {
-   "sum": 106.0,
-   "n": 18
+   "sum": 111.0,
+   "n": 19
   },
   "flash_color=\"white\"": {
-   "sum": 88.0,
-   "n": 15
+   "sum": 93.0,
+   "n": 16
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 67.0,
-   "n": 12
+   "sum": 72.0,
+   "n": 13
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -470,12 +490,12 @@
    "n": 5
   },
   "grade=\"warm_film\"": {
-   "sum": 11.0,
-   "n": 2
+   "sum": 16.0,
+   "n": 3
   },
   "zoom=1.14": {
-   "sum": 37.0,
-   "n": 7
+   "sum": 42.0,
+   "n": 8
   },
   "vignette=false": {
    "sum": 52.0,
@@ -538,8 +558,8 @@
    "n": 2
   },
   "cut_fx=[\"punch\"]": {
-   "sum": 6.0,
-   "n": 1
+   "sum": 11.0,
+   "n": 2
   },
   "cut_fx=[\"flash\"]": {
    "sum": 22.0,
@@ -547,9 +567,6 @@
   }
  },
  "notes": [
-  "Ensure high visual variety by avoiding repetitive use of identical stock buildings and crowded street shots across consecutive frames.",
-  "Improve text readability and layout to prevent captions from overlapping important facial expressions and anchor visuals.",
-  "Enhance the pacing and hook structure so that the opening tile establishes immediate impact while the final frame seamlessly loops back.",
   "Start immediately with high-impact news footage and overlay headline on Tile 0 instead of a full title card.",
   "Replace static brand graphics and repeated stock clips with fresh, dynamic B-roll every 2 seconds.",
   "Remove the static 'Like/Subscribe' end screen so the final frame loops seamlessly into the opening visual.",
@@ -558,6 +575,9 @@
   "Place lower-third text carefully to avoid covering important facial expressions or subjects.",
   "Ensure the first tile uses a punchy headline without generic graphics.",
   "Avoid repetitive or stock-looking illustrations on consecutive sequence frames.",
-  "Maintain smooth visual pacing with distinct and contextually relevant images for every section."
+  "Maintain smooth visual pacing with distinct and contextually relevant images for every section.",
+  "Eliminate duplicate consecutive shots and full-frame section intro cards to keep fast pacing.",
+  "Make Tile 0 hook instantly with a prominent, high-contrast headline image instead of weak graphics.",
+  "Re-position text overlays to prevent covering subject faces and key visual focus points."
  ]
 }
