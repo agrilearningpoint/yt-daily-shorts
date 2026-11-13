@@ -31,14 +31,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 os.chdir(ROOT)
 
-# Only what publishing needs. Asking for analytics/force-ssl on top is what pushes a freshly
-# published (or "testing") app into "Google hasn't verified this app", where there is no Allow.
+# Full channel access, so nothing 403s later: publish, captions, playlists, comments,
+# thumbnails (force-ssl), plus analytics for the self-learning loop.
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+    "https://www.googleapis.com/auth/youtube",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
 ]
 REPO = "agrilearningpoint/yt-daily-shorts"
-STATE: dict = {"state": "", "result": None, "error": "", "log": []}
+STATE: dict = {"state": "FULLSCOPE1", "result": None, "error": "", "log": []}
 
 
 def note(msg: str) -> None:
