@@ -442,6 +442,26 @@
     "flash_color": "white"
    },
    "score": 5.0
+  },
+  {
+   "at": "2026-11-13T13:10",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "whip"
+    ],
+    "motion": "slow_push",
+    "grade": "cool_studio",
+    "zoom": 1.18,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 5.0
   }
  ],
  "option_scores": {
@@ -470,16 +490,16 @@
    "n": 10
   },
   "ticker=true": {
-   "sum": 111.0,
-   "n": 19
+   "sum": 116.0,
+   "n": 20
   },
   "flash_color=\"white\"": {
-   "sum": 93.0,
-   "n": 16
+   "sum": 98.0,
+   "n": 17
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 72.0,
-   "n": 13
+   "sum": 77.0,
+   "n": 14
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -498,8 +518,8 @@
    "n": 8
   },
   "vignette=false": {
-   "sum": 52.0,
-   "n": 9
+   "sum": 57.0,
+   "n": 10
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -510,8 +530,8 @@
    "n": 1
   },
   "zoom=1.18": {
-   "sum": 19.0,
-   "n": 3
+   "sum": 24.0,
+   "n": 4
   },
   "cut_fx=[\"flash\", \"punch\", \"glitch\"]": {
    "sum": 7.0,
@@ -522,8 +542,8 @@
    "n": 2
   },
   "grade=\"cool_studio\"": {
-   "sum": 34.0,
-   "n": 6
+   "sum": 39.0,
+   "n": 7
   },
   "palette=[\"#7C3AED\", \"#120B2E\", \"#FACC15\"]": {
    "sum": 12.0,
@@ -538,8 +558,8 @@
    "n": 1
   },
   "motion=\"slow_push\"": {
-   "sum": 29.0,
-   "n": 5
+   "sum": 34.0,
+   "n": 6
   },
   "palette=[\"#FF7A00\", \"#101828\", \"#FFFFFF\"]": {
    "sum": 5.0,
@@ -554,8 +574,8 @@
    "n": 3
   },
   "cut_fx=[\"whip\"]": {
-   "sum": 12.0,
-   "n": 2
+   "sum": 17.0,
+   "n": 3
   },
   "cut_fx=[\"punch\"]": {
    "sum": 11.0,
@@ -567,9 +587,6 @@
   }
  },
  "notes": [
-  "Start immediately with high-impact news footage and overlay headline on Tile 0 instead of a full title card.",
-  "Replace static brand graphics and repeated stock clips with fresh, dynamic B-roll every 2 seconds.",
-  "Remove the static 'Like/Subscribe' end screen so the final frame loops seamlessly into the opening visual.",
   "Ensure every tile uses high-res original footage instead of blurry or repetitive stock screenshots.",
   "Add more frequent visual cuts to maintain a dynamic 2-3 second pacing throughout the short.",
   "Place lower-third text carefully to avoid covering important facial expressions or subjects.",
@@ -578,6 +595,9 @@
   "Maintain smooth visual pacing with distinct and contextually relevant images for every section.",
   "Eliminate duplicate consecutive shots and full-frame section intro cards to keep fast pacing.",
   "Make Tile 0 hook instantly with a prominent, high-contrast headline image instead of weak graphics.",
-  "Re-position text overlays to prevent covering subject faces and key visual focus points."
+  "Re-position text overlays to prevent covering subject faces and key visual focus points.",
+  "Replace mismatched stock visuals (e.g., German ambulance for Assam accident) with relevant local news footage.",
+  "Eliminate consecutive near-identical frames (32-33, 34-35) to keep pace dynamic.",
+  "Swap generic stock graphics (dollar bills, calculators) for context-specific news infographics."
  ]
 }
