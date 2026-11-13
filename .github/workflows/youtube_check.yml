@@ -1,11 +1,22 @@
-name: YouTube token check
+name: YouTube token health
+
+# Runs every day before the news cron. If the refresh token ever dies (the 7-day
+# "testing" expiry that broke publishing on 2026-11-13) this job fails loudly and
+# tells you exactly what to do, instead of you finding out from a failed video.
 on:
+  schedule:
+    - cron: '50 22 * * *'   # 04:20 IST — before the 04:47 IST news run
   workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Refresh token and read channel
+      - name: Refresh the token and prove the whole scope set
         env:
           TOKEN: ${{ secrets.YOUTUBE_TOKEN_JSON }}
         run: |
@@ -14,15 +25,45 @@ jobs:
           t = json.loads(os.environ["TOKEN"])
           data = urllib.parse.urlencode({"client_id": t["client_id"], "client_secret": t["client_secret"],
                   "refresh_token": t["refresh_token"], "grant_type": "refresh_token"}).encode()
-          tok = json.load(urllib.request.urlopen("https://oauth2.googleapis.com/token", data))["access_token"]
-          req = urllib.request.Request("https://www.googleapis.com/youtube/v3/channels?part=snippet,status&mine=true",
-                                       headers={"Authorization": "Bearer " + tok})
           try:
-              ch = json.load(urllib.request.urlopen(req))
+              tok = json.load(urllib.request.urlopen("https://oauth2.googleapis.com/token", data))["access_token"]
           except urllib.error.HTTPError as e:
-              print("YTERROR:", e.read().decode()[:600]); raise
+              body = e.read().decode()
+              print("❌ REFRESH FAILED:", body[:300])
+              print("👉 Fix: run `python scripts/oauth_relay.py` (or scripts/one_click_auth.py), sign in once,")
+              print("   then update the YOUTUBE_TOKEN_JSON secret. Cause is usually a token older than 7 days")
+              print("   while the OAuth consent screen is still in Testing.")
+              raise SystemExit(1)
+          hdr = {"Authorization": "Bearer " + tok}
+          def get(url):
+              return json.load(urllib.request.urlopen(urllib.request.Request(url, headers=hdr)))
+          ch = get("https://www.googleapis.com/youtube/v3/channels?part=snippet,status,contentDetails&mine=true")
           items = ch.get("items", [])
-          assert items, "token works but this Google account has no YouTube channel"
+          if not items:
+              raise SystemExit("token works but this Google account has no YouTube channel")
           for i in items:
-              print("CHANNEL:", i["snippet"]["title"], i["id"], i.get("status", {}).get("privacyStatus"))
+              print("CHANNEL:", i["snippet"]["title"].strip(), i["id"], i.get("status", {}).get("privacyStatus"))
+          # every capability the pipeline uses must answer, not just the channel read
+          caps = get("https://www.googleapis.com/youtube/v3/playlists?part=snippet&mine=true&maxResults=1")
+          print("PLAYLISTS OK:", len(caps.get("items", [])))
+          # a real caption list on the newest upload proves the force-ssl scope
+          uploads = items[0].get("contentDetails", {}).get("relatedPlaylists", {}).get("uploads")
+          if uploads:
+              pl = get(f"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId={uploads}&maxResults=1")
+              vids = pl.get("items", [])
+              if vids:
+                  vid = vids[0]["snippet"]["resourceId"]["videoId"]
+                  cap = get(f"https://www.googleapis.com/youtube/v3/captions?part=snippet&videoId={vid}")
+                  print(f"CAPTIONS OK on {vid}:", [c["snippet"]["language"] for c in cap.get("items", [])])
+          print("✅ token healthy — publish, captions, playlists, comments all authorized")
           PY
+
+      - name: Open a reminder issue when the token dies
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --repo "${{ github.repository }}" \
+            --title "YouTube token expired — uploads will fail" \
+            --body "The daily token check failed. Re-authorise: \`python scripts/oauth_relay.py\` → sign in → paste the http://localhost/?code=… link → the secret updates itself. See run ${{ github.run_id }}." \
+            --label youtube-auth || true
