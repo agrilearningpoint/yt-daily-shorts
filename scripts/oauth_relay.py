@@ -31,11 +31,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 os.chdir(ROOT)
 
+# Only what publishing needs. Asking for analytics/force-ssl on top is what pushes a freshly
+# published (or "testing") app into "Google hasn't verified this app", where there is no Allow.
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.readonly",
-    "https://www.googleapis.com/auth/youtube.force-ssl",
-    "https://www.googleapis.com/auth/yt-analytics.readonly",
 ]
 REPO = "agrilearningpoint/yt-daily-shorts"
 STATE: dict = {"state": "", "result": None, "error": "", "log": []}
@@ -56,13 +56,18 @@ def verifier_for(secret: str) -> str:
     return hashlib.sha256(("yt-daily-shorts-pkce:" + secret).encode()).hexdigest()
 
 
+def redirect_uri() -> str:
+    """The client is registered with http://localhost — use exactly that, not a port variant."""
+    return (client().get("redirect_uris") or ["http://localhost"])[0]
+
+
 def auth_url(port: int) -> str:
     c = client()
     verifier = verifier_for(c["client_secret"])
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
     q = {
         "client_id": c["client_id"],
-        "redirect_uri": f"http://localhost:{port}/oauth/callback",
+        "redirect_uri": redirect_uri(),
         "response_type": "code",
         "scope": " ".join(SCOPES),
         "access_type": "offline",
@@ -89,7 +94,7 @@ def exchange(code: str, port: int):
 
     c = client()
     flow = Flow.from_client_config({"installed": c}, SCOPES,
-                                   redirect_uri=f"http://localhost:{port}/oauth/callback",
+                                   redirect_uri=redirect_uri(),
                                    code_verifier=verifier_for(c["client_secret"]),
                                    autogenerate_code_verifier=False)
     flow.fetch_token(code=code)
@@ -100,13 +105,11 @@ def verify(creds) -> dict:
     from googleapiclient.discovery import build
 
     api = build("youtube", "v3", credentials=creds, cache_discovery=False)
-    items = (api.channels().list(part="snippet,statistics", mine=True).execute().get("items") or [])
+    items = (api.channels().list(part="snippet", mine=True).execute().get("items") or [])
     if not items:
         raise RuntimeError("इस account का कोई YouTube channel नहीं मिला — channel वाले account से sign in करें")
     ch = items[0]
-    return {"channel": ch["snippet"]["title"], "id": ch["id"],
-            "subs": ch.get("statistics", {}).get("subscriberCount", "?"),
-            "videos": ch.get("statistics", {}).get("videoCount", "?")}
+    return {"channel": ch["snippet"]["title"], "id": ch["id"]}
 
 
 def set_github_secret(name: str, value: str) -> None:
@@ -147,7 +150,12 @@ PAGE = """<!doctype html><html lang="hi"><head><meta charset="utf-8">
 <div class="log">{log}</div>
 </div></body></html>"""
 
-STEP1 = """<div class="step"><span class="n">1</span><b>Google से जोड़ें</b>
+STEP1 = """<div class="step"><span class="n">!</span><b>Sign in नहीं खुल रहा?</b>
+ <p>Google सिर्फ़ Chrome / Edge / Firefox / Safari में sign-in करने देता है। WhatsApp/Instagram के
+ अंदरले browser, या Google app के in-app view में Allow button नहीं आता — पेज नीचे link copy करके
+ <b>Chrome में paste</b> करें। साथ ही उसी browser में <code>abhi.socialservices@gmail.com</code> से
+ पहले से sign in रहें (एक ही account — वरना Google सीधे redirect कर देता है और Allow नहीं दिखता)।</p></div>
+<div class="step"><span class="n">1</span><b>Google से जोड़ें</b>
  <p>नीचे वाले button से sign in करें — वही account जो channel का owner है।</p>
  <a class="btn" href="/start">Google से जोड़ें →</a></div>
 <div class="step"><span class="n">2</span><b>लौटा हुआ address paste करें</b>
@@ -196,8 +204,14 @@ class Handler(BaseHTTPRequestHandler):
                                                    subs=r["subs"], videos=r["videos"],
                                                    secret=r.get("secret", "—"), run=r.get("run", ""))))
             else:
-                self._send(200, render(STEP1.format(port=self.port) +
-                                       (f'<p class="bad">{html.escape(STATE["error"])}</p>' if STATE["error"] else "")))
+                STATE["state"] = STATE["state"] or secrets.token_urlsafe(16)
+                link = auth_url(self.port)
+                body = STEP1.format(port=self.port) + (
+                    '<div class="step"><span class="n">2</span><b>या यह link Chrome में paste करें</b>'
+                    f'<p><code style="word-break:break-all">{html.escape(link)}</code></p></div>')
+                if STATE["error"]:
+                    body += f'<p class="bad">{html.escape(STATE["error"])}</p>'
+                self._send(200, render(body))
             return
         self._send(404, b"not found")
 
