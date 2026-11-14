@@ -1,17 +1,17 @@
-"""AI image (and optional clip) generation — three free-first backends.
+﻿"""AI image (and optional clip) generation â€” three free-first backends.
 
 Order of attack (cheapest / most likely to work first):
 
-1. ``hf-inference`` credits route  — ``InferenceClient`` with an explicit model
+1. ``hf-inference`` credits route  â€” ``InferenceClient`` with an explicit model
    ladder. Only works when the HF account has pre-paid credits or PRO, so it is
    tried but never relied upon (HTTP 402 flips a latch for the rest of the run).
-2. **HF Space (free)** — the official ``black-forest-labs/FLUX.1-schnell``
+2. **HF Space (free)** â€” the official ``black-forest-labs/FLUX.1-schnell``
    Gradio Space through ``gradio_client``. Real FLUX weights on HF hardware,
    no credits needed, authenticated with the same HF token. ~6 s per image.
-3. **Pollinations (free, keyless)** — last-resort HTTP backend, no account at
+3. **Pollinations (free, keyless)** â€” last-resort HTTP backend, no account at
    all. Keeps the pipeline alive even if HF itself is down.
 
-Storage never depends on any of this — see ``core.hf_storage`` (free, unlimited
+Storage never depends on any of this â€” see ``core.hf_storage`` (free, unlimited
 for public repos).
 
 Model ladders are configurable via ``config.media.hf_image_models``.
@@ -29,7 +29,7 @@ logger = logging.getLogger("video.ai_image")
 
 # Ranked: best quality first. HF recommended text-to-image models (Nov 2026).
 # NOTE hf-inference now serves exactly ONE t2i model (SD3-medium); everything
-# else 410s as "deprecated" on that provider — the Space route covers the rest.
+# else 410s as "deprecated" on that provider â€” the Space route covers the rest.
 DEFAULT_IMAGE_MODELS: List[str] = [
     "black-forest-labs/FLUX.1-Krea-dev",
     "Qwen/Qwen-Image",
@@ -56,7 +56,7 @@ _SPACE_API = "/infer"
 
 
 class AIImageGenerator:
-    """Generates images (or short clips) for free: credits → Space → Pollinations."""
+    """Generates images (or short clips) for free: credits â†’ Space â†’ Pollinations."""
 
     def __init__(self, hf_token: str = "", model_id: Optional[str] = None,
                  models: Optional[List[str]] = None, provider: str = "auto",
@@ -108,8 +108,8 @@ class AIImageGenerator:
             try:
                 if backend(text, out_file):
                     logger.info("AI image generated via %s: %s", backend.__name__, out_file)
-                    return str(out_file)
-            except Exception as exc:  # noqa: BLE001 — a backend must never break a run
+                    return output_path
+            except Exception as exc:  # noqa: BLE001 â€” a backend must never break a run
                 self.last_error = f"{backend.__name__}: {type(exc).__name__}: {str(exc)[:160]}"
                 logger.warning("AI image backend %s crashed: %s", backend.__name__, exc)
         logger.warning("all AI image backends failed (%s)", self.last_error)
@@ -126,9 +126,9 @@ class AIImageGenerator:
                 self.last_error = f"{model}: {type(exc).__name__}: {str(exc)[:160]}"
                 msg = str(exc)
                 if "402" in msg or "Payment Required" in msg:
-                    # no inference credits on this account — stop trying this run
+                    # no inference credits on this account â€” stop trying this run
                     self.dead = True
-                    logger.info("HF inference needs credits (%s) — trying free Space instead", model)
+                    logger.info("HF inference needs credits (%s) â€” trying free Space instead", model)
                     return False
                 if "410" in msg or "deprecated" in msg:
                     continue      # model retired on this provider, next candidate
@@ -207,7 +207,7 @@ class AIImageGenerator:
                 self.last_error = f"{candidate}: {type(exc).__name__}: {str(exc)[:160]}"
                 if "402" in str(exc) or "Payment Required" in str(exc):
                     self.dead = True
-                    logger.info("HF video inference needs credits — skipping")
+                    logger.info("HF video inference needs credits â€” skipping")
                     return None
                 logger.warning("HF clip failed via %s: %s", candidate, self.last_error)
                 continue
@@ -215,7 +215,7 @@ class AIImageGenerator:
                 data = payload if isinstance(payload, (bytes, bytearray)) else payload.read()
                 if data:
                     out_file.write_bytes(bytes(data))
-                    return str(out_file)
+                    return output_path
             except Exception as exc:  # noqa: BLE001
                 logger.warning("HF clip save failed: %s", exc)
         return None
@@ -228,5 +228,6 @@ class AIImageGenerator:
             from PIL import Image
             with Image.open(src) as im:
                 im.convert("RGB").save(dest, "JPEG", quality=92)
-        except Exception:  # noqa: BLE001 — PIL missing or odd format: copy bytes as-is
+        except Exception:  # noqa: BLE001 â€” PIL missing or odd format: copy bytes as-is
             dest.write_bytes(Path(src).read_bytes())
+

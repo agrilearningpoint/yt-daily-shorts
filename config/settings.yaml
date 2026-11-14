@@ -12,7 +12,7 @@
 llm:
   provider_order: ["gemini", "groq", "openrouter", "mistral", "nvidia", "agnes"]
   models:
-    gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash", "auto-free"]
+    gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash", "auto-free"]
     groq: ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b", "auto-free"]
     openrouter:
       - "openrouter/free"
@@ -91,4 +91,5 @@ youtube:
 
 telegram:
   send_video: true
+
 
