@@ -1,10 +1,10 @@
-﻿"""Multi-provider LLM layer with automatic fallback.
+"""Multi-provider LLM layer with automatic fallback.
 
 Providers: Gemini (native REST), and OpenAI-compatible Groq, Mistral,
 OpenRouter, NVIDIA NIM and Ollama Cloud. They are tried in the configured
 order; a provider/model that errors, rate-limits or returns invalid JSON
 falls through to the next one. The mock provider is used ONLY when
-``allow_mock`` is set (tests / offline dev) â€” never in a live run.
+``allow_mock`` is set (tests / offline dev) — never in a live run.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ class _KeyRing:
         """Try the keys in ring order; a hung key is retired for the whole run.
 
         A 429/503 is per-request and worth retrying later, but a timeout means
-        the key's endpoint is stalling â€” retrying it on every model would add
+        the key's endpoint is stalling — retrying it on every model would add
         minutes to a run, so it is parked in ``_bad``.
         """
         usable = [k for k in self.keys if k not in getattr(self, "_bad", ())] or list(self.keys)
@@ -83,7 +83,7 @@ class _KeyRing:
                     if not hasattr(self, "_bad"):
                         self._bad = set()
                     self._bad.add(key)
-                    logger.warning("%s key %sâ€¦%s is stalling â€” parked for this run",
+                    logger.warning("%s key %s…%s is stalling — parked for this run",
                                    self.name, key[:6], key[-4:])
                 if not any(c in msg for c in ROTATE_ON):
                     raise
@@ -250,14 +250,14 @@ class OpenAICompatProvider(_KeyRing, BaseLLMProvider):
 
 
 class MockLLMProvider(BaseLLMProvider):
-    """Deterministic offline provider â€” tests and local dev only."""
+    """Deterministic offline provider — tests and local dev only."""
 
     name = "mock"
 
     async def generate_text(self, prompt, system_prompt=None, json_mode=False, tier="") -> str:
         if json_mode:
             return json.dumps(await self.generate_json(prompt))
-        return "à¤¯à¤¹ à¤à¤• à¤ªà¤°à¥€à¤•à¥à¤·à¤£ à¤‰à¤¤à¥à¤¤à¤° à¤¹à¥ˆà¥¤"
+        return "यह एक परीक्षण उत्तर है।"
 
     async def generate_json(self, prompt: str, system_prompt: Optional[str] = None,
                             tier: str = "") -> Dict[str, Any]:
@@ -271,8 +271,8 @@ class MockLLMProvider(BaseLLMProvider):
 
             n_nat = _count(r"(\d+)\s+DIFFERENT Indian stories", 16)
             n_int = _count(r"(\d+)\s+DIFFERENT world stories", 4)
-            topics = ["à¤¡à¤¿à¤œà¤¿à¤Ÿà¤² à¤‡à¤‚à¤¡à¤¿à¤¯à¤¾", "à¤‡à¤¸à¤°à¥‹ à¤®à¤¿à¤¶à¤¨", "à¤•à¤¿à¤¸à¤¾à¤¨ à¤¯à¥‹à¤œà¤¨à¤¾", "à¤°à¥‡à¤²à¤µà¥‡ à¤µà¤¿à¤¸à¥à¤¤à¤¾à¤°",
-                      "à¤¨à¤¿à¤°à¥à¤¯à¤¾à¤¤ à¤µà¥ƒà¤¦à¥à¤§à¤¿", "à¤¶à¤¿à¤•à¥à¤·à¤¾ à¤¨à¥€à¤¤à¤¿"]
+            topics = ["डिजिटल इंडिया", "इसरो मिशन", "किसान योजना", "रेलवे विस्तार",
+                      "निर्यात वृद्धि", "शिक्षा नीति"]
 
             def story(i: int, _section: str) -> Dict[str, Any]:
                 topic = topics[i % len(topics)]
@@ -280,37 +280,37 @@ class MockLLMProvider(BaseLLMProvider):
                     "on_screen_text": topic,
                     "src": (i % 6) + 1,
                     "parts": [
-                        {"say": f"à¤¸à¤°à¤•à¤¾à¤° à¤¨à¥‡ {topic} à¤ªà¤° à¤¬à¤¡à¤¼à¤¾ à¤«à¥ˆà¤¸à¤²à¤¾ à¤²à¤¿à¤¯à¤¾ à¤¹à¥ˆ",
+                        {"say": f"सरकार ने {topic} पर बड़ा फैसला लिया है",
                          "visual": "Indian parliament building", "entity": "Parliament House (India)",
                          "search": "india parliament", "source": "entity"},
-                        {"say": "à¤‡à¤¸à¤¸à¥‡ à¤²à¤¾à¤–à¥‹à¤‚ à¤²à¥‹à¤—à¥‹à¤‚ à¤•à¥‹ à¤¸à¥€à¤§à¤¾ à¤«à¤¾à¤¯à¤¦à¤¾ à¤®à¤¿à¤²à¥‡à¤—à¤¾",
+                        {"say": "इससे लाखों लोगों को सीधा फायदा मिलेगा",
                          "visual": "happy indian families", "entity": "",
                          "search": "indian family", "source": "stock"},
                     ],
                 }
 
             return {
-                "title": "à¤†à¤œ à¤•à¥€ à¤¬à¤¡à¤¼à¥€ à¤–à¤¬à¤°à¥‡à¤‚",
-                "hook": f"à¤†à¤œ à¤•à¥€ à¤¸à¤¬à¤¸à¥‡ à¤¬à¤¡à¤¼à¥€ à¤–à¤¬à¤°: {topics[0]} à¤ªà¤° à¤¸à¤°à¤•à¤¾à¤° à¤•à¤¾ à¤¬à¤¡à¤¼à¤¾ à¤«à¥ˆà¤¸à¤²à¤¾",
+                "title": "आज की बड़ी खबरें",
+                "hook": f"आज की सबसे बड़ी खबर: {topics[0]} पर सरकार का बड़ा फैसला",
                 "national": [story(i, "national") for i in range(max(n_nat, 4))],
                 "international": [story(i, "international") for i in range(max(n_int, 2))],
                 "sources": ["https://pib.gov.in", "https://ddnews.gov.in"],
             }
         if "SEO_METADATA" in prompt:
-            return {"title": "à¤­à¤¾à¤°à¤¤ à¤•à¥€ à¤¬à¤¡à¤¼à¥€ à¤‰à¤ªà¤²à¤¬à¥à¤§à¤¿ | 60 à¤¸à¥‡à¤•à¤‚à¤¡ à¤®à¥‡à¤‚", "tags": ["india", "hindi news"],
-                    "description_hook": "à¤œà¤¾à¤¨à¤¿à¤ à¤†à¤œ à¤•à¥€ à¤¸à¤¬à¤¸à¥‡ à¤…à¤¹à¤® à¤¬à¤¾à¤¤à¥¤"}
+            return {"title": "भारत की बड़ी उपलब्धि | 60 सेकंड में", "tags": ["india", "hindi news"],
+                    "description_hook": "जानिए आज की सबसे अहम बात।"}
         return {
-            "title": "à¤†à¤œ à¤•à¥€ à¤¬à¤¡à¤¼à¥€ à¤–à¤¬à¤°à¥‡à¤‚ - 60 à¤¸à¥‡à¤•à¤‚à¤¡ à¤®à¥‡à¤‚",
-            "hook": "à¤•à¥à¤¯à¤¾ à¤†à¤ª à¤œà¤¾à¤¨à¤¤à¥‡ à¤¹à¥ˆà¤‚ à¤†à¤œ à¤¦à¥‡à¤¶ à¤®à¥‡à¤‚ à¤•à¥Œà¤¨ à¤¸à¤¾ à¤¬à¤¡à¤¼à¤¾ à¤«à¥ˆà¤¸à¤²à¤¾ à¤¹à¥à¤†?",
+            "title": "आज की बड़ी खबरें - 60 सेकंड में",
+            "hook": "क्या आप जानते हैं आज देश में कौन सा बड़ा फैसला हुआ?",
             "scenes": [
-                {"scene_number": 1, "on_screen_text": "à¤¬à¤¡à¤¼à¤¾ à¤«à¥ˆà¤¸à¤²à¤¾",
-                 "parts": [{"say": "à¤­à¤¾à¤°à¤¤ à¤¸à¤°à¤•à¤¾à¤° à¤¨à¥‡ à¤†à¤œ à¤¡à¤¿à¤œà¤¿à¤Ÿà¤² à¤‡à¤‚à¤«à¥à¤°à¤¾à¤¸à¥à¤Ÿà¥à¤°à¤•à¥à¤šà¤° à¤•à¥‹ à¤²à¥‡à¤•à¤°", "visual": "india digital infrastructure", "entity": "", "search": "india digital infrastructure", "source": "stock"}, {"say": "à¤à¤• à¤¬à¤¡à¤¼à¤¾ à¤”à¤° à¤…à¤¹à¤® à¤¨à¤¿à¤°à¥à¤£à¤¯ à¤²à¤¿à¤¯à¤¾ à¤¹à¥ˆ à¤œà¤¿à¤¸à¤•à¤¾", "visual": "india digital infrastructure", "entity": "", "search": "india digital infrastructure", "source": "stock"}, {"say": "à¤…à¤¸à¤° à¤•à¤°à¥‹à¤¡à¤¼à¥‹à¤‚ à¤²à¥‹à¤—à¥‹à¤‚ à¤ªà¤° à¤¹à¥‹à¤—à¤¾à¥¤", "visual": "india digital infrastructure", "entity": "", "search": "india digital infrastructure", "source": "stock"}],
+                {"scene_number": 1, "on_screen_text": "बड़ा फैसला",
+                 "parts": [{"say": "भारत सरकार ने आज डिजिटल इंफ्रास्ट्रक्चर को लेकर", "visual": "india digital infrastructure", "entity": "", "search": "india digital infrastructure", "source": "stock"}, {"say": "एक बड़ा और अहम निर्णय लिया है जिसका", "visual": "india digital infrastructure", "entity": "", "search": "india digital infrastructure", "source": "stock"}, {"say": "असर करोड़ों लोगों पर होगा।", "visual": "india digital infrastructure", "entity": "", "search": "india digital infrastructure", "source": "stock"}],
                  "visual_keywords": "india digital infrastructure", "sources": ["https://pib.gov.in"]},
-                {"scene_number": 2, "on_screen_text": "à¤¯à¥à¤µà¤¾à¤“à¤‚ à¤•à¥‹ à¤«à¤¾à¤¯à¤¦à¤¾",
-                 "parts": [{"say": "à¤‡à¤¸ à¤ªà¤°à¤¿à¤¯à¥‹à¤œà¤¨à¤¾ à¤¸à¥‡ à¤²à¤¾à¤–à¥‹à¤‚ à¤¯à¥à¤µà¤¾à¤“à¤‚ à¤•à¥‹ à¤°à¥‹à¤œà¤—à¤¾à¤° à¤®à¤¿à¤²à¥‡à¤—à¤¾", "visual": "indian youth technology", "entity": "", "search": "indian youth technology", "source": "stock"}, {"say": "à¤”à¤° à¤—à¤¾à¤‚à¤µà¥‹à¤‚ à¤¤à¤• à¤¤à¥‡à¤œ à¤‡à¤‚à¤Ÿà¤°à¤¨à¥‡à¤Ÿ à¤ªà¤¹à¥à¤‚à¤šà¥‡à¤—à¤¾, à¤œà¤¿à¤¸à¤¸à¥‡ à¤ªà¤¢à¤¼à¤¾à¤ˆ", "visual": "indian youth technology", "entity": "", "search": "indian youth technology", "source": "stock"}, {"say": "à¤”à¤° à¤•à¤¾à¤°à¥‹à¤¬à¤¾à¤° à¤¦à¥‹à¤¨à¥‹à¤‚ à¤†à¤¸à¤¾à¤¨ à¤¹à¥‹à¤‚à¤—à¥‡à¥¤", "visual": "indian youth technology", "entity": "", "search": "indian youth technology", "source": "stock"}],
+                {"scene_number": 2, "on_screen_text": "युवाओं को फायदा",
+                 "parts": [{"say": "इस परियोजना से लाखों युवाओं को रोजगार मिलेगा", "visual": "indian youth technology", "entity": "", "search": "indian youth technology", "source": "stock"}, {"say": "और गांवों तक तेज इंटरनेट पहुंचेगा, जिससे पढ़ाई", "visual": "indian youth technology", "entity": "", "search": "indian youth technology", "source": "stock"}, {"say": "और कारोबार दोनों आसान होंगे।", "visual": "indian youth technology", "entity": "", "search": "indian youth technology", "source": "stock"}],
                  "visual_keywords": "indian youth technology", "sources": ["https://pib.gov.in"]},
-                {"scene_number": 3, "on_screen_text": "à¤†à¤ªà¤•à¥€ à¤°à¤¾à¤¯?",
-                 "parts": [{"say": "à¤µà¤¿à¤¶à¥‡à¤·à¤œà¥à¤ž à¤®à¤¾à¤¨à¤¤à¥‡ à¤¹à¥ˆà¤‚ à¤•à¤¿ à¤¯à¤¹ à¤•à¤¦à¤® à¤…à¤°à¥à¤¥à¤µà¥à¤¯à¤µà¤¸à¥à¤¥à¤¾ à¤•à¥‹", "visual": "india economy growth", "entity": "", "search": "india economy growth", "source": "stock"}, {"say": "à¤¨à¤ˆ à¤°à¤«à¥à¤¤à¤¾à¤° à¤¦à¥‡à¤—à¤¾à¥¤ à¤†à¤ªà¤•à¥‹ à¤•à¥à¤¯à¤¾ à¤²à¤—à¤¤à¤¾ à¤¹à¥ˆ? à¤•à¤®à¥‡à¤‚à¤Ÿ", "visual": "india economy growth", "entity": "", "search": "india economy growth", "source": "stock"}, {"say": "à¤®à¥‡à¤‚ à¤¬à¤¤à¤¾à¤‡à¤ à¤”à¤° à¤šà¥ˆà¤¨à¤² à¤•à¥‹ à¤¸à¤¬à¥à¤¸à¤•à¥à¤°à¤¾à¤‡à¤¬ à¤•à¥€à¤œà¤¿à¤à¥¤", "visual": "india economy growth", "entity": "", "search": "india economy growth", "source": "stock"}],
+                {"scene_number": 3, "on_screen_text": "आपकी राय?",
+                 "parts": [{"say": "विशेषज्ञ मानते हैं कि यह कदम अर्थव्यवस्था को", "visual": "india economy growth", "entity": "", "search": "india economy growth", "source": "stock"}, {"say": "नई रफ्तार देगा। आपको क्या लगता है? कमेंट", "visual": "india economy growth", "entity": "", "search": "india economy growth", "source": "stock"}, {"say": "में बताइए और चैनल को सब्सक्राइब कीजिए।", "visual": "india economy growth", "entity": "", "search": "india economy growth", "source": "stock"}],
                  "visual_keywords": "india economy growth", "sources": ["https://pib.gov.in"]},
             ],
             "sources": ["https://pib.gov.in"],
@@ -407,7 +407,7 @@ class FallbackLLM(BaseLLMProvider):
         return not self.candidates and self.allow_mock
 
     def order_for(self, tier: str = "") -> List[BaseLLMProvider]:
-        """Candidates for one call â€” a tier reorders the chain, never shrinks it."""
+        """Candidates for one call — a tier reorders the chain, never shrinks it."""
         return self.tiers.get(tier) or self.candidates
 
     async def _run(self, method: str, prompt: str, system_prompt: Optional[str],
@@ -432,17 +432,17 @@ class FallbackLLM(BaseLLMProvider):
                     if any(c in msg for c in ("HTTP 404", "HTTP 410", "HTTP 402", "HTTP 401", "HTTP 403")):
                         self.dead.add(label)  # model retired / no access: skip for the rest of the run
                     if "exceeded your current quota" in msg or "billing" in msg:
-                        # daily quota spent (gemini free tier is 20 RPD) â€” it will
+                        # daily quota spent (gemini free tier is 20 RPD) — it will
                         # not come back inside this run, so stop paying for it
                         self.dead.add(label)
-                        logger.warning("LLM %s is out of daily quota â€” parked for the rest of the run", label)
+                        logger.warning("LLM %s is out of daily quota — parked for the rest of the run", label)
                     elif "timeout" in msg or "timed out" in msg:
-                        # a hung model already cost one full timeout â€” never again
+                        # a hung model already cost one full timeout — never again
                         self.dead.add(label)
-                        logger.warning("LLM %s hung (timeout) â€” parked for the rest of the run", label)
+                        logger.warning("LLM %s hung (timeout) — parked for the rest of the run", label)
                     elif any(c in msg for c in ("HTTP 503", "high demand", "overloaded")):
                         self.strikes[label] = self.strikes.get(label, 0) + 1
-                        if self.strikes[label] >= 2:      # twice is enough â€” don't stall every call
+                        if self.strikes[label] >= 2:      # twice is enough — don't stall every call
                             self.dead.add(label)
                     transient = any(c in msg for c in ("HTTP 500", "HTTP 502", "HTTP 504", "invalid JSON"))
                     if transient and attempt == 0:
@@ -450,7 +450,7 @@ class FallbackLLM(BaseLLMProvider):
                         continue
                     break
         if self.allow_mock:
-            logger.warning("All LLM providers failed/unavailable â€” using MOCK provider (dry-run only).")
+            logger.warning("All LLM providers failed/unavailable — using MOCK provider (dry-run only).")
             self.last_used = "mock"
             return await getattr(MockLLMProvider(), method)(prompt, system_prompt)
         raise LLMError("All LLM providers failed: " + " | ".join(self.errors[-6:]))
@@ -495,9 +495,9 @@ def build_llm(llm_cfg, allow_mock: bool = False) -> FallbackLLM:
         rings[provider] = ring
         key = ring[0]
         configured = list((llm_cfg.models or {}).get(provider) or ["auto"])
-        preferred = [m for m in configured if m not in ("auto", "auto-free", "auto:free")]
+        preferred = [m for m in configured if m not in ("auto", "auto-free")]
         models = list(preferred)
-        if any(m in ("auto", "auto-free", "auto:free") for m in configured):
+        if any(m in ("auto", "auto-free") for m in configured):
             discovered = []
             for k in ring:   # a dead/limited key must not hide the provider's models
                 discovered = discover_models(provider, k)
@@ -576,4 +576,3 @@ def get_llm_client(provider: str = "", api_key: str = "", model_name: Optional[s
     if p in OpenAICompatProvider.BASE_URLS and api_key:
         return OpenAICompatProvider(p, api_key, model_name or "openai/gpt-oss-120b", temperature)
     return MockLLMProvider()
-
