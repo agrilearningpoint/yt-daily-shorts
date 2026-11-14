@@ -308,6 +308,12 @@ class TTSEngine:
                 logger.warning("TTS provider %s failed: %s", provider, exc)
                 errors.append(f"{provider}: {exc}")
 
+        if not self.strict:
+            final_wav = str(out_path / "voice_full.wav")
+            durs = [max(1.5, len(t.split()) / 2.6) for t in texts]
+            total = sum(durs) or 2.0
+            subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", f"{total:.2f}", "-c:a", "pcm_s16le", final_wav], capture_output=True)
+            return VoiceResult(audio_path=final_wav, durations=durs, provider="silence")
         raise TTSError(f"All TTS providers failed (silent fallback disabled in production): {'; '.join(errors)}")
 
 def detect_silences(path: str, noise_db: int = -32, min_d: float = 0.12) -> List[Tuple[float, float]]:
