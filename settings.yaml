@@ -1,0 +1,101 @@
+# ============================================================
+# YT Daily Shorts — Default Settings
+# Override via env vars (YT_ prefix) or config/settings.local.yaml.
+# ============================================================
+
+general:
+  project_name: "yt-daily-shorts"
+  channel_name: "BHARAT KI SOCH"
+  channel_name_spoken: "भारत की सोच"   # override with repo variable YT_CHANNEL_NAME
+  timezone: "Asia/Kolkata"
+  daily_video_count: 2
+  max_video_count: 3
+  dry_run: true          # GitHub scheduled runs set YT_DRY_RUN=false
+  strict_mode: false     # forced ON automatically when dry_run is false
+  debug: false
+
+llm:
+  provider_order: ["gemini", "mistral", "groq", "agnes", "nvidia", "openrouter"]
+  models:
+    gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash", "auto-free"]
+    mistral: ["ministral-14b-latest", "open-mistral-nemo", "auto-free"]
+    groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "auto-free"]
+    agnes: ["agnes-2.5-flash"]
+    nvidia: ["nvidia/nemotron-3-ultra-550b-a55b", "auto-free"]
+    openrouter:
+      - "auto:free"
+      - "nvidia/nemotron-3-ultra-550b-a55b:free"
+      - "nvidia/nemotron-3.5-lightning:free"
+      - "dots-studio/dots-3-note-preview:free"
+      - "liquid/lfm-3-1.7b:free"
+      - "recursive/flint-v1.0:free"
+    ollama: []
+  tiers:
+    quality:
+      gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
+  max_keys_per_provider: 10
+  temperature: 0.7
+  max_tokens: 12000
+  timeout_sec: 60
+
+video:
+  width: 1080
+  height: 1920
+  fps: 30
+  target_duration: 52
+  min_duration: 25
+  max_duration: 58
+  news_max_duration: 140
+  news_target_duration: 120
+  news_national_count: 16
+  news_international_count: 4
+  output_format: "mp4"
+  hf_repo_id: ""
+  hf_storage_private: true
+  background_music: true
+  music_volume: 0.10
+  news_headline_count: 20
+  depth_motion: true
+  show_headline_chips: true
+  sound_effects: true
+
+editorial_calendar:
+  monday: "Indian Politics and Political Leaders"
+  tuesday: "Science and Technology"
+  wednesday: "Medical Science and Scientific Research"
+  thursday: "Great Personalities and Biographies"
+  friday: "Indian History, Monuments, Temples and Heritage"
+  saturday: "Interesting Facts, Inventions and Discoveries"
+  sunday: "Economy, Society and World Affairs"
+
+tts:
+  provider_order: ["gemini", "edge"]
+  gemini_models: ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"]
+  gemini_voice: "auto"
+  gemini_fallback_voice: "Charon"
+  news_style: "clear, confident Hindi TV news anchor, natural breathing, a short pause after each story, a brisk, fast pace — clearly quicker than normal but every word still clear"
+  knowledge_style: "warm, curious Hindi storyteller, expressive, a brisk, fast pace — clearly quicker than normal but every word still clear"
+  provider: "edge-tts"
+  voice: "hi-IN-MadhurNeural"
+  fallback_voice: "hi-IN-SwaraNeural"
+  rate: "+20%"
+  pitch: "+0Hz"
+
+seo:
+  max_title_length: 100
+  max_description_length: 5000
+  default_hashtags:
+    - "#shorts"
+    - "#hindi"
+    - "#india"
+    - "#facts"
+    - "#knowledge"
+
+youtube:
+  default_privacy: "unlisted"
+  news_category_id: "25"
+  knowledge_category_id: "27"
+  contains_synthetic_media: true
+
+telegram:
+  send_video: true
