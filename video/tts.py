@@ -309,3 +309,30 @@ class TTSEngine:
                 errors.append(f"{provider}: {exc}")
 
         raise TTSError(f"All TTS providers failed (silent fallback disabled in production): {'; '.join(errors)}")
+
+def detect_silences(path: str, noise_db: int = -32, min_d: float = 0.12) -> List[Tuple[float, float]]:
+    import re
+    cmd = ["ffmpeg", "-i", str(path), "-af", f"silencedetect=noise={noise_db}dB:d={min_d}", "-f", "null", "-"]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    starts = [float(x) for x in re.findall(r"silence_start:\s*([0-9.]+)", res.stderr)]
+    ends = [float(x) for x in re.findall(r"silence_end:\s*([0-9.]+)", res.stderr)]
+    return list(zip(starts, ends))
+
+
+def split_by_pauses(texts: List[str], total: float, silences: List[Tuple[float, float]]) -> List[float]:
+    if not texts:
+        return []
+    if len(texts) == 1:
+        return [round(total, 3)]
+    weights = [max(1, len(t.split())) for t in texts]
+    w_sum = sum(weights)
+    mids = [(s + e) / 2.0 for s, e in silences]
+    cuts, acc = [0.0], 0
+    for w in weights[:-1]:
+        acc += w
+        target = total * (acc / w_sum)
+        best = min(mids, key=lambda m: abs(m - target)) if mids else target
+        snap = best if abs(best - target) <= 1.2 and best > cuts[-1] + 0.2 else target
+        cuts.append(snap)
+    cuts.append(total)
+    return [round(cuts[i + 1] - cuts[i], 3) for i in range(len(texts))]

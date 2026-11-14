@@ -1,7 +1,7 @@
-general:
+﻿general:
   project_name: "yt-daily-shorts"
   channel_name: "BHARAT KI SOCH"
-  channel_name_spoken: "भारत की सोच"
+  channel_name_spoken: "à¤­à¤¾à¤°à¤¤ à¤•à¥€ à¤¸à¥‹à¤š"
   timezone: "Asia/Kolkata"
   daily_video_count: 2
   max_video_count: 3
@@ -12,7 +12,7 @@ general:
 llm:
   provider_order: ["gemini", "groq", "openrouter", "mistral", "nvidia", "agnes"]
   models:
-    gemini: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "auto-free"]
+    gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash", "auto-free"]
     groq: ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b", "auto-free"]
     openrouter:
       - "openrouter/free"
@@ -91,3 +91,4 @@ youtube:
 
 telegram:
   send_video: true
+
