@@ -1,133 +1,93 @@
-# ============================================================
-# YT Daily Shorts — Default Settings
-# Override via env vars (YT_ prefix) or config/settings.local.yaml.
-# ============================================================
-
 general:
   project_name: "yt-daily-shorts"
   channel_name: "BHARAT KI SOCH"
-  channel_name_spoken: "भारत की सोच"   # override with repo variable YT_CHANNEL_NAME
+  channel_name_spoken: "भारत की सोच"
   timezone: "Asia/Kolkata"
   daily_video_count: 2
   max_video_count: 3
-  dry_run: true          # GitHub scheduled runs set YT_DRY_RUN=false
-  strict_mode: false     # forced ON automatically when dry_run is false
+  dry_run: false
+  strict_mode: true
   debug: false
 
 llm:
-  # Tried in order. Providers without a key are skipped; a failing
-  # provider/model falls through to the next one.
-  # Quality first, then the uncapped free fallback. Ollama is removed: its free
-  # tier answers HTTP 402 (credits/subscription required), so it only wasted a
-  # round-trip on every run. Re-add it after subscribing to Ollama Cloud.
-  provider_order: ["gemini", "mistral", "groq", "agnes", "nvidia", "openrouter"]
-  # "auto" = ask the provider's /models API at run time and pick the best
-  # current free model, so retired models never break the pipeline.
-  # Ids listed before "auto" are preferred while the provider still lists them.
-  # Verified free on official pages (Nov 2026): Gemini 3.8/3.6 Flash, 3.5/3.1
-  # Flash-Lite, 2.5 Flash; Groq gpt-oss-120b/20b; NVIDIA "Free Endpoint" models;
-  # OpenRouter ":free" models; Mistral Free mode (low limits).
-  # Probed live 2026-11-10 (see KEY_VERIFICATION_REPORT.md):
-  #   gemini-3.8-flash -> 503/timeouts in bursts, 429 once the 20 RPD is spent
-  #   3.5-flash-lite   -> 6/6 keys 200, avg 2.4 s (the reliable volume tier)
-  #   mistral-small|medium -> 429 with limit_req_minute=0; ministral-14b and
-  #   open-mistral-nemo -> 200 with 2 RPM / 40K TPM (the real free allowance)
-  #   openrouter inkling/gemma -> 403/429; nemotron + dots + lfm + flint -> 200
+  provider_order: ["gemini", "groq", "openrouter", "mistral", "nvidia", "agnes"]
   models:
-    # Latest free flagships first: 3.8-flash (20 RPD/project) then 3.5-flash-lite
-    # (500 RPD/project). 3.8 answers 503 "high demand" in bursts and its daily
-    # quota is tiny, so the next two entries are the volume workhorses — the
-    # chain skips a model for the rest of the run after two 503s.
-    gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
-    # 2 RPM but 40,000 TPM — the most generous token ceiling of the free tiers.
-    mistral: ["ministral-14b-latest", "open-mistral-nemo"]
-    groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
-    agnes: ["agnes-2.5-flash"]           # 30 RPM, no hard usage cap
-    nvidia: ["nvidia/nemotron-3-ultra-550b-a55b"]   # deepseek-v4.1-flash timed out in CI
-    openrouter: ["nvidia/nemotron-3-ultra-550b-a55b:free", "nvidia/nemotron-3.5-lightning:free",
-      "dots-studio/dots-3-note-preview:free", "liquid/lfm-3-1.7b:free", "recursive/flint-v1.0:free"]
-    ollama: []   # HTTP 402 — paid credits required; re-enable with ["auto"] after subscribing
-  # Stage routing — the flagship's daily quota is tiny (3.8-flash ≈ 20 RPD), so
-  # it is spent only where quality is visible in the finished video:
-  #   script  -> the narration the viewer hears
-  #   seo     -> the title / tags that decide whether anyone clicks
-  # Everything else (research, hook picking, fact-check) uses the normal chain,
-  # where gemini-3.5-flash-lite (500 RPD) or another provider serves the call.
+    gemini: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "auto-free"]
+    groq: ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b", "auto-free"]
+    openrouter:
+      - "openrouter/free"
+      - "auto-free"
+      - "nvidia/nemotron-3-ultra-550b-a55b:free"
+      - "nvidia/nemotron-3.5-lightning:free"
+      - "google/gemma-4-31b-it:free"
+    mistral: ["ministral-14b-latest", "open-mistral-nemo", "auto-free"]
+    nvidia: ["nvidia/nemotron-3-ultra-550b-a55b", "auto-free"]
+    agnes: ["agnes-2.5-flash"]
+    ollama: []
   tiers:
     quality:
-      gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
-
-  # Extra failover keys per provider come from YT_<PROVIDER>_API_KEY_2..9 secrets.
-  # Chain length = models x keys, so keep this small (2 = primary + 1 spare).
-  max_keys_per_provider: 2
+      gemini: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
+      openrouter: ["openrouter/free", "nvidia/nemotron-3-ultra-550b-a55b:free"]
+  max_keys_per_provider: 10
   temperature: 0.7
   max_tokens: 12000
-  timeout_sec: 60          # a hung key is parked after one timeout
+  timeout_sec: 60
 
 video:
   width: 1080
   height: 1920
   fps: 30
-  target_duration: 52
+  target_duration: 46
   min_duration: 25
   max_duration: 58
-  news_max_duration: 140      # hard cap (Shorts allow up to 3 min)
-  news_target_duration: 120   # 2-minute bulletin
-  news_national_count: 16     # section 1: India (fewer, fuller stories - Satyam 2026-11-08)
-  news_international_count: 4 # section 2: world
+  news_max_duration: 58
+  news_target_duration: 50
+  news_national_count: 4
+  news_international_count: 1
+  news_headline_count: 5
   output_format: "mp4"
-  # Free Hugging Face dataset repo for artefact + state storage
-  # (GitHub artifacts expire after 7 days; long renders outgrow them)
-  hf_repo_id: ""          # e.g. "Rajaagri/yt-daily-shorts-artifacts" (override: YT_HF_REPO_ID)
+  hf_repo_id: ""
   hf_storage_private: true
   background_music: true
-  music_volume: 0.10
-  news_headline_count: 20     # 16 national + 4 international, 2 sentences each (what + result)
-  depth_motion: true          # real news photo of each line plays with gentle 3D camera motion (free, CPU)
-  show_headline_chips: true   # short 2-4 word title chip per story (NOT subtitles)
-  sound_effects: true         # whoosh/pop on every cut
+  music_volume: 0.08
+  depth_motion: true
+  show_headline_chips: true
+  sound_effects: true
 
 editorial_calendar:
-  monday: "Indian Politics and Political Leaders"
-  tuesday: "Science and Technology"
-  wednesday: "Medical Science and Scientific Research"
-  thursday: "Great Personalities and Biographies"
-  friday: "Indian History, Monuments, Temples and Heritage"
-  saturday: "Interesting Facts, Inventions and Discoveries"
-  sunday: "Economy, Society and World Affairs"
+  monday: "Indian Politics and Policy Decisions"
+  tuesday: "Science, AI and Space Tech"
+  wednesday: "Medical Science and Health Breakthroughs"
+  thursday: "Great Indian Personalities and Untold Stories"
+  friday: "Indian History, Monuments and Heritage"
+  saturday: "Shocking Facts, Inventions and Discoveries"
+  sunday: "Indian Economy, Geopolitics and World Affairs"
 
 tts:
-  # Human-like voice first (Gemini TTS, free tier), Microsoft edge-tts as fallback.
   provider_order: ["gemini", "edge"]
   gemini_models: ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"]
-  gemini_voice: "auto"        # auto = Hindi news voice from Google's voice library, else Charon
+  gemini_voice: "auto"
   gemini_fallback_voice: "Charon"
-  news_style: "clear, confident Hindi TV news anchor, natural breathing, a short pause
-    after each story, a brisk, fast pace — clearly quicker than normal but every word
-    still clear"
-  knowledge_style: "warm, curious Hindi storyteller, expressive, a brisk, fast pace
-    — clearly quicker than normal but every word still clear"
+  per_beat_synthesis: true
+  news_style: "clear, energetic Hindi TV news anchor, punchy 3-second hook, natural breathing, crisp pause between beats"
+  knowledge_style: "warm, curious Hindi storyteller, dramatic hook in first 2 seconds, brisk engaging pace"
   provider: "edge-tts"
   voice: "hi-IN-MadhurNeural"
   fallback_voice: "hi-IN-SwaraNeural"
-  rate: "+20%"      # 1.2x anchor speed (owner, 2026-11-11)
+  rate: "+16%"
   pitch: "+0Hz"
 
 seo:
   max_title_length: 100
   max_description_length: 5000
-  default_hashtags:
-  - "#shorts"
-  - "#hindi"
-  - "#india"
-  - "#facts"
-  - "#knowledge"
+  default_hashtags: ["#shorts", "#hindi", "#india", "#facts", "#bharatkisoch"]
 
 youtube:
-  default_privacy: "unlisted"     # override with repo variable YT_YOUTUBE_PRIVACY
-  news_category_id: "25"        # News & Politics
-  knowledge_category_id: "27"   # Education
+  default_privacy: "public"
+  news_category_id: "25"
+  knowledge_category_id: "27"
   contains_synthetic_media: true
+  trend_region_code: "IN"
 
 telegram:
   send_video: true
