@@ -15,8 +15,7 @@ llm:
     gemini: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash", "auto-free"]
     groq: ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b", "auto-free"]
     openrouter:
-      - "openrouter/free"
-      - "auto-free"
+      - "auto:free"
       - "nvidia/nemotron-3-ultra-550b-a55b:free"
       - "nvidia/nemotron-3.5-lightning:free"
       - "google/gemma-4-31b-it:free"
@@ -91,5 +90,6 @@ youtube:
 
 telegram:
   send_video: true
+
 
 
