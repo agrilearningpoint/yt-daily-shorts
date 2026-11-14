@@ -495,9 +495,9 @@ def build_llm(llm_cfg, allow_mock: bool = False) -> FallbackLLM:
         rings[provider] = ring
         key = ring[0]
         configured = list((llm_cfg.models or {}).get(provider) or ["auto"])
-        preferred = [m for m in configured if m not in ("auto", "auto-free")]
+        preferred = [m for m in configured if m not in ("auto", "auto-free", "auto:free")]
         models = list(preferred)
-        if any(m in ("auto", "auto-free") for m in configured):
+        if any(m in ("auto", "auto-free", "auto:free") for m in configured):
             discovered = []
             for k in ring:   # a dead/limited key must not hide the provider's models
                 discovered = discover_models(provider, k)
