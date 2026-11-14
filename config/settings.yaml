@@ -39,11 +39,11 @@ video:
   target_duration: 46
   min_duration: 25
   max_duration: 58
-  news_max_duration: 58
-  news_target_duration: 50
-  news_national_count: 4
-  news_international_count: 1
-  news_headline_count: 5
+  news_max_duration: 140
+  news_target_duration: 120
+  news_national_count: 16
+  news_international_count: 4
+  news_headline_count: 20
   output_format: "mp4"
   hf_repo_id: ""
   hf_storage_private: true

@@ -222,7 +222,7 @@ class TTSEngine:
         list_file.unlink(missing_ok=True)
         return str(output_path)
 
-    async def _synth_edge(self, text: str, out_file: Path, voice: str) -> List[WordTiming]:
+    async def _synth(self, text: str, out_file: Path, voice: str) -> List[WordTiming]:
         comm = edge_tts.Communicate(text, voice, rate=self.rate, pitch=self.pitch)
         words: List[WordTiming] = []
         audio_chunks: List[bytes] = []
@@ -241,9 +241,9 @@ class TTSEngine:
         raw_mp3.parent.mkdir(parents=True, exist_ok=True)
         words: List[WordTiming] = []
         try:
-            words = await self._synth_edge(text, raw_mp3, self.voice)
+            words = await self._synth(text, raw_mp3, self.voice)
         except Exception:
-            words = await self._synth_edge(text, raw_mp3, self.fallback_voice)
+            words = await self._synth(text, raw_mp3, self.fallback_voice)
         self._normalise(str(raw_mp3), output_path)
         raw_mp3.unlink(missing_ok=True)
         dur = probe_duration(output_path)
