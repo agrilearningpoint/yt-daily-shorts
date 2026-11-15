@@ -631,7 +631,7 @@ class MediaCollector:
         part = int(spec.get("_part", 0) or 0)
         ent = [("entity", self._checked(
             lambda: entity and self._wikipedia_exact(entity, dest), vlm_desc, min_match=0.0))]
-        if mode == "news" and (spec.get("news_query") or search):
+        if mode == "news" and hint != "ai" and (spec.get("news_query") or search):
             nq = spec.get("news_query") or search
             steps.append(("news", self._checked(
                 lambda: self._news_photo(nq, dest, part, cycle=False), vlm_desc, min_match=0.0)))
@@ -658,7 +658,9 @@ class MediaCollector:
         ai = [("ai", lambda: self._agnes(visual or search, dest, mode)),
               ("ai-cf", lambda: self._cloudflare(visual or search, dest, mode)),
               ("ai-hf", lambda: self._huggingface(visual or search, dest, mode))]
-        if hint == "stock":
+        if hint == "ai":
+            order = ai + ent + clips + stock
+        elif hint == "stock":
             order = ent + clips + stock + ai
         else:  # real photo of the person/thing first, then a matching real clip, else an AI picture for this line
             order = ent + clips + ai + stock
