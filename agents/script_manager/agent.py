@@ -151,8 +151,57 @@ class ScriptManagerAgent(BaseAgent):
         return {"national": v.news_national_count, "international": v.news_international_count,
                 "min_national": v.news_national_count - 6, "min_international": min(5, v.news_international_count)}
 
+    def _normalize_scenes(self, script: Script) -> None:
+        """Auto-split parts > 9 words and cap story length <= 20 words so LLM overshoots never fail."""
+        lim = 9
+        for s in script.scenes:
+            # 1. Split any part longer than 9 words into <= 9-word visual beats
+            new_parts = []
+            for pt in (s.parts or []):
+                words = (pt.get("say") or "").split()
+                if len(words) <= lim:
+                    if words:
+                        new_parts.append(dict(pt, say=" ".join(words)))
+                else:
+                    for idx in range(0, len(words), lim):
+                        chunk = words[idx:idx + lim]
+                        if len(chunk) < 3 and new_parts:
+                            new_parts[-1]["say"] = new_parts[-1]["say"] + " " + " ".join(chunk)
+                        else:
+                            new_parts.append(dict(pt, say=" ".join(chunk)))
+            # 2. For non-today news stories, cap total story words to <= 20 words
+            if script.video_type == "news" and s.section != "today":
+                kept, total_w = [], 0
+                for pt in new_parts:
+                    w = pt["say"].split()
+                    if total_w + len(w) <= 20:
+                        kept.append(pt)
+                        total_w += len(w)
+                    else:
+                        rem = 20 - total_w
+                        if rem >= 4:
+                            s_end = " ".join(w[:rem]).rstrip("?,.") + "?"
+                            kept.append(dict(pt, say=s_end))
+                        break
+                if kept:
+                    new_parts = kept
+            # 3. Ensure at least 2 parts per scene for dynamic visual cuts
+            if len(new_parts) == 1:
+                w = new_parts[0]["say"].split()
+                if len(w) >= 6:
+                    mid = len(w) // 2
+                    base = new_parts[0]
+                    new_parts = [
+                        dict(base, say=" ".join(w[:mid])),
+                        dict(base, say=" ".join(w[mid:])),
+                    ]
+            if new_parts:
+                s.parts = new_parts
+                s.narration = " ".join(pt["say"] for pt in new_parts if pt.get("say"))
+
     def fit_news(self, script: Script, max_w: int) -> None:
-        """LLMs overshoot length: drop the longest/extra stories (keeping section minimums) instead of failing."""
+        """LLMs overshoot length: normalize parts/stories and drop extra stories instead of failing."""
+        self._normalize_scenes(script)
         t = self._targets()
         need = {"national": t["min_national"], "international": t["min_international"]}
         sec = lambda s: "international" if s.section == "international" else "national"
@@ -260,6 +309,7 @@ class ScriptManagerAgent(BaseAgent):
                 self.logger.error("Script generation failed: %s", exc)
                 return AgentResult(success=False, errors=[str(exc)])
             script = parse_script(data, video_type, fallback_sources, research_data.get("items", []))
+            self._normalize_scenes(script)
             if video_type == "news":  # trim to the quality-gate limit before judging (saves LLM retries)
                 self.fit_news(script, int(bounds(self.config.video, "news", self.targets)[1] * WORDS_PER_SEC["news"]))
             last_problems = self.validate(script, min_w, max_w)
