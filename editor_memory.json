@@ -503,6 +503,26 @@
     "flash_color": "white"
    },
    "score": 5.0
+  },
+  {
+   "at": "2026-11-15T13:20+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "whip"
+    ],
+    "motion": "kenburns_in",
+    "grade": "warm_film",
+    "zoom": 1.14,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 4.0
   }
  ],
  "option_scores": {
@@ -527,20 +547,20 @@
    "n": 9
   },
   "vignette=true": {
-   "sum": 64.0,
-   "n": 11
+   "sum": 68.0,
+   "n": 12
   },
   "ticker=true": {
-   "sum": 126.0,
-   "n": 22
+   "sum": 130.0,
+   "n": 23
   },
   "flash_color=\"white\"": {
-   "sum": 108.0,
-   "n": 19
+   "sum": 112.0,
+   "n": 20
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 87.0,
-   "n": 16
+   "sum": 91.0,
+   "n": 17
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -551,12 +571,12 @@
    "n": 6
   },
   "grade=\"warm_film\"": {
-   "sum": 16.0,
-   "n": 3
+   "sum": 20.0,
+   "n": 4
   },
   "zoom=1.14": {
-   "sum": 42.0,
-   "n": 8
+   "sum": 46.0,
+   "n": 9
   },
   "vignette=false": {
    "sum": 62.0,
@@ -579,8 +599,8 @@
    "n": 1
   },
   "motion=\"kenburns_in\"": {
-   "sum": 12.0,
-   "n": 2
+   "sum": 16.0,
+   "n": 3
   },
   "grade=\"cool_studio\"": {
    "sum": 39.0,
@@ -615,8 +635,8 @@
    "n": 4
   },
   "cut_fx=[\"whip\"]": {
-   "sum": 17.0,
-   "n": 3
+   "sum": 21.0,
+   "n": 4
   },
   "cut_fx=[\"punch\"]": {
    "sum": 11.0,
@@ -632,9 +652,6 @@
   }
  },
  "notes": [
-  "Eliminate duplicate consecutive shots and full-frame section intro cards to keep fast pacing.",
-  "Make Tile 0 hook instantly with a prominent, high-contrast headline image instead of weak graphics.",
-  "Re-position text overlays to prevent covering subject faces and key visual focus points.",
   "Replace mismatched stock visuals (e.g., German ambulance for Assam accident) with relevant local news footage.",
   "Eliminate consecutive near-identical frames (32-33, 34-35) to keep pace dynamic.",
   "Swap generic stock graphics (dollar bills, calculators) for context-specific news infographics.",
@@ -643,6 +660,9 @@
   "Remove static call-to-action end screens and construct a seamless visual loop back to tile 0.",
   "Replace the static calendar intro (Tile 0) with an engaging real-world news action frame and clear headline.",
   "Eliminate consecutive duplicate frames (such as repeated bus, leopard, and SCO shots) to increase visual cuts.",
-  "Swap generic stock footage of skies and planes with relevant news imagery, and shorten the ending call-to-action screen."
+  "Swap generic stock footage of skies and planes with relevant news imagery, and shorten the ending call-to-action screen.",
+  "Eliminate visual repetition: Ensure no two adjacent tiles use the exact same or near-identical image. Find distinct visuals or use dynamic motion graphics to vary the look every 2-3 seconds.",
+  "Upgrade generic visuals: Replace all cartoon images, generic stock photos (e.g., random buildings, abstract patterns, generic people/scenes), and logos with high-quality, specific, and impactful real-world footage or professional news graphics directly illustrating the headline.",
+  "Strengthen the hook: The first tile (0) needs a more compelling and visually striking image directly related to a major headline to instantly grab viewer attention, rather than a generic scene or a date."
  ]
 }
