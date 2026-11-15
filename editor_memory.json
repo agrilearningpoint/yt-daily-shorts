@@ -462,6 +462,26 @@
     "flash_color": "white"
    },
    "score": 5.0
+  },
+  {
+   "at": "2026-11-15T02:55",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "flash"
+    ],
+    "motion": "parallax_pan",
+    "grade": "punchy",
+    "zoom": 1.1,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 5.0
   }
  ],
  "option_scores": {
@@ -482,32 +502,32 @@
    "n": 6
   },
   "zoom=1.1": {
-   "sum": 50.0,
-   "n": 8
+   "sum": 55.0,
+   "n": 9
   },
   "vignette=true": {
-   "sum": 59.0,
-   "n": 10
+   "sum": 64.0,
+   "n": 11
   },
   "ticker=true": {
-   "sum": 116.0,
-   "n": 20
+   "sum": 121.0,
+   "n": 21
   },
   "flash_color=\"white\"": {
-   "sum": 98.0,
-   "n": 17
+   "sum": 103.0,
+   "n": 18
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 77.0,
-   "n": 14
+   "sum": 82.0,
+   "n": 15
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
    "n": 1
   },
   "motion=\"parallax_pan\"": {
-   "sum": 27.0,
-   "n": 5
+   "sum": 32.0,
+   "n": 6
   },
   "grade=\"warm_film\"": {
    "sum": 16.0,
@@ -550,8 +570,8 @@
    "n": 2
   },
   "grade=\"punchy\"": {
-   "sum": 22.0,
-   "n": 4
+   "sum": 27.0,
+   "n": 5
   },
   "cut_fx=[\"glitch\", \"whip\", \"flash\"]": {
    "sum": 6.0,
@@ -582,14 +602,11 @@
    "n": 2
   },
   "cut_fx=[\"flash\"]": {
-   "sum": 22.0,
-   "n": 4
+   "sum": 27.0,
+   "n": 5
   }
  },
  "notes": [
-  "Ensure every tile uses high-res original footage instead of blurry or repetitive stock screenshots.",
-  "Add more frequent visual cuts to maintain a dynamic 2-3 second pacing throughout the short.",
-  "Place lower-third text carefully to avoid covering important facial expressions or subjects.",
   "Ensure the first tile uses a punchy headline without generic graphics.",
   "Avoid repetitive or stock-looking illustrations on consecutive sequence frames.",
   "Maintain smooth visual pacing with distinct and contextually relevant images for every section.",
@@ -598,6 +615,9 @@
   "Re-position text overlays to prevent covering subject faces and key visual focus points.",
   "Replace mismatched stock visuals (e.g., German ambulance for Assam accident) with relevant local news footage.",
   "Eliminate consecutive near-identical frames (32-33, 34-35) to keep pace dynamic.",
-  "Swap generic stock graphics (dollar bills, calculators) for context-specific news infographics."
+  "Swap generic stock graphics (dollar bills, calculators) for context-specific news infographics.",
+  "Cut static graphics quicker to ensure dynamic visual transitions every 2 seconds.",
+  "Replace stock illustrations and repeated character frames with varied context-relevant footage.",
+  "Remove static call-to-action end screens and construct a seamless visual loop back to tile 0."
  ]
 }
