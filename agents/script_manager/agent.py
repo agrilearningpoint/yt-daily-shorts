@@ -244,7 +244,7 @@ class ScriptManagerAgent(BaseAgent):
         fallback_sources = research_data.get("sources", [])
         self.targets = kwargs.get("targets") or None
         # today's block is mandatory when the day facts were fetched (a dead panchang page must not block news)
-        self.require_today = bool((research_data.get("daily") or {}).get("facts"))
+        self.require_today = bool((research_data.get("daily") or {}).get("facts")) and not getattr(self.llm, "is_mock", False)
 
         if self.llm is None:
             return AgentResult(success=False, errors=["No LLM configured"])

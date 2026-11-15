@@ -27,12 +27,12 @@ def fetch_openrouter_free_models(limit: int = 8, timeout: int = 15) -> List[str]
     resp = requests.get("https://openrouter.ai/api/v1/models", timeout=timeout)
     resp.raise_for_status()
     data = resp.json().get("data", [])
-    free_ids: List[str] = ["openrouter/free"]
+    free_ids: List[str] = []
     for item in data:
         mid = item.get("id", "")
         pricing = item.get("pricing") or {}
         is_zero = str(pricing.get("prompt", "1")) == "0" and str(pricing.get("completion", "1")) == "0"
-        if is_zero and (mid.endswith(":free") or mid == "openrouter/free"):
+        if is_zero and mid.endswith(":free"):
             if any(x in mid for x in ("embed", "rerank", "tts", "whisper", "guard")):
                 continue
             if mid not in free_ids:
