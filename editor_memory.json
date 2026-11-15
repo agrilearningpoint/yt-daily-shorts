@@ -482,6 +482,27 @@
     "flash_color": "white"
    },
    "score": 5.0
+  },
+  {
+   "at": "2026-11-15T05:33",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "punch",
+     "whip"
+    ],
+    "motion": "kenburns_mix",
+    "grade": "news_crisp",
+    "zoom": 1.18,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 5.0
   }
  ],
  "option_scores": {
@@ -494,8 +515,8 @@
    "n": 4
   },
   "motion=\"kenburns_mix\"": {
-   "sum": 43.0,
-   "n": 7
+   "sum": 48.0,
+   "n": 8
   },
   "grade=\"neutral\"": {
    "sum": 39.0,
@@ -510,16 +531,16 @@
    "n": 11
   },
   "ticker=true": {
-   "sum": 121.0,
-   "n": 21
+   "sum": 126.0,
+   "n": 22
   },
   "flash_color=\"white\"": {
-   "sum": 103.0,
-   "n": 18
+   "sum": 108.0,
+   "n": 19
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 82.0,
-   "n": 15
+   "sum": 87.0,
+   "n": 16
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -538,8 +559,8 @@
    "n": 8
   },
   "vignette=false": {
-   "sum": 57.0,
-   "n": 10
+   "sum": 62.0,
+   "n": 11
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -550,8 +571,8 @@
    "n": 1
   },
   "zoom=1.18": {
-   "sum": 24.0,
-   "n": 4
+   "sum": 29.0,
+   "n": 5
   },
   "cut_fx=[\"flash\", \"punch\", \"glitch\"]": {
    "sum": 7.0,
@@ -590,8 +611,8 @@
    "n": 1
   },
   "cut_fx=[\"punch\", \"whip\"]": {
-   "sum": 16.0,
-   "n": 3
+   "sum": 21.0,
+   "n": 4
   },
   "cut_fx=[\"whip\"]": {
    "sum": 17.0,
@@ -604,12 +625,13 @@
   "cut_fx=[\"flash\"]": {
    "sum": 27.0,
    "n": 5
+  },
+  "grade=\"news_crisp\"": {
+   "sum": 5.0,
+   "n": 1
   }
  },
  "notes": [
-  "Ensure the first tile uses a punchy headline without generic graphics.",
-  "Avoid repetitive or stock-looking illustrations on consecutive sequence frames.",
-  "Maintain smooth visual pacing with distinct and contextually relevant images for every section.",
   "Eliminate duplicate consecutive shots and full-frame section intro cards to keep fast pacing.",
   "Make Tile 0 hook instantly with a prominent, high-contrast headline image instead of weak graphics.",
   "Re-position text overlays to prevent covering subject faces and key visual focus points.",
@@ -618,6 +640,9 @@
   "Swap generic stock graphics (dollar bills, calculators) for context-specific news infographics.",
   "Cut static graphics quicker to ensure dynamic visual transitions every 2 seconds.",
   "Replace stock illustrations and repeated character frames with varied context-relevant footage.",
-  "Remove static call-to-action end screens and construct a seamless visual loop back to tile 0."
+  "Remove static call-to-action end screens and construct a seamless visual loop back to tile 0.",
+  "Replace the static calendar intro (Tile 0) with an engaging real-world news action frame and clear headline.",
+  "Eliminate consecutive duplicate frames (such as repeated bus, leopard, and SCO shots) to increase visual cuts.",
+  "Swap generic stock footage of skies and planes with relevant news imagery, and shorten the ending call-to-action screen."
  ]
 }
