@@ -100,7 +100,10 @@ async def build_metadata(llm, title: str, chapters: List[Dict[str, Any]], stamps
     if best:
         out["title"] = best[:95]
     if len(desc) >= 200:
-        out["description"] = (desc + "\n\n⏱ अध्याय\n" + "\n".join(stamps))[:4900]
+        if "⏱ अध्याय" in desc:
+            out["description"] = desc[:4900]
+        else:
+            out["description"] = (desc + "\n\n⏱ अध्याय\n" + "\n".join(stamps))[:4900]
     if tags:
         merged = tags[:15]
         for t in DEFAULT_TAGS:

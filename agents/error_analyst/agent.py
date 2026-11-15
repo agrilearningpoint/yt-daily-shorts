@@ -38,7 +38,9 @@ class ErrorAnalystAgent(BaseAgent):
         rows: List[Dict[str, Any]] = []
         try:
             for v in self.state.get_failed_videos():
-                if str(getattr(v, "state", "")).lower().endswith("failed") and getattr(v, "error_message", ""):
+                st_raw = getattr(v, "state", "")
+                st_val = getattr(st_raw, "value", st_raw)
+                if str(st_val).lower() == "failed" and getattr(v, "error_message", ""):
                     rows.append({"video_id": getattr(v, "video_id", ""),
                                  "error": str(v.error_message)[:400],
                                  "type": getattr(v, "video_type", "")})

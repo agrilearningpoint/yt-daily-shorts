@@ -121,14 +121,19 @@ def build(video_id: str, title: str, film: Optional[Path] = None) -> Optional[Pa
     if not film:
         logger.error("no film found for %s", video_id)
         return None
-    hero = pick_best(candidate_frames(film))
-    if not hero:
-        logger.error("no usable frame in %s", film)
-        return None
-    out = film.parent / "thumbnail.jpg"
-    R.compose_thumbnail(str(hero), title, out, channel="BHARAT KI SOCH")
-    logger.info("thumbnail rebuilt from %s -> %s", hero.name, out)
-    return out
+    import shutil
+    tmp = film.parent / "thumbs_tmp"
+    try:
+        hero = pick_best(candidate_frames(film, tmp=tmp))
+        if not hero:
+            logger.error("no usable frame in %s", film)
+            return None
+        out = film.parent / "thumbnail.jpg"
+        R.compose_thumbnail(str(hero), title, out, channel="BHARAT KI SOCH")
+        logger.info("thumbnail rebuilt from %s -> %s", hero.name, out)
+        return out
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def set_on_youtube(video_id: str, thumb: Path) -> bool:

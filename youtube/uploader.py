@@ -18,6 +18,25 @@ class UploadError(RuntimeError):
     pass
 
 
+def _trim_tags(tags: Optional[List[str]], publishing_key: str = "", max_chars: int = 480) -> List[str]:
+    """Keep tags under YouTube's 500-char API budget while always preserving publishing_key."""
+    cleaned: List[str] = []
+    seen: set = set()
+    ordered = ([publishing_key] if publishing_key else []) + list(tags or [])
+    total = 0
+    for raw in ordered:
+        t = str(raw or "").replace("<", "").replace(">", "").strip()
+        if not t or t in seen:
+            continue
+        cost = len(t) + (3 if "," in t or " " in t else 1)
+        if total + cost > max_chars and t != publishing_key:
+            continue
+        seen.add(t)
+        cleaned.append(t)
+        total += cost
+    return cleaned
+
+
 def publish_key(video_type: str, when=None) -> str:
     """One upload per video type per IST day, e.g. 'bks-news-20261108' (stored as a video tag)."""
     import datetime as _dt
@@ -77,8 +96,8 @@ class YouTubeUploader:
         from googleapiclient.http import MediaFileUpload
 
         youtube = build("youtube", "v3", credentials=creds, cache_discovery=False)
+        tags = _trim_tags(tags, publishing_key)
         if publishing_key:
-            tags = list(tags or []) + [publishing_key]
             if not force:
                 try:
                     existing = find_existing_upload(youtube, publishing_key)

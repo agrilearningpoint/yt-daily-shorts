@@ -58,6 +58,11 @@ def parse_args() -> argparse.Namespace:
         help="Ping every configured LLM provider/model and exit",
     )
     parser.add_argument(
+        "--healthcheck",
+        action="store_true",
+        help="Check pipeline health (last run recency, disk space, LLM quota) and exit",
+    )
+    parser.add_argument(
         "--resume",
         type=str,
         default="",
@@ -79,6 +84,13 @@ async def main_async() -> int:
     if args.dry_run:
         config.set_dry_run(True)
     logger.info("Mode: dry_run=%s strict=%s", config.general.dry_run, config.general.strict_mode)
+
+    if args.healthcheck:
+        from core.healthcheck import check
+        healthy, findings = check(config.database.sqlite_path)
+        for line in findings:
+            print(line)
+        return 0 if healthy else 1
 
     if args.llm_check:
         from core.llm_client import health_check

@@ -78,10 +78,11 @@ class VisualSourcer:
                     got.append(path)
         if len(got) < want * 0.5:
             for q in queries[:AI_CAP_PER_CHAPTER]:
-                if len(got) >= want:
+                if len(got) >= want or self._ai_used >= AI_CAP_PER_CHAPTER * 9:
                     break
                 p = self._ai_one(q, ch_dir)
-                if p:
+                if p and self._accept(p):
+                    self._ai_used += 1
                     got.append(p)
         got = [p for p in got if Path(p).exists()]
         # a chapter must never render with 2-3 pictures: repeat what we have
@@ -206,7 +207,7 @@ class VisualSourcer:
         try:
             from video.image_generator import AIImageGenerator
             gen = AIImageGenerator(self.hf_token)
-            out = gen.generate(prompt, str(path))
+            out = gen.generate(prompt, str(path), width=1344, height=768)
             if out:
                 logger.info("ch ai: %s via %s", query[:40], "hf-space")
                 return out
@@ -248,12 +249,10 @@ class VisualSourcer:
             from video.media_collector import MediaCollector  # reuse the existing junk detector
             with Image.open(path) as im:
                 w, h = im.size
-            if w < MIN_W or h < MIN_H or w / h < 0.5:
+                blank = MediaCollector._looks_blank(im)
+            if w < MIN_W or h < MIN_H or w / h < 0.8 or blank:
                 Path(path).unlink(missing_ok=True)
-                return False
-            if MediaCollector._is_blank_or_logo(Image.open(path)) if hasattr(
-                    MediaCollector, "_is_blank_or_logo") else False:
-                Path(path).unlink(missing_ok=True)
+                self._kept.discard(path)
                 return False
         except Exception:
             pass

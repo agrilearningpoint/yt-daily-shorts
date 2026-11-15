@@ -64,7 +64,7 @@ def make_vision_check(api_key: str, models: Optional[List[str]] = None,
     """
     if not api_key:
         return None
-    models = models or ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
+    models = models or ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash"]
     state = {"calls": 0, "dead": set()}
     lock = threading.Lock()
 
@@ -72,44 +72,55 @@ def make_vision_check(api_key: str, models: Optional[List[str]] = None,
         with lock:
             if state["calls"] >= max_calls:
                 return None          # budget spent: no opinion, caller uses the word-check
+            if all(m in state["dead"] for m in models):
+                return None
             state["calls"] += 1
         try:
-            img = Image.open(path).convert("RGB")
+            with Image.open(path) as raw_im:
+                img = raw_im.convert("RGB")
         except Exception:
             return False
         img.thumbnail((512, 512))
         buf = io.BytesIO()
         img.save(buf, "JPEG", quality=80)
-        prompt = (f"A Hindi news video shows this photo while the narrator says: \"{description}\".\n"
-                  "Does the photo clearly show that scene, its people, place or object (not a random/unrelated "
-                  "stock photo, not a different country's scene, not a logo or text slide, not a social-media post "
-                  "or profile screenshot, not a TV/website screenshot with on-screen text)? Answer only YES or NO.")
+        prompt = (f"A Hindi news/documentary video shows this image while the narrator covers: \"{description}\".\n"
+                  "Does this image clearly and accurately depict that subject, person, place, or event "
+                  "(NOT an unrelated stock photo, NOT a wrong person/country, NOT a plain logo/text slide, "
+                  "NOT a social-media/TV/website screenshot)? Answer strictly YES or NO.")
         body = {"contents": [{"parts": [{"text": prompt},
                                         {"inline_data": {"mime_type": "image/jpeg",
                                                          "data": base64.b64encode(buf.getvalue()).decode()}}]}],
-                "generationConfig": {"temperature": 0, "maxOutputTokens": 5}}
-        tried = 0
+                "generationConfig": {"temperature": 0, "maxOutputTokens": 10}}
         for m in models:
-            if m in state["dead"]:
-                continue
-            tried += 1
+            with lock:
+                if m in state["dead"]:
+                    continue
             try:
                 r = requests.post(URL.format(model=m), params={"key": api_key}, json=body, timeout=30)
-                if r.status_code in (404, 400):
-                    state["dead"].add(m)      # model name not available on this key
+                if r.status_code in (404, 400, 403):
+                    with lock:
+                        state["dead"].add(m)
                     continue
                 if r.status_code == 429:
-                    logger.warning("vision quota exhausted on %s — deferring to the word check", m)
-                    return None
+                    logger.warning("vision quota exhausted on %s — trying fallback model", m)
+                    with lock:
+                        state["dead"].add(m)
+                    continue
                 if r.status_code != 200:
                     continue
-                txt = "".join(p.get("text", "") for p in
-                              r.json()["candidates"][0]["content"]["parts"]).strip().upper()
-                return not txt.startswith("NO")
+                cands = r.json().get("candidates") or []
+                parts = (cands[0].get("content") or {}).get("parts") or [] if cands else []
+                txt = "".join(p.get("text", "") for p in parts).strip().upper()
+                if not txt:
+                    continue
+                toks = re.findall(r"[A-Z]+", txt)
+                if toks and toks[0] == "NO":
+                    return False
+                if "NO" in toks and "YES" not in toks:
+                    return False
+                return True
             except Exception as exc:
                 logger.debug("vision %s failed: %s", m, exc)
-        if tried == 0:
-            return None
         return None   # every model failed: no opinion, not a rejection
 
     return check

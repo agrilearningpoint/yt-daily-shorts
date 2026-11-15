@@ -112,8 +112,12 @@ jobs:
       - name: Restore state (so the film is listed in history)
         continue-on-error: true
         run: |
-          git fetch origin state 2>/dev/null || true
-          git checkout origin/state -- data 2>/dev/null || true
+          mkdir -p data
+          if git fetch -q origin state 2>/dev/null; then
+            for f in history.json editor_memory.json yt_shorts.db; do
+              git show "FETCH_HEAD:$f" > "/tmp/$f" 2>/dev/null && [ -s "/tmp/$f" ] && mv "/tmp/$f" "data/$f" && echo "restored $f"
+            done
+          fi
           ls -la data 2>/dev/null | head
 
       - name: Script health check (LLM chain)
@@ -155,8 +159,9 @@ jobs:
               repo = os.environ.get("YT_HF_REPO_ID", "")
               if not repo or not os.environ.get("YT_HF_TOKEN"):
                   print("storage disabled"); raise SystemExit(0)
+              from pathlib import Path
               for f in glob.glob("output/long/**/film_1080p.mp4", recursive=True):
-                  vid = f.split("/")[-2]
+                  vid = Path(f).parent.name
                   api.upload_file(path_or_fileobj=f, path_in_repo=f"long/{vid}/film_1080p.mp4", repo_id=repo, repo_type="dataset")
                   print("mirrored", vid)
                   for extra in ("film.srt", "thumbnail.jpg", "manifest.json"):

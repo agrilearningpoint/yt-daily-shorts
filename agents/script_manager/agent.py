@@ -180,10 +180,13 @@ class ScriptManagerAgent(BaseAgent):
                     else:
                         rem = 20 - total_w
                         if rem >= 4:
-                            s_end = " ".join(w[:rem]).rstrip("?,.") + "?"
+                            s_end = " ".join(w[:rem]).rstrip("।,?.") + "।"
                             kept.append(dict(pt, say=s_end))
                         break
                 if kept:
+                    last_say = kept[-1]["say"].strip()
+                    if last_say and last_say[-1] not in "।?!.":
+                        kept[-1]["say"] = last_say.rstrip(",") + "।"
                     new_parts = kept
             # 3. Ensure at least 2 parts per scene for dynamic visual cuts
             if len(new_parts) == 1:
@@ -222,7 +225,7 @@ class ScriptManagerAgent(BaseAgent):
         problems = []
         if script.video_type == "news":
             t = self._targets()
-            nat = [s for s in script.scenes if s.section != "international"]
+            nat = [s for s in script.scenes if s.section not in ("international", "today")]
             intl = [s for s in script.scenes if s.section == "international"]
             if len(nat) < t["min_national"]:
                 problems.append(f"only {len(nat)} national stories, need {t['national']}")

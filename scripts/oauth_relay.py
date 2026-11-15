@@ -40,8 +40,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube",
     "https://www.googleapis.com/auth/yt-analytics.readonly",
 ]
-REPO = "agrilearningpoint/yt-daily-shorts"
-STATE: dict = {"state": "FULLSCOPE1", "result": None, "error": "", "log": []}
+REPO = os.environ.get("YT_GITHUB_REPO", "agrilearningpoint/yt-daily-shorts")
+STATE: dict = {"state": "", "result": None, "error": "", "log": []}
 
 
 def note(msg: str) -> None:
@@ -108,18 +108,22 @@ def verify(creds) -> dict:
     from googleapiclient.discovery import build
 
     api = build("youtube", "v3", credentials=creds, cache_discovery=False)
-    items = (api.channels().list(part="snippet", mine=True).execute().get("items") or [])
+    items = (api.channels().list(part="snippet,statistics", mine=True).execute().get("items") or [])
     if not items:
         raise RuntimeError("इस account का कोई YouTube channel नहीं मिला — channel वाले account से sign in करें")
     ch = items[0]
-    return {"channel": ch["snippet"]["title"], "id": ch["id"]}
+    stats = ch.get("statistics", {})
+    return {"channel": ch["snippet"]["title"], "id": ch["id"],
+            "subs": stats.get("subscriberCount", "0"), "videos": stats.get("videoCount", "0")}
 
 
 def set_github_secret(name: str, value: str) -> None:
     import requests
     from nacl import encoding, public
 
-    token = os.environ.get("GH_TOKEN", "").strip() or Path("/home/user/.secrets/github_token").read_text().strip()
+    token = (os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError("GH_TOKEN environment variable not set")
     h = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
     r = requests.get(f"https://api.github.com/repos/{REPO}/actions/secrets/public-key", headers=h, timeout=30)
     r.raise_for_status()
@@ -156,7 +160,7 @@ PAGE = """<!doctype html><html lang="hi"><head><meta charset="utf-8">
 STEP1 = """<div class="step"><span class="n">!</span><b>Sign in नहीं खुल रहा?</b>
  <p>Google सिर्फ़ Chrome / Edge / Firefox / Safari में sign-in करने देता है। WhatsApp/Instagram के
  अंदरले browser, या Google app के in-app view में Allow button नहीं आता — पेज नीचे link copy करके
- <b>Chrome में paste</b> करें। साथ ही उसी browser में <code>abhi.socialservices@gmail.com</code> से
+ <b>Chrome में paste</b> करें। साथ ही उसी browser में अपने YouTube channel वाले Google account से
  पहले से sign in रहें (एक ही account — वरना Google सीधे redirect कर देता है और Allow नहीं दिखता)।</p></div>
 <div class="step"><span class="n">1</span><b>Google से जोड़ें</b>
  <p>नीचे वाले button से sign in करें — वही account जो channel का owner है।</p>
@@ -264,11 +268,12 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> int:
     ap = argparse.ArgumentParser(prog="oauth_relay")
+    ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
     a = ap.parse_args()
     Handler.port = a.port
-    srv = ThreadingHTTPServer(("0.0.0.0", a.port), Handler)
-    note(f"listening on 0.0.0.0:{a.port}")
+    srv = ThreadingHTTPServer((a.host, a.port), Handler)
+    note(f"listening on {a.host}:{a.port}")
     srv.serve_forever()
     return 0
 

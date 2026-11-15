@@ -145,35 +145,42 @@ def make_clip(image_path: str, out_path: str, seconds: float, width: int = 1080,
     gx, gy = np.meshgrid(np.arange(width, dtype=np.float32) - width / 2,
                          np.arange(height, dtype=np.float32) - height / 2)
     cx, cy = sw / 2, sh / 2
-    pad = min((sw - width) / 2, (sh - height) / 2)
-    amp = max(18.0, min(pad * 0.75, 70.0)) * strength      # near-object travel in px
+    pad = max(0.0, min((sw - width) / 2, (sh - height) / 2))
+    amp = min(max(14.0, min(pad * 0.72, 68.0)), max(pad * 0.85, 8.0)) * strength
+    base_zoom = max(1.0, 1.0 + (2.0 * abs(amp) + 4.0) / max(min(width, height), 1)) if pad < 12.0 else 1.0
     dirs = [(0, 0, 1), (1, 0, 0), (-1, 0, 0), (0, -1, 1), (1, -1, 0), (-1, 1, 1)]
     dx, dy, dolly = dirs[style % len(dirs)]
     proc = subprocess.Popen(
         [ffmpeg, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{width}x{height}",
          "-r", str(fps), "-i", "-", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
          "-pix_fmt", "yuv420p", out_path], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+    denom = max(frames - 1, 1)
     try:
         for i in range(frames):
-            t = _ease(i / (frames - 1))
-            zoom = 1.0 + 0.045 * t                           # gentle overall push
+            t = _ease(i / denom)
+            zoom = base_zoom + 0.045 * t                     # gentle overall push
             bx, by = cx + gx / zoom, cy + gy / zoom
             d = cv2.remap(depth, bx, by, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
             k = d - 0.5                                       # near moves one way, far the other
             near_zoom = 1.0 + (0.07 * t * d if dolly else 0.0)
             ox = dx * amp * (t - 0.5) * k * 2
             oy = dy * amp * (t - 0.5) * k * 2
-            mx = cx + gx / (zoom * near_zoom) - ox
-            my = cy + gy / (zoom * near_zoom) - oy
-            frame = cv2.remap(img, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+            mx = np.clip(cx + gx / (zoom * near_zoom) - ox, 0, sw - 1)
+            my = np.clip(cy + gy / (zoom * near_zoom) - oy, 0, sh - 1)
+            frame = cv2.remap(img, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
             proc.stdin.write(frame.tobytes())
         proc.stdin.close()
         rc = proc.wait(timeout=180)
+        stderr_tail = (proc.stderr.read() or b"")[-300:] if proc.stderr else b""
     except Exception as exc:
-        proc.kill()
+        try:
+            proc.kill()
+            proc.wait(timeout=10)
+        except Exception:
+            pass
         logger.warning("parallax render failed: %s", exc)
         return None
     if rc != 0 or not Path(out_path).exists():
-        logger.warning("parallax encode failed: %s", (proc.stderr.read() or b"")[-300:])
+        logger.warning("parallax encode failed: %s", stderr_tail)
         return None
     return out_path

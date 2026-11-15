@@ -8,6 +8,7 @@ Run with shell credentials provider github-pat. Prints one status line:
 """
 import datetime as dt
 import json
+import os
 import re
 import sys
 import urllib.request
@@ -17,8 +18,18 @@ API = f"https://api.github.com/repos/{REPO}"
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 
 
+def _gh_headers(extra=None):
+    h = {"Accept": "application/vnd.github+json"}
+    tok = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
+    if tok:
+        h["Authorization"] = f"Bearer {tok.strip()}"
+    if extra:
+        h.update(extra)
+    return h
+
+
 def get(url, raw=False):
-    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+    req = urllib.request.Request(url, headers=_gh_headers())
     with urllib.request.urlopen(req, timeout=60) as r:
         data = r.read()
     return data if raw else json.loads(data)
@@ -47,7 +58,7 @@ def main():
             return
         if r["conclusion"] == "success":
             log = run_log(r["id"])
-            m = re.search(r"done: (https://youtube\.com/shorts/\S+)", log)
+            m = re.search(r"done: (https://(?:youtu\.be|youtube\.com/shorts)/\S+)", log)
             if m:
                 print(f"DONE {m.group(1)}")
                 return
@@ -56,8 +67,7 @@ def main():
                 return
     body = json.dumps({"ref": "main", "inputs": {"video_type": "news", "dry_run": "false"}}).encode()
     req = urllib.request.Request(f"{API}/actions/workflows/daily_shorts.yml/dispatches", data=body, method="POST",
-                                 headers={"Accept": "application/vnd.github+json",
-                                          "Content-Type": "application/json"})
+                                 headers=_gh_headers({"Content-Type": "application/json"}))
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             print("DISPATCHED" if r.status == 204 else f"FAILED_DISPATCH {r.status}")

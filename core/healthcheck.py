@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -21,34 +21,56 @@ MAX_AGE_HOURS = 30.0       # a daily channel must have produced something in thi
 
 
 def _last_success(state_db: Path) -> Optional[datetime]:
+    if not state_db.exists():
+        return None
     try:
         import sqlite3
-        con = sqlite3.connect(str(state_db))
+        con = sqlite3.connect(f"file:{state_db.resolve()}?mode=ro", uri=True)
         cur = con.cursor()
         cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [r[0] for r in cur.fetchall()]
         stamps: List[str] = []
-        for t in tables:
-            try:
-                cur.execute(f"SELECT * FROM {t} LIMIT 0")
-                cols = [d[0] for d in cur.description]
-            except Exception:
-                continue
-            for col in ("updated_at", "created_at", "completed_at", "timestamp"):
-                if col in cols:
-                    try:
-                        cur.execute(f"SELECT {col} FROM {t} WHERE {col} IS NOT NULL ORDER BY {col} DESC LIMIT 1")
-                        row = cur.fetchone()
-                        if row and row[0]:
-                            stamps.append(str(row[0]))
-                    except Exception:
-                        continue
+        if "video_states" in tables:
+            cur.execute(
+                "SELECT updated_at FROM video_states "
+                "WHERE state = 'completed' AND updated_at IS NOT NULL "
+                "ORDER BY updated_at DESC LIMIT 1"
+            )
+            row = cur.fetchone()
+            if row and row[0]:
+                stamps.append(str(row[0]))
+        else:
+            for t in tables:
+                try:
+                    cur.execute(f"SELECT * FROM {t} LIMIT 0")
+                    cols = [d[0] for d in cur.description]
+                except Exception:
+                    continue
+                for col in ("completed_at", "updated_at", "created_at", "timestamp"):
+                    if col in cols:
+                        try:
+                            cur.execute(f"SELECT {col} FROM {t} WHERE {col} IS NOT NULL ORDER BY {col} DESC LIMIT 1")
+                            row = cur.fetchone()
+                            if row and row[0]:
+                                stamps.append(str(row[0]))
+                        except Exception:
+                            continue
         con.close()
         parsed = []
         for s in stamps:
+            try:
+                dt_obj = datetime.fromisoformat(s.replace("Z", "+00:00"))
+                if dt_obj.tzinfo is None:
+                    dt_obj = dt_obj.replace(tzinfo=timezone.utc)
+                else:
+                    dt_obj = dt_obj.astimezone(timezone.utc)
+                parsed.append(dt_obj)
+                continue
+            except ValueError:
+                pass
             for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
                 try:
-                    parsed.append(datetime.strptime(s[:19], fmt))
+                    parsed.append(datetime.strptime(s[:19], fmt).replace(tzinfo=timezone.utc))
                     break
                 except ValueError:
                     continue
@@ -74,7 +96,9 @@ def check(state_db: str = "data/yt_shorts.db") -> Tuple[bool, List[str]]:
     if last is None:
         findings.append("⚠️ state DB me koi successful run record nahi mila")
     else:
-        age = (datetime.now() - last).total_seconds() / 3600.0
+        now_utc = datetime.now(timezone.utc)
+        ref = last if last.tzinfo else last.replace(tzinfo=timezone.utc)
+        age = (now_utc - ref).total_seconds() / 3600.0
         if age > MAX_AGE_HOURS:
             healthy = False
             findings.append(f"🚨 pichla successful run {age:.0f} घंटे पहले tha (limit {MAX_AGE_HOURS:.0f}h)")
@@ -110,9 +134,10 @@ def check(state_db: str = "data/yt_shorts.db") -> Tuple[bool, List[str]]:
 def notify(findings: List[str]) -> None:
     try:
         from core.configuration import load_config
-        from telegram.notifier import TelegramNotifier
+        from telegram.bot import TelegramNotifier
         cfg = load_config()
-        TelegramNotifier(cfg.telegram).send_message("🩺 <b>Healthcheck</b>\n" + "\n".join(findings))
+        TelegramNotifier(cfg.telegram.bot_token, cfg.telegram.chat_id).send_message(
+            "🩺 <b>Healthcheck</b>\n" + "\n".join(findings))
     except Exception as exc:
         logger.warning("healthcheck notify skipped: %s", exc)
 

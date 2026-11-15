@@ -190,13 +190,17 @@ def _stems(text: str) -> str:
 def market_score(title: str, summary: str = "") -> int:
     """0 = not a market story, 1..3 = impact tier (higher = runs earlier)."""
     text = f"{title} {summary}".lower()
-    stems = _stems(text)
+    stem_tokens = set(stems_list := _stems(text).split())
     for tier, weight in (("high", 3), ("mid", 2), ("low", 1)):
         for term in MARKET_TERMS[tier]:
             t = term.lower()
-            if t in text:                       # exact / multi-word / English
+            if re.fullmatch(r"[a-z0-9\s&.-]+", t):
+                if re.search(rf"(?<![a-z0-9]){re.escape(t)}(?![a-z0-9])", text):
+                    return weight
+            elif t in text:
                 return weight
-            if any(_stem(part) in stems.split() for part in t.split() if len(part) > 2):
+            parts = [part for part in t.split() if len(part) > 2]
+            if parts and all(_stem(part) in stem_tokens for part in parts):
                 return weight
     return 0
 

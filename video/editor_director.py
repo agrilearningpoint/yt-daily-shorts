@@ -14,7 +14,7 @@ import json
 import logging
 import random
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -63,14 +63,14 @@ def _save(mem: Dict[str, Any]) -> None:
 class EditorDirector:
     def __init__(self, gemini_key: str = "", models: Optional[List[str]] = None):
         self.key = gemini_key
-        self.models = models or ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
+        self.models = models or ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
         self.mem = _load()
 
     # ------------------------------------------------------------------ plan
     def plan(self, video_type: str = "news") -> Dict[str, Any]:
         scores = self.mem.get("option_scores", {})
         last = (self.mem.get("runs") or [{}])[-1].get("recipe", {})
-        rng = random.Random(datetime.utcnow().strftime("%Y%m%d%H") + video_type)
+        rng = random.Random(datetime.now(timezone.utc).strftime("%Y%m%d%H") + video_type)
         recipe: Dict[str, Any] = {}
         for key, options in STYLE_SPACE.items():
             weights = []
@@ -133,7 +133,12 @@ class EditorDirector:
                         continue
                     txt = "".join(p.get("text", "") for p in r.json()["candidates"][0]["content"]["parts"])
                     data = json.loads(txt[txt.find("{"): txt.rfind("}") + 1])
-                    result = {"score": float(data.get("score", 0)) or None, "notes": data.get("notes", [])[:3],
+                    raw_score = data.get("score")
+                    try:
+                        sc = max(1.0, min(10.0, float(raw_score))) if raw_score is not None else None
+                    except (TypeError, ValueError):
+                        sc = None
+                    result = {"score": sc, "notes": [str(n) for n in (data.get("notes") or [])][:3],
                               "bad_tiles": [int(x) for x in (data.get("bad_tiles") or []) if str(x).isdigit()][:12]}
                     break
                 except Exception as exc:
@@ -146,7 +151,7 @@ class EditorDirector:
     def _learn(self, recipe: Dict[str, Any], result: Dict[str, Any]) -> None:
         mem = self.mem
         clean = {k: v for k, v in recipe.items() if k in STYLE_SPACE}
-        mem.setdefault("runs", []).append({"at": datetime.utcnow().isoformat(timespec="minutes"),
+        mem.setdefault("runs", []).append({"at": datetime.now(timezone.utc).isoformat(timespec="minutes"),
                                            "recipe": clean, "score": result.get("score")})
         if result.get("score"):
             for k, v in clean.items():

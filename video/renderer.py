@@ -28,6 +28,24 @@ class RenderError(RuntimeError):
     pass
 
 
+def quantize_durations(raw_durs: List[float], fps: int = 30, tail: float = 0.0) -> List[float]:
+    """Quantize beat durations to exact integer frames with zero cumulative drift."""
+    if not raw_durs:
+        return []
+    adjusted = list(raw_durs)
+    adjusted[-1] = max(0.2, adjusted[-1] + tail)
+    out: List[float] = []
+    cum_target = 0.0
+    cur_frame = 0
+    for d in adjusted:
+        cum_target += max(d, 2.0 / fps)
+        end_frame = max(cur_frame + 2, int(round(cum_target * fps)))
+        n_frames = end_frame - cur_frame
+        out.append(n_frames / fps)
+        cur_frame = end_frame
+    return out
+
+
 @dataclass
 class SceneClip:
     background: str
@@ -216,8 +234,8 @@ class VideoRenderer:
         out = Path(output_path)
         work = out.parent / "_clips"
         work.mkdir(parents=True, exist_ok=True)
-        durs = [c.duration / tempo for c in clips]
-        durs[-1] += TAIL
+        tempo = max(0.5, min(float(tempo or 1.0), 2.0))
+        durs = quantize_durations([c.duration / tempo for c in clips], fps=self.fps, tail=TAIL)
         # frame-accurate lengths so cuts stay in sync with the voice
         self._prepare_depth(clips, durs, work)
         paths = []
@@ -262,12 +280,12 @@ class VideoRenderer:
                 for k, ct in enumerate(cut_times):
                     wd = max(int((ct - 0.18) * 1000), 0)
                     pd = int((ct + 0.22) * 1000)
-                    fc.append(f"[w{k}]adelay={wd}|{wd},volume=0.32[wd{k}]")
-                    fc.append(f"[p{k}]adelay={pd}|{pd},volume=0.22[pd{k}]")
+                    fc.append(f"[w{k}]adelay={wd}|{wd},volume=0.22[wd{k}]")
+                    fc.append(f"[p{k}]adelay={pd}|{pd},volume=0.16[pd{k}]")
                 fc.append("".join(f"[wd{k}][pd{k}]" for k in range(n))
                           + f"amix=inputs={2 * n}:normalize=0:duration=longest[fxcuts]")
                 mix.append("[fxcuts]")
-            fc.append(f"[{h_i}:a]volume=0.8[hit]")
+            fc.append(f"[{h_i}:a]volume=0.35[hit]")
             mix.append("[hit]")
         if len(mix) == 1:
             fc.append(f"[voice]loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=in:st=0:d=0.25,afade=t=out:st={max(total - 0.6, 0):.2f}:d=0.6[aout]")

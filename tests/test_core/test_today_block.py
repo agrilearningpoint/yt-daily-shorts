@@ -58,20 +58,20 @@ def test_fallback_intro_always_has_the_date():
     assert out["beats"][-1]["kind"] == "trading" and "सेंसेक्स" in says
 
 
-def test_voice_speed_is_the_configured_1_2x():
-    assert WORDS_PER_SEC["news"] > 2.6      # 2.3 * 1.2
-    assert WORDS_PER_SEC["knowledge"] > 2.8  # 2.4 * 1.2
+def test_voice_speed_is_the_configured_1_05x():
+    assert 2.35 <= WORDS_PER_SEC["news"] <= 2.50       # 2.3 * 1.05 = 2.415
+    assert 2.45 <= WORDS_PER_SEC["knowledge"] <= 2.60  # 2.4 * 1.05 = 2.52
 
 
-def test_news_duration_budget_counts_the_faster_voice():
-    """2.76 words/s at 1.2x: a 120 s bulletin needs more words than the old 2.3 estimate allowed."""
+def test_news_duration_budget_counts_the_natural_voice():
+    """2.415 words/s at 1.05x: matches natural unhurried news bulletin pacing."""
     from core.duration import estimate_seconds
 
     script = {"video_type": "news", "hook": "", "outro": "",
-              "scenes": [{"narration": " ".join(["शब्द"] * 300)},
-                         {"narration": " ".join(["शब्द"] * 31)}]}
+              "scenes": [{"narration": " ".join(["शब्द"] * 260)},
+                         {"narration": " ".join(["शब्द"] * 30)}]}
     est = estimate_seconds(script)
-    assert 118 <= est <= 122          # 331 / 2.76
+    assert 118 <= est <= 122          # 290 / 2.415
 
 
 def test_visual_quality_is_reported_for_every_render():

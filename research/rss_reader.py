@@ -78,7 +78,11 @@ class RSSReader:
                 date_str = entry.get("published", "") or entry.get("updated", "")
                 if date_str:
                     try:
-                        pub_date = date_parser.parse(date_str)
+                        if date_parser is not None:
+                            pub_date = date_parser.parse(date_str)
+                        else:
+                            from email.utils import parsedate_to_datetime
+                            pub_date = parsedate_to_datetime(date_str)
                         if pub_date and pub_date.tzinfo is None:
                             pub_date = pub_date.replace(tzinfo=timezone.utc)
                     except Exception:

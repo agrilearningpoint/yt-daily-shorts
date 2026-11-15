@@ -76,8 +76,14 @@ class SceneComposer:
                            card_text: str = "") -> str:
         bw, bh = int(W * ZOOM_PAD), int(H * ZOOM_PAD)
         box = ""
+        src = None
         if image_path and Path(image_path).exists():
-            src = Image.open(image_path).convert("RGB")
+            try:
+                with Image.open(image_path) as _im:
+                    src = _im.convert("RGB")
+            except Exception:
+                src = None
+        if src is not None:
             # blurred cover fill
             scale = max(bw / src.width, bh / src.height)
             fill = src.resize((int(src.width * scale) + 1, int(src.height * scale) + 1))
@@ -208,6 +214,7 @@ class SceneComposer:
         self.compose_background(image_path, bg_path, seed=7)
         bg = Image.open(bg_path).convert("RGB")
         bw, bh = bg.size
+        Path(bg_path + ".box").unlink(missing_ok=True)
         bg = bg.crop(((bw - W) // 2, (bh - H) // 2, (bw - W) // 2 + W, (bh - H) // 2 + H))
         d = ImageDraw.Draw(bg)
         f = font(132)
@@ -369,5 +376,6 @@ def compose_title_card(composer: "SceneComposer", out_path: str, big: str, small
                                 fill=composer.primary + (255,))
             d.text(((bw - tw) / 2, y + 28), ln, font=sf, fill=(10, 10, 10, 255))
             y += 120
+    Path(out_path + ".box").unlink(missing_ok=True)
     img.convert("RGB").save(out_path, "JPEG", quality=92)
     return out_path

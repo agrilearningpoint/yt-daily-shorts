@@ -186,9 +186,14 @@ class LongFormPipeline:
         card = R.make_card(f"अध्याय {idx + 1} / {total}", ch["title"], ch_dir / "card.jpg")
         pieces.append(R.render_still(card, CARD_SECONDS, str(ch_dir / "p_card.mp4"), seed=idx))
 
+        from video.renderer import quantize_durations
+        raw_spans: List[float] = []
         for j, cue in enumerate(cues):
-            span = max(1.2, cue["end"] - cue["start"])
-            img = images[j % len(images)]
+            next_start = cues[j + 1]["start"] if j + 1 < len(cues) else max(dur, cue["end"])
+            raw_spans.append(max(0.25, next_start - cue["start"]))
+        q_spans = quantize_durations(raw_spans, fps=R.FPS) if raw_spans else []
+        for j, (cue, span) in enumerate(zip(cues, q_spans)):
+            img = images[j % len(images)] if images else card
             png = R.subtitle_png(cue["text"], ch_dir / f"sub_{j:03d}.png")
             pieces.append(R.render_still(img, span, str(ch_dir / f"c_{j:03d}.mp4"),
                                          seed=idx + j, overlay=png))
@@ -295,10 +300,10 @@ class LongFormPipeline:
         parts.append(str(tail_av))
 
         joined = R.concat(parts, str(self.work / "joined.mp4"), self.work, reencode=True)
-        self._merge_srt(chs)
         R.run([R.ff(), "-y", "-i", joined, "-c", "copy", "-movflags", "+faststart", str(film)],
               "finalise film")
         self._fill_start_times(chs, film)
+        self._merge_srt(chs)
         return str(film)
 
     def _merge_srt(self, chs: List[Dict]) -> None:

@@ -96,8 +96,9 @@ class AIImageGenerator:
         return self._space_clients[space_id]
 
     # ------------------------------------------------------------------ images
-    def generate(self, prompt: str, output_path: str) -> Optional[str]:
-        """Render one vertical image. Returns the saved path or ``None``."""
+    def generate(self, prompt: str, output_path: str, width: int = 768, height: int = 1344) -> Optional[str]:
+        """Render one image. Returns the saved path or ``None``."""
+        self._req_size = (width, height)
         out_file = Path(output_path)
         out_file.parent.mkdir(parents=True, exist_ok=True)
         text = (prompt or "") + _PROMPT_SUFFIX
@@ -148,12 +149,13 @@ class AIImageGenerator:
         for space_id in self.spaces:
             try:
                 client = self._get_space(space_id)
+                req_w, req_h = getattr(self, "_req_size", (768, 1344))
                 result = client.predict(
                     prompt=text,
                     seed=0,
                     randomize_seed=True,
-                    width=768,
-                    height=1344,
+                    width=req_w,
+                    height=req_h,
                     num_inference_steps=4,
                     api_name=_SPACE_API,
                 )
@@ -177,15 +179,21 @@ class AIImageGenerator:
             import requests
             from urllib.parse import quote
 
+            import shutil
+            req_w, req_h = getattr(self, "_req_size", (768, 1344))
             url = "https://image.pollinations.ai/prompt/" + quote(text[:900], safe="")
-            resp = requests.get(url, params={"width": 768, "height": 1344, "model": "flux",
+            resp = requests.get(url, params={"width": req_w, "height": req_h, "model": "flux",
                                              "nologo": "true", "enhance": "false"},
                                 timeout=self.timeout)
             if resp.status_code != 200 or len(resp.content) < 20_000:
                 raise RuntimeError(f"HTTP {resp.status_code}, {len(resp.content)} bytes")
-            tmp = Path(tempfile.mkdtemp()) / "pollinations.img"
-            tmp.write_bytes(resp.content)
-            self._normalise_image(str(tmp), out_file)
+            tmp_dir = Path(tempfile.mkdtemp())
+            try:
+                tmp = tmp_dir / "pollinations.img"
+                tmp.write_bytes(resp.content)
+                self._normalise_image(str(tmp), out_file)
+            finally:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
             return True
         except Exception as exc:  # noqa: BLE001
             self.last_error = f"pollinations: {type(exc).__name__}: {str(exc)[:160]}"

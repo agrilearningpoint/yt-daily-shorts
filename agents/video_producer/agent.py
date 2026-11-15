@@ -110,7 +110,7 @@ class VideoProducerAgent(BaseAgent):
             first = (scenes[0].get("parts") or [{}])[0] if scenes else {}
             beats.append({"kind": "hook", "text": hook, "chip": "", "category": "",
                           "parts": [{"say": hook, "visual": first.get("visual", "") or topic_kw,
-                                     "entity": first.get("entity", "") or scenes[0].get("image_query", "") if scenes else "",
+                                     "entity": first.get("entity", "") or (scenes[0].get("image_query", "") if scenes else ""),
                                      "search": first.get("search", "") or topic_kw, "source": first.get("source", ""),
                                      "preferred": lead_image}]})
         for i, s in enumerate(scenes):
@@ -128,6 +128,8 @@ class VideoProducerAgent(BaseAgent):
                 nq = it.get("title") or s.get("headline") or s.get("on_screen_text", "")
                 for p in parts:
                     p["news_query"] = nq
+                    if p.get("search") and p.get("search") != nq:
+                        p["news_query_en"] = p["search"]
             elif topic_kw:
                 for p in parts:
                     if p.get("search") and topic_kw.lower().split()[0] not in p["search"].lower():
@@ -307,9 +309,11 @@ class VideoProducerAgent(BaseAgent):
         # ---- 4. render ---------------------------------------------------------
         final_path = str(out_dir / "final_short.mp4")
         captions = srt_path = None
+        beat_words = getattr(voice, "beat_words", None) or []
         if getattr(vcfg, "burn_captions", True):
             try:
-                captions, srt_path = self._captions(clips, clip_meta, tempo, out_dir)
+                captions, srt_path = self._captions(clips, clip_meta, tempo, out_dir,
+                                                    beat_words=beat_words, seg_owner=seg_owner)
             except Exception as exc:
                 self.logger.warning("captions skipped: %s", exc)
         self._captions_ass = captions
@@ -382,8 +386,9 @@ class VideoProducerAgent(BaseAgent):
         targets = set()
         for tile in bad:
             sec = tile * 3.0 + 0.5
-            idx = max(j for j, st in enumerate(starts) if st <= sec) if starts else 0
-            if clip_meta[idx]["kind"] == "item":
+            past = [j for j, st in enumerate(starts) if st <= sec]
+            idx = max(past) if past else 0
+            if idx < len(clip_meta) and clip_meta[idx]["kind"] == "item":
                 targets.add(idx)
         targets = sorted(targets)[:8]
         if not targets:
@@ -429,26 +434,42 @@ class VideoProducerAgent(BaseAgent):
             return second, review2
         return final_path, review
 
-    def _captions(self, clips, clip_meta, tempo, out_dir):
-        """Word-synced Hindi captions. Each picture has its own voiced line, so words are timed inside that
-        line's exact audio window (weighted by word length) -> captions stay locked to the voice."""
+    def _captions(self, clips, clip_meta, tempo, out_dir, beat_words=None, seg_owner=None):
+        """Word-synced Hindi captions aligned to real TTS WordBoundary timings when available."""
         from video.subtitle_generator import SubtitleGenerator
+        from video.renderer import quantize_durations
+        scale = 1.0 / (tempo or 1.0)
+        q_durs = quantize_durations([c.duration * scale for c in clips], fps=self.renderer.fps, tail=0.0)
+        owner_words = {}
+        if beat_words and seg_owner and len(beat_words) == len(seg_owner):
+            for own, bw in zip(seg_owner, beat_words):
+                owner_words[own] = bw
         words, t = [], 0.0
-        for c, m in zip(clips, clip_meta):
-            dur = c.duration / (tempo or 1.0)
-            # title/section/outro cards already show big text: no captions on top of them
-            say = (m["spec"].get("say") or "").strip() if m.get("kind") == "item" else ""
-            toks = say.split()
-            if toks:
-                lead, span = 0.06, dur * 0.94 - 0.06
-                weights = [len(w) + 2 for w in toks]
-                tot = float(sum(weights))
-                cur = t + lead
-                for w, wt in zip(toks, weights):
-                    d = span * wt / tot
-                    words.append({"word": w, "start": round(cur, 3), "end": round(cur + d, 3)})
-                    cur += d
-            t += dur
+        for qd, m in zip(q_durs, clip_meta):
+            if m.get("kind") == "item":
+                own = (m["beat"], m["part"])
+                real_bw = owner_words.get(own) or []
+                if real_bw:
+                    base0 = real_bw[0].start
+                    orig_span = max((real_bw[-1].end - base0), 0.1)
+                    wscale = min(qd * 0.95 / orig_span, scale * 1.15) if orig_span > qd else scale
+                    for w in real_bw:
+                        st = round(t + max(0.0, (w.start - base0) * wscale), 3)
+                        en = round(min(t + qd - 0.02, max(st + 0.04, t + (w.end - base0) * wscale)), 3)
+                        words.append({"word": w.word, "start": st, "end": en})
+                else:
+                    say = (m["spec"].get("say") or "").strip()
+                    toks = say.split()
+                    if toks:
+                        lead, span = 0.05, max(0.1, qd * 0.94 - 0.05)
+                        weights = [len(w) + 2 for w in toks]
+                        tot = float(sum(weights))
+                        cur = t + lead
+                        for w, wt in zip(toks, weights):
+                            d = span * wt / tot
+                            words.append({"word": w, "start": round(cur, 3), "end": round(cur + d, 3)})
+                            cur += d
+            t += qd
         if not words:
             return None, None
         gen = SubtitleGenerator()

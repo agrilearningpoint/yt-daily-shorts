@@ -55,7 +55,7 @@ def newsdata(key: str) -> List[RawArticle]:
                 if a.get("duplicate"):
                     continue
                 out.append(RawArticle(a.get("title", "") or "", a.get("link", "") or "", a.get("description", "") or "",
-                                      _dt(a.get("pubDate", "") + " UTC"), "NewsData", (a.get("language") or "hi")[:2],
+                                      _dt(a.get("pubDate", "")), "NewsData", (a.get("language") or "hi")[:2],
                                       a.get("image_url", "") or "", region, a.get("source_name", "") or ""))
             if not r.ok:
                 logger.warning("NewsData HTTP %s", r.status_code)

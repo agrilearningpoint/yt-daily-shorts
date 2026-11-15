@@ -55,18 +55,23 @@ class TelegramNotifier:
         if Path(video_path).stat().st_size > 48 * 1024 * 1024:
             logger.info("Video too large for Telegram bot upload; skipped.")
             return False
+        files = {}
         try:
-            files = {"video": open(video_path, "rb")}
+            files["video"] = open(video_path, "rb")
             if thumb_path and Path(thumb_path).exists():
                 files["thumbnail"] = open(thumb_path, "rb")
             data = {"chat_id": self.chat_id, "caption": caption[:1000], "parse_mode": "HTML",
                     "supports_streaming": "true", "width": 1080, "height": 1920}
             resp = requests.post(self._api("sendVideo"), data=data, files=files, timeout=180)
-            for f in files.values():
-                f.close()
             if resp.status_code != 200:
                 logger.warning("Telegram sendVideo %s: %s", resp.status_code, resp.text[:200])
             return resp.status_code == 200
         except Exception as exc:
             logger.warning("Telegram sendVideo failed: %s", exc)
             return False
+        finally:
+            for f in files.values():
+                try:
+                    f.close()
+                except Exception:
+                    pass

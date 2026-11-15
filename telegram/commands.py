@@ -17,15 +17,18 @@ class CommandDispatcher:
 
     def is_authorized(self, user_id: str) -> bool:
         if not self.authorized_ids:
-            return True
-        return str(user_id) in self.authorized_ids
+            return False
+        return str(user_id) in {str(x) for x in self.authorized_ids}
 
     def handle_command(self, command: str, user_id: str, context_data: Dict[str, Any]) -> str:
         """Route command and return reply text."""
         if not self.is_authorized(user_id):
             return "⛔ Unauthorized. You do not have permission to manage this bot."
 
-        cmd = command.strip().lower().split()[0]
+        parts = (command or "").strip().lower().split()
+        if not parts:
+            return "ℹ️ Type /help for available commands."
+        cmd = parts[0]
         if cmd in ("/start", "/help"):
             return (
                 "🤖 *YouTube Shorts Automation Bot*\n\n"

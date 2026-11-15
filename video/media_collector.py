@@ -46,6 +46,7 @@ class MediaCollector:
         self.use_openverse = use_openverse
         self.timeout = timeout
         self._used: set = set()
+        self._used_hashes: set = set()
         self.agnes_key = agnes_key
         self.agnes_model = agnes_model
         self.use_publisher_images = use_publisher_images
@@ -74,8 +75,13 @@ class MediaCollector:
             if self._looks_blank(img):
                 logger.info("rejecting blank/logo-like image %s", url)
                 return None
+            digest = hashlib.sha1(img.tobytes()).hexdigest()
+            if digest in self._used_hashes:
+                logger.info("rejecting duplicate image content %s", url)
+                return None
             img.save(dest, "JPEG", quality=92)
             self._used.add(url)
+            self._used_hashes.add(digest)
             return str(dest)
         except Exception as exc:
             logger.debug("download failed %s: %s", url, exc)
@@ -131,6 +137,7 @@ class MediaCollector:
                     for chunk in r.iter_content(1 << 16):
                         size += len(chunk)
                         if size > 40 * 1024 * 1024:
+                            vid.unlink(missing_ok=True)
                             return None
                         fh.write(chunk)
             import subprocess
@@ -141,6 +148,7 @@ class MediaCollector:
             self._used.add(url)
             return MediaAsset(str(dest), source, credit, page, video=str(vid))
         except Exception as exc:
+            vid.unlink(missing_ok=True)
             logger.debug("clip download failed: %s", exc)
             return None
 
@@ -373,7 +381,7 @@ class MediaCollector:
                 return None
             if self._download(src, dest):
                 return MediaAsset(str(dest), "wikipedia", f"{page.get('title', entity)} — Wikipedia/Wikimedia Commons",
-                                  page.get("fullurl", ""))
+                                  page.get("fullurl", ""), labels=f"{entity} {page.get('title', '')}")
         except Exception as exc:
             logger.debug("Wikipedia exact image failed for %s: %s", entity, exc)
         return None
@@ -459,13 +467,18 @@ class MediaCollector:
                     continue  # social posts give profile pictures/screenshots, not event photos
                 seen.add(real)
                 try:
-                    page = requests.get(real, headers=_UA, timeout=self.timeout).text
+                    resp = requests.get(real, headers=_UA, timeout=self.timeout)
+                    if not resp.ok:
+                        continue
+                    page = resp.text
                 except Exception:
                     continue
                 m = (re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', page, re.I)
                      or re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', page, re.I)
                      or re.search(r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)', page, re.I))
-                img = html.unescape(m.group(1)) if m else ""
+                img = html.unescape(m.group(1)).strip() if m else ""
+                if img:
+                    img = urllib.parse.urljoin(real, img)
                 key = img.split("?")[0]
                 if not img or self._BAD_IMG.search(key) or key in seen:
                     continue
@@ -584,7 +597,7 @@ class MediaCollector:
                     a.match = max(a.match, 0.8)
                     return a
             # no vision opinion: trust the picture only if its own words name the same thing
-            if weak:
+            if weak and min_match > 0:
                 logger.info("word-check rejected %s (%.2f) for '%s'", a.source, a.match, description[:60])
                 return None
             return a
@@ -595,42 +608,53 @@ class MediaCollector:
         dest = Path(dest_path)
         dest.parent.mkdir(parents=True, exist_ok=True)
         entity, search, visual = spec.get("entity", ""), spec.get("search", ""), spec.get("visual", "")
+        say = (spec.get("say") or "").strip()
         hint = (spec.get("source") or "").lower()
+        desc = visual or search or entity or say[:100]
+        vlm_desc = f"{desc} (Spoken Hindi line: {say[:120]})" if (say and desc and say != desc) else desc
         steps = []
         if spec.get("preferred"):
-            steps.append(("preferred", lambda: self._download(spec["preferred"], dest) and
-                          MediaAsset(str(dest), "wikipedia", "Image: Wikipedia / Wikimedia Commons", spec["preferred"])))
+            steps.append(("preferred", self._checked(
+                lambda: self._download(spec["preferred"], dest) and
+                MediaAsset(str(dest), "wikipedia", "Image: Wikipedia / Wikimedia Commons", spec["preferred"],
+                           labels=f"{entity} {search}"),
+                vlm_desc, min_match=0.0)))
         if spec.get("article"):
-            steps.append(("article", lambda: self.article_image(spec["article"], dest)))
+            steps.append(("article", self._checked(
+                lambda: self.article_image(spec["article"], dest), vlm_desc, min_match=0.0)))
         if spec.get("publisher") and self.use_publisher_images:
-            steps.append(("publisher", lambda: self._download(spec["publisher"], dest) and
-                          MediaAsset(str(dest), "publisher", f"Image: {spec.get('publisher_name', 'news source')}",
-                                     spec.get("article_page", ""))))
-        desc = visual or search or entity
+            steps.append(("publisher", self._checked(
+                lambda: self._download(spec["publisher"], dest) and
+                MediaAsset(str(dest), "publisher", f"Image: {spec.get('publisher_name', 'news source')}",
+                           spec.get("article_page", ""), labels=f"{spec.get('news_query', '')} {search}"),
+                vlm_desc, min_match=0.0)))
         part = int(spec.get("_part", 0) or 0)
-        ent = [("entity", lambda: entity and self._wikipedia_exact(entity, dest))]
-        if mode == "news" and spec.get("news_query"):
-            # Real photos first: a different real photo of the same story for each part; when the
-            # story has fewer real photos than parts, the person/place photo, then reuse a real one.
-            # fresh same-story photos are already matched by headline: a literal vision check against the
-            # line's scene description wrongly rejected real photos (run 42471690616: 14 rejected), so skip it
-            steps.append(("news", lambda: self._news_photo(spec["news_query"], dest, part, cycle=False)))
+        ent = [("entity", self._checked(
+            lambda: entity and self._wikipedia_exact(entity, dest), vlm_desc, min_match=0.0))]
+        if mode == "news" and (spec.get("news_query") or search):
+            nq = spec.get("news_query") or search
+            steps.append(("news", self._checked(
+                lambda: self._news_photo(nq, dest, part, cycle=False), vlm_desc, min_match=0.0)))
+            if spec.get("news_query_en") and spec["news_query_en"] != nq:
+                nq_en = spec["news_query_en"]
+                steps.append(("news-en", self._checked(
+                    lambda: self._news_photo(nq_en, dest, part, cycle=False), vlm_desc, min_match=0.0)))
             steps += ent
             ent = []
             steps.append(("news-reuse", self._checked(
-                lambda: self._news_photo(spec["news_query"], dest, part, cycle=True), desc)))
+                lambda: self._news_photo(nq, dest, part, cycle=True), vlm_desc, min_match=0.0)))
         stock = []
         if self.pexels_key:
-            stock.append(("pexels", self._checked(lambda: search and self._pexels(search, dest), desc)))
+            stock.append(("pexels", self._checked(lambda: search and self._pexels(search, dest), vlm_desc)))
         if os.getenv("YT_UNSPLASH_ACCESS_KEY"):
-            stock.append(("unsplash", self._checked(lambda: search and self._unsplash(search, dest), desc)))
+            stock.append(("unsplash", self._checked(lambda: search and self._unsplash(search, dest), vlm_desc)))
         if self.pixabay_key:
-            stock.append(("pixabay", self._checked(lambda: search and self._pixabay(search, dest), desc)))
+            stock.append(("pixabay", self._checked(lambda: search and self._pixabay(search, dest), vlm_desc)))
         clips = []   # short real-motion stock clips (vision-checked against this line), mixed with photos
         if self.pexels_key:
-            clips.append(("pexels-video", self._checked(lambda: search and self._pexels_video(search, dest), desc)))
+            clips.append(("pexels-video", self._checked(lambda: search and self._pexels_video(search, dest), vlm_desc)))
         if self.pixabay_key:
-            clips.append(("pixabay-video", self._checked(lambda: search and self._pixabay_video(search, dest), desc)))
+            clips.append(("pixabay-video", self._checked(lambda: search and self._pixabay_video(search, dest), vlm_desc)))
         ai = [("ai", lambda: self._agnes(visual or search, dest, mode)),
               ("ai-cf", lambda: self._cloudflare(visual or search, dest, mode)),
               ("ai-hf", lambda: self._huggingface(visual or search, dest, mode))]
@@ -641,7 +665,7 @@ class MediaCollector:
         tail = []
         if self.use_wikimedia:
             tail.append(("commons", self._checked(
-                lambda: search and self._commons(" ".join(search.split()[:3]), dest), desc)))
+                lambda: search and self._commons(" ".join(search.split()[:3]), dest), vlm_desc)))
         for name, fn in steps + order + tail:
             try:
                 asset = fn()
@@ -660,7 +684,6 @@ class MediaCollector:
                 return asset
         except Exception as exc:
             logger.debug("ai fallback failed: %s", exc)
-        return None
         return None
 
     def find_visuals(self, specs: List[dict], mode: str = "news", workers: int = 6) -> List[Optional[MediaAsset]]:

@@ -194,33 +194,44 @@ def build_srt(cues: Sequence[Dict], out_path: Path, offset: float = 0.0) -> str:
 
 
 def sentence_cues(sentences: Sequence[str], words: Sequence[Dict], total: float) -> List[Dict]:
-    """Map edge-tts word timings onto sentence boundaries.
-
-    The TTS reads the sentences in order, so sentence i owns the next
-    len(sentence_i) words. That keeps subtitle timing locked to the voice without
-    needing a forced aligner.
-    """
+    """Map edge-tts word timings onto sentence boundaries cleanly without drift or clamping."""
     from longform.script import split_sentences
+    from video.tts import _spoken_weight
 
     flat: List[str] = []
     for s in sentences:
         flat.extend(split_sentences(s))
-    if not words:
-        weight = [len(s) for s in flat] or [1]
+    if not flat:
+        return []
+    total_split_words = sum(max(1, len(s.split())) for s in flat)
+    ratio_mismatch = (not words) or abs(len(words) - total_split_words) / max(total_split_words, 1) > 0.20
+    if ratio_mismatch:
+        weights = [_spoken_weight(s) for s in flat]
+        wsum = float(sum(weights)) or 1.0
         cues, t = [], 0.0
-        for s, w in zip(flat, weight):
-            dur = total * (w / sum(weight))
-            cues.append({"text": s, "start": t, "end": t + dur})
+        for s, w in zip(flat, weights):
+            dur = total * (w / wsum)
+            cues.append({"text": s, "start": round(t, 3), "end": round(t + dur, 3)})
             t += dur
+        if cues:
+            cues[-1]["end"] = round(max(total, cues[-1]["start"] + 0.3), 3)
         return cues
-    cues, wi = [], 0
-    for s in flat:
+    cues: List[Dict] = []
+    cum = 0
+    prev_end = 0.0
+    n_words = len(words)
+    for i, s in enumerate(flat):
         n = max(1, len(s.split()))
-        start = float(words[min(wi, len(words) - 1)]["start"])
-        end_idx = min(wi + n - 1, len(words) - 1)
-        end = float(words[end_idx]["end"])
-        cues.append({"text": s, "start": start, "end": max(end, start + 0.6)})
-        wi += n
+        wi = min(int(round(cum * n_words / total_split_words)), n_words - 1)
+        cum += n
+        end_idx = min(max(wi, int(round(cum * n_words / total_split_words)) - 1), n_words - 1)
+        start = max(prev_end, float(words[wi]["start"]))
+        if i == len(flat) - 1:
+            end = max(total, float(words[end_idx]["end"]), start + 0.4)
+        else:
+            end = max(float(words[end_idx]["end"]), start + 0.4)
+        cues.append({"text": s, "start": round(start, 3), "end": round(end, 3)})
+        prev_end = end
     return cues
 
 
@@ -316,7 +327,7 @@ def mux_chapter(video: str, audio: str, _ass_unused: Optional[str], out_path: st
     cmd = [ff(), "-y", "-i", video, "-i", audio,
            "-vf", ",".join(vf),
            "-af", (("adelay=%d|%d," % (audio_delay_ms, audio_delay_ms)) if audio_delay_ms else "")
-                  + "loudnorm=I=-16:TP=-1.5:LRA=11",
+                  + "loudnorm=I=-16:TP=-1.5:LRA=11,apad=pad_dur=0.5",
            "-c:v", "libx264", "-preset", PRESET, "-crf", CRF, "-pix_fmt", "yuv420p",
            "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
            "-shortest", "-movflags", "+faststart", out_path]

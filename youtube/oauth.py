@@ -67,6 +67,10 @@ class YouTubeOAuthManager:
             creds = Credentials.from_authorized_user_info(token, token.get("scopes") or SCOPES)
             if not creds.valid and creds.refresh_token:
                 creds.refresh(Request())
+            if not creds.valid:
+                self.last_error = "OAuth credentials invalid and no refresh_token available"
+                logger.error(self.last_error)
+                return None
             return creds
         except Exception as exc:
             self.last_error = f"OAuth refresh failed: {exc}"

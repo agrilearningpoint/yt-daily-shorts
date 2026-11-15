@@ -66,8 +66,19 @@ class _KeyRing:
         """
         usable = [k for k in self.keys if k not in getattr(self, "_bad", ())] or list(self.keys)
         if len(usable) <= 1:
-            self._tl.key = usable[0]
-            return fn(*args)
+            key = usable[0]
+            self._tl.key = key
+            try:
+                return fn(*args)
+            except LLMError as exc:
+                msg = str(exc)
+                if "timeout" in msg or "timed out" in msg:
+                    if not hasattr(self, "_bad"):
+                        self._bad = set()
+                    self._bad.add(key)
+                    logger.warning("%s key %s…%s is stalling — parked for this run",
+                                   getattr(self, "name", "llm"), key[:6], key[-4:])
+                raise
         last = None
         for step in range(len(usable)):
             key = usable[(self._ki + step) % len(usable)]
@@ -84,10 +95,10 @@ class _KeyRing:
                         self._bad = set()
                     self._bad.add(key)
                     logger.warning("%s key %s…%s is stalling — parked for this run",
-                                   self.name, key[:6], key[-4:])
+                                   getattr(self, "name", "llm"), key[:6], key[-4:])
                 if not any(c in msg for c in ROTATE_ON):
                     raise
-                logger.info("%s key #%d hit a limit, trying the next key", self.name,
+                logger.info("%s key #%d hit a limit, trying the next key", getattr(self, "name", "llm"),
                             (self._ki + step) % len(usable) + 1)
         raise last
 
@@ -169,9 +180,25 @@ class GeminiProvider(_KeyRing, BaseLLMProvider):
             )
         except requests.RequestException as exc:   # hang / reset: rotate to the next key
             raise LLMError(f"gemini/{self.model_name} timeout: {type(exc).__name__}") from exc
+        if resp.status_code == 400 and (json_mode or system_prompt):
+            fallback_body: Dict[str, Any] = {
+                "contents": [{"role": "user", "parts": [{"text": f"{system_prompt}\n\n{prompt}" if system_prompt else prompt}]}],
+                "generationConfig": {"temperature": self.temperature, "maxOutputTokens": self.max_tokens},
+            }
+            try:
+                resp = requests.post(
+                    self.URL.format(model=self.model_name),
+                    headers={"x-goog-api-key": self._key(), "Content-Type": "application/json"},
+                    json=fallback_body, timeout=self.timeout,
+                )
+            except requests.RequestException as exc:
+                raise LLMError(f"gemini/{self.model_name} timeout: {type(exc).__name__}") from exc
         if resp.status_code != 200:
             raise LLMError(f"gemini/{self.model_name} HTTP {resp.status_code}: {resp.text[:300]}")
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise LLMError(f"gemini/{self.model_name} non-JSON response: {resp.text[:200]}") from exc
         try:
             parts = data["candidates"][0]["content"]["parts"]
         except (KeyError, IndexError) as exc:
@@ -238,7 +265,10 @@ class OpenAICompatProvider(_KeyRing, BaseLLMProvider):
             resp = self._post(payload)
         if resp.status_code != 200:
             raise LLMError(f"{self.name}/{self.model_name} HTTP {resp.status_code}: {resp.text[:300]}")
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise LLMError(f"{self.name}/{self.model_name} non-JSON response: {resp.text[:200]}") from exc
         try:
             content = data["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError) as exc:
@@ -411,7 +441,7 @@ class FallbackLLM(BaseLLMProvider):
         return self.tiers.get(tier) or self.candidates
 
     async def _run(self, method: str, prompt: str, system_prompt: Optional[str],
-                   tier: str = "") -> Any:
+                   tier: str = "", json_mode: bool = False) -> Any:
         self.errors = []
         for cand in self.order_for(tier):
             label = f"{cand.name}/{getattr(cand, 'model_name', '')}"
@@ -419,7 +449,10 @@ class FallbackLLM(BaseLLMProvider):
                 continue
             for attempt in range(2):
                 try:
-                    result = await getattr(cand, method)(prompt, system_prompt)
+                    if method == "generate_text" and json_mode:
+                        result = await cand.generate_text(prompt, system_prompt, json_mode=True)
+                    else:
+                        result = await getattr(cand, method)(prompt, system_prompt)
                     if method == "generate_text" and not str(result).strip():
                         raise LLMError("empty text")
                     self.last_used = label
@@ -456,7 +489,7 @@ class FallbackLLM(BaseLLMProvider):
         raise LLMError("All LLM providers failed: " + " | ".join(self.errors[-6:]))
 
     async def generate_text(self, prompt, system_prompt=None, json_mode=False, tier="") -> str:
-        return await self._run("generate_text", prompt, system_prompt, tier=tier)
+        return await self._run("generate_text", prompt, system_prompt, tier=tier, json_mode=json_mode)
 
     async def generate_json(self, prompt, system_prompt=None, tier="") -> Dict[str, Any]:
         return await self._run("generate_json", prompt, system_prompt, tier=tier)

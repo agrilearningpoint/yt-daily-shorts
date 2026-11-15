@@ -96,14 +96,14 @@ class TTSConfig:
     provider: str = "edge-tts"
     voice: str = "hi-IN-MadhurNeural"
     fallback_voice: str = "hi-IN-SwaraNeural"
-    rate: str = "+8%"
+    rate: str = "+5%"
     pitch: str = "+0Hz"
     provider_order: List[str] = field(default_factory=lambda: ["gemini", "edge"])
     gemini_models: List[str] = field(default_factory=lambda: [
         "gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"])
     gemini_voice: str = "auto"
     gemini_fallback_voice: str = "Charon"
-    news_style: str = "energetic, confident Hindi TV news anchor, fast crisp delivery"
+    news_style: str = "clear, confident Hindi TV news anchor, natural conversational pace"
     knowledge_style: str = "warm, curious Hindi storyteller, natural conversational pace"
 
 

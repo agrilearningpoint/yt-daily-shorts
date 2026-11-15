@@ -50,8 +50,6 @@ video:
   news_national_count: 16
   news_international_count: 4
   output_format: "mp4"
-  hf_repo_id: ""
-  hf_storage_private: true
   background_music: true
   music_volume: 0.10
   news_headline_count: 20
@@ -73,12 +71,12 @@ tts:
   gemini_models: ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"]
   gemini_voice: "auto"
   gemini_fallback_voice: "Charon"
-  news_style: "clear, confident Hindi TV news anchor, natural breathing, a short pause after each story, a brisk, fast pace — clearly quicker than normal but every word still clear"
-  knowledge_style: "warm, curious Hindi storyteller, expressive, a brisk, fast pace — clearly quicker than normal but every word still clear"
+  news_style: "clear, confident Hindi TV news anchor, natural conversational pace, short breath pause after each story"
+  knowledge_style: "warm, curious Hindi storyteller, natural conversational pace, expressive and unhurried"
   provider: "edge-tts"
   voice: "hi-IN-MadhurNeural"
   fallback_voice: "hi-IN-SwaraNeural"
-  rate: "+20%"
+  rate: "+5%"
   pitch: "+0Hz"
 
 seo:
@@ -99,3 +97,7 @@ youtube:
 
 telegram:
   send_video: true
+
+media:
+  hf_repo_id: ""
+  hf_storage_private: true

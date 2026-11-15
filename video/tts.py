@@ -56,6 +56,7 @@ class VoiceResult:
     audio_path: str             # full voiceover
     durations: List[float]      # one per beat, sums to total
     provider: str
+    beat_words: List[List[WordTiming]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -118,40 +119,61 @@ def detect_silences(path: str, noise_db: int = -32, min_d: float = 0.12) -> List
     return list(zip(starts, ends))
 
 
+def _spoken_weight(text: str) -> float:
+    """Estimate relative spoken duration (Hindi + English syllables + punctuation pauses)."""
+    clean = re.sub(r"<[^>]+>", " ", text or "").strip()
+    chars = len(re.sub(r"[\s।,.?!;:'\"()\-]+", "", clean))
+    pauses = len(re.findall(r"[।,.?!;:]", clean))
+    digits = len(re.findall(r"\d+", clean))
+    return max(float(chars) + 2.8 * pauses + 1.5 * digits, 1.0)
+
+
 def split_by_pauses(texts: List[str], total: float, silences: List[Tuple[float, float]]) -> List[float]:
     """Durations per text: proportional estimate snapped to the nearest real pause."""
-    weights = [max(len(re.sub(r"<[^>]+>", "", t).replace(" ", "")), 1) for t in texts]
+    if not texts:
+        return []
+    if len(texts) == 1 or total <= 0:
+        return [round(max(total, 0.0), 3)] * len(texts)
+    weights = [_spoken_weight(t) for t in texts]
     wsum = float(sum(weights))
-    mids = [(a + b) / 2 for a, b in silences if b - a >= 0.08]
+    mids = sorted((a + b) / 2 for a, b in silences if b - a >= 0.08)
+    n = len(texts)
+    min_step = min(0.45, total / max(n * 1.5, 1.0))
     bounds: List[float] = []
     acc = 0.0
     prev = 0.0
     for i, w in enumerate(weights[:-1]):
         acc += w
         expected = total * acc / wsum
-        avg = total / len(texts)
-        window = max(0.5, avg * 0.45)
-        cands = [m for m in mids if abs(m - expected) <= window and m > prev + 0.6]
-        b = min(cands, key=lambda m: abs(m - expected)) if cands else max(expected, prev + 0.6)
+        remaining_min = (n - 1 - i) * min_step
+        max_b = max(prev + min_step, total - remaining_min)
+        avg = total / n
+        window = max(0.45, avg * 0.45)
+        cands = [m for m in mids if abs(m - expected) <= window and prev + min_step <= m <= max_b]
+        b = min(cands, key=lambda m: abs(m - expected)) if cands else min(max(expected, prev + min_step), max_b)
         bounds.append(b)
         prev = b
     edges = [0.0] + bounds + [total]
-    durs = [max(edges[i + 1] - edges[i], 0.4) for i in range(len(texts))]
-    scale = total / sum(durs)
-    return [round(d * scale, 3) for d in durs]
+    durs = [round(max(edges[i + 1] - edges[i], min_step), 3) for i in range(n)]
+    diff = round(total - sum(durs), 3)
+    if durs:
+        durs[-1] = round(max(0.2, durs[-1] + diff), 3)
+    return durs
 
 
-def _find_audio_b64(obj: Any) -> Optional[str]:
-    """Find base64 audio inside an Interactions/generateContent response."""
-    found: List[str] = []
+def _find_audio_with_mime(obj: Any) -> Tuple[Optional[str], str]:
+    """Find (base64 audio, mime_type) inside an Interactions/generateContent response."""
+    found: List[Tuple[str, str]] = []
 
     def walk(o: Any) -> None:
         if isinstance(o, dict):
             if o.get("type") == "audio" and isinstance(o.get("data"), str):
-                found.append(o["data"])
+                found.append((o["data"], str(o.get("mime_type", o.get("mimeType", "")))))
             inline = o.get("inlineData") or o.get("inline_data")
-            if isinstance(inline, dict) and str(inline.get("mimeType", inline.get("mime_type", ""))).startswith("audio"):
-                found.append(inline.get("data", ""))
+            if isinstance(inline, dict):
+                mime = str(inline.get("mimeType", inline.get("mime_type", "")))
+                if mime.startswith("audio") and isinstance(inline.get("data"), str):
+                    found.append((inline["data"], mime))
             for v in o.values():
                 walk(v)
         elif isinstance(o, list):
@@ -159,7 +181,13 @@ def _find_audio_b64(obj: Any) -> Optional[str]:
                 walk(v)
 
     walk(obj)
-    return found[-1] if found else None
+    return found[-1] if found else (None, "")
+
+
+def _find_audio_b64(obj: Any) -> Optional[str]:
+    """Find base64 audio inside an Interactions/generateContent response."""
+    data, _ = _find_audio_with_mime(obj)
+    return data
 
 
 def _write_pcm_wav(pcm: bytes, path: str, rate: int = 24000) -> None:
@@ -178,6 +206,8 @@ class GeminiTTS:
     def __init__(self, api_key: str, models: List[str], voice: str = "auto", fallback_voice: str = "Charon",
                  timeout: int = 180):
         self.api_key = api_key
+        self.keys: List[str] = [k.strip() for k in (api_key or "").split(",") if k.strip()]
+        self._ki: int = 0
         self.models = models
         self.voice = voice
         self.fallback_voice = fallback_voice
@@ -224,12 +254,12 @@ class GeminiTTS:
         r = requests.post(f"{GEMINI_BASE}/interactions", headers=self._headers(), json=body, timeout=self.timeout)
         if r.status_code != 200:
             raise TTSError(f"{model} HTTP {r.status_code}: {r.text[:200]}")
-        data = _find_audio_b64(r.json())
+        data, mime = _find_audio_with_mime(r.json())
         if not data:
             raise TTSError(f"{model}: no audio in response")
-        return base64.b64decode(data)
+        return base64.b64decode(data), mime
 
-    def _generate_content(self, model: str, text: str, style: str, voice: str) -> bytes:
+    def _generate_content(self, model: str, text: str, style: str, voice: str) -> Tuple[bytes, str]:
         body = {
             "contents": [{"parts": [{"text": f"Read this Hindi text aloud in the style of a {style}:\n{text}"}]}],
             "generationConfig": {"responseModalities": ["AUDIO"],
@@ -239,10 +269,32 @@ class GeminiTTS:
                           timeout=self.timeout)
         if r.status_code != 200:
             raise TTSError(f"{model} HTTP {r.status_code}: {r.text[:200]}")
-        data = _find_audio_b64(r.json())
+        data, mime = _find_audio_with_mime(r.json())
         if not data:
             raise TTSError(f"{model}: no audio in response")
-        return base64.b64decode(data)
+        return base64.b64decode(data), mime
+
+    @staticmethod
+    def _save_audio(audio: bytes, mime: str, out_wav: str) -> None:
+        m = (mime or "").lower()
+        encoded = (audio[:4] in (b"RIFF", b"OggS", b"fLaC") or audio[:3] == b"ID3"
+                   or audio[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2")
+                   or any(ext in m for ext in ("mp3", "mpeg", "ogg", "opus", "aac", "flac", "mp4", "wav")))
+        if audio[:4] == b"RIFF":
+            Path(out_wav).write_bytes(audio)
+        elif encoded:
+            raw_enc = Path(out_wav).with_suffix(".encoded")
+            raw_enc.write_bytes(audio)
+            ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+            try:
+                res = subprocess.run([ffmpeg, "-y", "-i", str(raw_enc), "-ac", "1", "-ar", "24000", out_wav],
+                                     capture_output=True, timeout=120)
+                if res.returncode != 0:
+                    _write_pcm_wav(audio, out_wav)
+            finally:
+                raw_enc.unlink(missing_ok=True)
+        else:
+            _write_pcm_wav(audio, out_wav)
 
     def synthesize(self, text: str, style: str, out_wav: str) -> str:
         voice = self.resolve_voice()
@@ -251,13 +303,10 @@ class GeminiTTS:
             for v in dict.fromkeys([voice, self.fallback_voice]):
                 try:
                     if not model.startswith(("gemini-2.", "gemini-1.")):
-                        audio = self._interactions(model, text, style, v)
+                        audio, mime = self._interactions(model, text, style, v)
                     else:
-                        audio = self._generate_content(model, re.sub(r"<[^>]+>", "...", text), style, v)
-                    if audio[:4] == b"RIFF":
-                        Path(out_wav).write_bytes(audio)
-                    else:
-                        _write_pcm_wav(audio, out_wav)
+                        audio, mime = self._generate_content(model, re.sub(r"<[^>]+>", "...", text), style, v)
+                    self._save_audio(audio, mime, out_wav)
                     if probe_duration(out_wav) < 1.0:
                         raise TTSError(f"{model}: audio too short")
                     logger.info("Voice generated with Gemini %s (%s)", model, v)
@@ -275,7 +324,7 @@ class GeminiTTS:
 # ---------------------------------------------------------------------------
 
 class TTSEngine:
-    def __init__(self, voice: str = "hi-IN-MadhurNeural", rate: str = "+8%", pitch: str = "+0Hz",
+    def __init__(self, voice: str = "hi-IN-MadhurNeural", rate: str = "+5%", pitch: str = "+0Hz",
                  fallback_voice: str = "hi-IN-SwaraNeural", strict: bool = False,
                  provider_order: Optional[List[str]] = None, gemini: Optional[GeminiTTS] = None):
         self.voice = voice
@@ -323,7 +372,7 @@ class TTSEngine:
                 await asyncio.sleep(2 * (attempt + 1))
         if self.strict:
             raise TTSError(f"TTS failed after retries: {last_exc}")
-        duration = max(1.5, len(clean.split()) / 2.8)
+        duration = max(1.5, len(clean.split()) / 2.35)
         self._silence(str(out_file), duration)
         logger.warning("Using SILENT placeholder audio (dry-run only) for: %s", clean[:40])
         return Segment(text=clean, audio_path=str(out_file), duration=duration,
@@ -342,19 +391,57 @@ class TTSEngine:
         for provider in self.provider_order:
             if provider == "gemini" and self.gemini:
                 try:
-                    joined = " <short pause> ".join(t.strip().rstrip("।.") + "।" for t in texts)
+                    parts_joined = []
+                    for t in texts:
+                        s = (t or "").strip()
+                        if s and s[-1] not in "।.?!":
+                            s += "।"
+                        parts_joined.append(s)
+                    joined = " <short pause> ".join(parts_joined)
                     raw = str(out / "voice_gemini.wav")
                     model = await asyncio.to_thread(self.gemini.synthesize, joined, style, raw)
                     self._normalise(raw, final)
                     total = probe_duration(final)
+                    if total <= 0:
+                        raise TTSError("gemini normalised audio has zero duration")
                     durs = split_by_pauses(texts, total, detect_silences(final))
-                    return VoiceResult(final, durs, f"gemini:{model}")
+                    beat_words: List[List[WordTiming]] = []
+                    cursor = 0.0
+                    for t, d in zip(texts, durs):
+                        beat_words.append(distribute_words(re.sub(r"<[^>]+>", " ", t), d, offset=cursor))
+                        cursor += d
+                    return VoiceResult(final, durs, f"gemini:{model}", beat_words=beat_words)
                 except Exception as exc:
                     logger.warning("Gemini TTS unavailable, falling back: %s", str(exc)[:200])
             elif provider == "edge":
                 segs = await self.synthesize_segments(texts, out_dir)
                 self.concat_audio(segs, final)
-                return VoiceResult(final, [s.duration for s in segs], "edge-tts")
+                raw_durs = [max(s.duration, 0.2) for s in segs]
+                actual_total = probe_duration(final)
+                raw_sum = sum(raw_durs)
+                if actual_total > 0 and raw_sum > 0:
+                    scale = actual_total / raw_sum
+                    durs = [round(d * scale, 3) for d in raw_durs]
+                    if durs:
+                        durs[-1] = round(max(0.2, durs[-1] + (actual_total - sum(durs))), 3)
+                else:
+                    scale = 1.0
+                    durs = [round(d, 3) for d in raw_durs]
+                beat_words = []
+                cursor = 0.0
+                for s, d in zip(segs, durs):
+                    s_words = []
+                    if s.words and s.duration > 0:
+                        wscale = d / s.duration
+                        for w in s.words:
+                            st = round(cursor + w.start * wscale, 3)
+                            en = round(min(cursor + d, max(st + 0.04, cursor + w.end * wscale)), 3)
+                            s_words.append(WordTiming(w.word, st, en))
+                    else:
+                        s_words = distribute_words(s.text, d, offset=cursor)
+                    beat_words.append(s_words)
+                    cursor += d
+                return VoiceResult(final, durs, "edge-tts", beat_words=beat_words)
         raise TTSError("No TTS provider produced audio")
 
     @staticmethod

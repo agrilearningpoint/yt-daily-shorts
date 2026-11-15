@@ -217,6 +217,8 @@ class DailyOrchestrator:
         return await self.run_pipeline(task, video_id=video_id)
 
     async def run_daily(self, video_type_filter: str = "all") -> List[VideoState]:
+        import time as _time
+        self._run_t0 = _time.monotonic()
         logger.info("=== YT Daily Shorts run started (dry_run=%s, strict=%s, llm=%d candidates) ===",
                     self.config.general.dry_run, self.config.general.strict_mode, len(self.llm.candidates))
         self._summary_cache = {}
@@ -274,9 +276,14 @@ class DailyOrchestrator:
         try:
             from core import self_improve
 
+            import time as _time
             errors = list(getattr(self, "failures", []) or [])
-            ok = all(getattr(r, "state", "") == "completed" for r in results) if results else False
-            self_improve.record_run("shorts", 0.0, ok, errors=errors,
+            ok = all(
+                (getattr(getattr(r, "state", None), "value", getattr(r, "state", "")) == "completed")
+                for r in results
+            ) if results else False
+            elapsed_min = round((_time.monotonic() - getattr(self, "_run_t0", _time.monotonic())) / 60.0, 2)
+            self_improve.record_run("shorts", elapsed_min, ok, errors=errors,
                                     extra={"videos": len(results or [])})
             from agents.error_analyst import ErrorAnalystAgent
 
