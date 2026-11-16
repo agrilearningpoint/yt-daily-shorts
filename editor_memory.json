@@ -523,6 +523,26 @@
     "flash_color": "white"
    },
    "score": 4.0
+  },
+  {
+   "at": "2026-11-16T02:58+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "flash"
+    ],
+    "motion": "kenburns_mix",
+    "grade": "punchy",
+    "zoom": 1.1,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 4.0
   }
  ],
  "option_scores": {
@@ -535,32 +555,32 @@
    "n": 4
   },
   "motion=\"kenburns_mix\"": {
-   "sum": 48.0,
-   "n": 8
+   "sum": 52.0,
+   "n": 9
   },
   "grade=\"neutral\"": {
    "sum": 39.0,
    "n": 6
   },
   "zoom=1.1": {
-   "sum": 55.0,
-   "n": 9
+   "sum": 59.0,
+   "n": 10
   },
   "vignette=true": {
    "sum": 68.0,
    "n": 12
   },
   "ticker=true": {
-   "sum": 130.0,
-   "n": 23
+   "sum": 134.0,
+   "n": 24
   },
   "flash_color=\"white\"": {
-   "sum": 112.0,
-   "n": 20
+   "sum": 116.0,
+   "n": 21
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 91.0,
-   "n": 17
+   "sum": 95.0,
+   "n": 18
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -579,8 +599,8 @@
    "n": 9
   },
   "vignette=false": {
-   "sum": 62.0,
-   "n": 11
+   "sum": 66.0,
+   "n": 12
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -611,8 +631,8 @@
    "n": 2
   },
   "grade=\"punchy\"": {
-   "sum": 27.0,
-   "n": 5
+   "sum": 31.0,
+   "n": 6
   },
   "cut_fx=[\"glitch\", \"whip\", \"flash\"]": {
    "sum": 6.0,
@@ -643,8 +663,8 @@
    "n": 2
   },
   "cut_fx=[\"flash\"]": {
-   "sum": 27.0,
-   "n": 5
+   "sum": 31.0,
+   "n": 6
   },
   "grade=\"news_crisp\"": {
    "sum": 5.0,
@@ -652,9 +672,6 @@
   }
  },
  "notes": [
-  "Replace mismatched stock visuals (e.g., German ambulance for Assam accident) with relevant local news footage.",
-  "Eliminate consecutive near-identical frames (32-33, 34-35) to keep pace dynamic.",
-  "Swap generic stock graphics (dollar bills, calculators) for context-specific news infographics.",
   "Cut static graphics quicker to ensure dynamic visual transitions every 2 seconds.",
   "Replace stock illustrations and repeated character frames with varied context-relevant footage.",
   "Remove static call-to-action end screens and construct a seamless visual loop back to tile 0.",
@@ -663,6 +680,9 @@
   "Swap generic stock footage of skies and planes with relevant news imagery, and shorten the ending call-to-action screen.",
   "Eliminate visual repetition: Ensure no two adjacent tiles use the exact same or near-identical image. Find distinct visuals or use dynamic motion graphics to vary the look every 2-3 seconds.",
   "Upgrade generic visuals: Replace all cartoon images, generic stock photos (e.g., random buildings, abstract patterns, generic people/scenes), and logos with high-quality, specific, and impactful real-world footage or professional news graphics directly illustrating the headline.",
-  "Strengthen the hook: The first tile (0) needs a more compelling and visually striking image directly related to a major headline to instantly grab viewer attention, rather than a generic scene or a date."
+  "Strengthen the hook: The first tile (0) needs a more compelling and visually striking image directly related to a major headline to instantly grab viewer attention, rather than a generic scene or a date.",
+  "Replace the generic calendar intro (Tile 0) with a dynamic, high-impact visual and a compelling headline to instantly hook viewers.",
+  "Eliminate all instances of repetitive or near-identical images in adjacent tiles; each 3-second segment needs a distinct visual to maintain engagement.",
+  "Ensure every picture is highly relevant to its accompanying text and avoid generic stock-like images (e.g., Tiles 8, 9, 14, 23)."
  ]
 }
