@@ -9,29 +9,38 @@ news Short is perfect.
 
 | Video | Time (IST) | Cron (UTC) | Content |
 |---|---|---|---|
-| News | 05:30 | `0 0 * * *` | ~2-minute bulletin: up to 30 national + 6 international stories from the **last 24 h only** (dated, verified), every spoken line with a real photo of that same story |
-| Knowledge | paused | `0 9 * * *` (commented out) | 7-day editorial calendar (105 curated topics + LLM-suggested fresh topics) |
+| News | 05:30 | `0 0 * * *` | 50–58s superfast bulletin: 20+ national and international stories from the **last 24 h only** (dated, verified), every spoken line with a real photo of that same story |
+| Knowledge | 14:30 | `0 9 * * *` | 50–58s researched explainer: 7-day editorial calendar (105 curated topics + LLM-suggested fresh topics) |
 
-### Reliability rules (2026-11-08)
-* **Fresh news only**: undated, older-than-24h or future-dated items are rejected; fewer fresh stories = a
-  shorter video (minimum 12), never old news.
+### Reliability rules
+* **Fresh news only**: undated, older-than-24h or future-dated items are rejected; minimum 20 fresh stories for bulletin.
 * **Claim-level fact check**: each used story's article text is fetched; unsupported stories are dropped.
-* **One duration rule** (`core/duration.py`) shared by script writer, quality gate and post-render check (15-179 s).
-* **No duplicate uploads**: every video carries a tag `bks-<type>-<YYYYMMDD IST>`; the channel is checked before
-  uploading and after any failed upload. `force_upload` workflow input overrides.
-* **Auto-retry** once on failure; **permanent state** (history, editor memory, DB) on the `state` branch.
-* **Editor Director**: daily look, Gemini review of a contact sheet, flagged pictures replaced and re-rendered.
-* **Health workflow**: 08:00 IST daily check (upload live, token, LLM keys) + Sunday weekly report on Telegram.
+* **One duration rule** (`core/duration.py`): Target 50–60s, Hard limit 59.9s for Shorts compliance.
+* **Precision Audio-Video Synchronization** (`video/synchronization_engine.py`): Integer frame quantization with 0.000s cumulative drift.
+* **Hook Director** (`agents/hook_director/`): Evaluates 6 viral archetypes and enforces opening 1–3s visual pairing contract.
+* **Post-Render QA Inspector** (`video/qa_inspector.py`): 5-pillar validation (technical, audio, visual, sync, duration) with auto-repair.
+* **No duplicate uploads**: every video carries a tag `bks-<type>-<YYYYMMDD IST>`; the channel is checked before uploading.
+* **Auto-retry** once on failure; **permanent state** on the `state` branch and HF storage.
 
-## Pipeline
+## Architecture & Documentation
+
+- [Complete Architecture Audit](docs/COMPLETE_ARCHITECTURE_AUDIT.md)
+- [New Multi-Agent Architecture](docs/NEW_AGENT_ARCHITECTURE.md)
+- [Voice & Video Synchronization Design](docs/VOICE_VIDEO_SYNC_DESIGN.md)
+- [Video Creative Direction Guide](docs/VIDEO_CREATIVE_DIRECTION.md)
+- [Multi-Pillar Quality Assurance Report](docs/QUALITY_ASSURANCE_REPORT.md)
+- [Implementation Changelog](docs/IMPLEMENTATION_CHANGELOG.md)
+
+## Multi-Agent Pipeline
 
 ```
-research ─► prompt ─► script (LLM, validated) ─► fact-check (LLM, auto-corrects) ─► QUALITY GATE
-   ─► theme ─► human-like Hindi voice (Gemini TTS, edge-tts fallback) split per beat by real pauses
-   ─► one photo per beat (Wikipedia entity image / Commons / Openverse / Pexels / Pixabay)
-   ─► motion graphics: Ken Burns + white-flash cuts + sliding headline chip + counter + progress bar
-   ─► synthesized whoosh/pop SFX + ducked music (no subtitles) ─► MP4 1080x1920
-   ─► SEO (LLM) ─► YouTube upload ─► Telegram preview + daily report ─► history/analytics (cached)
+research ─► prompt ─► script ─► HOOK DIRECTOR ─► fact-check ─► QUALITY GATE
+   ─► creative direction ─► VFX & MOTION GRAPHICS
+   ─► SYNCHRONIZATION ENGINE (frame-accurate audio & visual bounds)
+   ─► media collector (real photographs / Wikimedia / publisher)
+   ─► FFmpeg video renderer (Ken Burns + transitions + burned captions)
+   ─► POST-RENDER QA INSPECTOR (5 pillars + auto-repair)
+   ─► SEO ─► YouTube upload ─► Telegram preview + daily report
 ```
 
 * **Multi-LLM fallback + auto models**: Gemini → Groq → OpenRouter (free) → Mistral → NVIDIA NIM (→ Ollama).

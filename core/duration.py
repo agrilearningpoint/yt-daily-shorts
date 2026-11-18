@@ -13,7 +13,7 @@ _BASE_WORDS_PER_SEC = {"news": 2.3, "knowledge": 2.4}
 VOICE_SPEED = 1.05
 # Everything that estimates length must use these, or a script the writer accepts gets rejected later.
 WORDS_PER_SEC = {k: round(v * VOICE_SPEED, 3) for k, v in _BASE_WORDS_PER_SEC.items()}
-SHORTS_HARD_LIMIT = 179.0                         # YouTube Shorts max is 180 s
+SHORTS_HARD_LIMIT = 179.0                         # YouTube Shorts 3-minute vertical format limit (180s)
 MIN_NEWS_STORIES = 20                             # 20+ news headlines for rapid-fire bulletin
 
 
@@ -36,8 +36,9 @@ def news_targets(cfg_video, items: List[Dict[str, Any]]) -> Dict[str, int]:
     nat = min(cfg_video.news_national_count, max(nat_avail - 2, 0))
     intl = min(cfg_video.news_international_count, max(intl_avail - 1, 0))
     full = cfg_video.news_national_count + cfg_video.news_international_count
-    seconds = round(cfg_video.news_target_duration * max(nat + intl, 1) / full)
-    seconds = max(55, min(seconds, cfg_video.news_target_duration))
+    target_sec = getattr(cfg_video, "news_target_duration", 130)
+    seconds = round(target_sec * max(nat + intl, 1) / max(full, 1))
+    seconds = max(55, min(seconds, getattr(cfg_video, "news_target_duration", 130)))
     return {"national": nat, "international": intl, "total": nat + intl, "seconds": seconds,
             "min_national": max(1, nat - 6) if nat > 8 else nat,
             "min_international": min(intl, 5)}
@@ -46,8 +47,8 @@ def news_targets(cfg_video, items: List[Dict[str, Any]]) -> Dict[str, int]:
 def bounds(cfg_video, video_type: str, targets: Dict[str, int] | None = None) -> Tuple[float, float]:
     """Allowed spoken duration (seconds) for a script, before TTS."""
     if video_type == "news":
-        hi = cfg_video.news_max_duration
+        hi = getattr(cfg_video, "news_max_duration", 150)
         if targets and targets.get("seconds"):
             hi = min(hi, targets["seconds"] * 1.15)
-        return max(30.0, cfg_video.min_duration), min(float(hi), SHORTS_HARD_LIMIT)
-    return float(cfg_video.min_duration), float(cfg_video.max_duration) * 1.25
+        return max(30.0, getattr(cfg_video, "min_duration", 25)), min(float(hi), SHORTS_HARD_LIMIT)
+    return float(getattr(cfg_video, "min_duration", 25)), min(float(getattr(cfg_video, "max_duration", 58)), SHORTS_HARD_LIMIT)

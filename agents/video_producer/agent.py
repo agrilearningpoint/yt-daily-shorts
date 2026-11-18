@@ -26,6 +26,7 @@ from video.semantic_matcher import (SemanticVisualMatcher, extract_entity_from_h
                                     detect_topic_theme)
 from video.motion_graphics import MotionGraphicsEngine
 from video.vfx_engine import VFXEngine
+from video.synchronization_engine import SynchronizationEngine
 
 HINDI_MONTHS = ["जनवरी", "फरवरी", "मार्च", "अप्रैल", "मई", "जून", "जुलाई", "अगस्त", "सितंबर", "अक्टूबर", "नवंबर", "दिसंबर"]
 CATEGORY_BADGES = {
@@ -88,12 +89,35 @@ class VideoProducerAgent(BaseAgent):
         script: Dict[str, Any] = kwargs.get("script", {}) or {}
         theme: Dict[str, Any] = kwargs.get("creative_brief", {}) or {}
         research: Dict[str, Any] = kwargs.get("research_data", {}) or {}
+        vfx_data: Dict[str, Any] = kwargs.get("vfx_data", {}) or {}
+        motion_data: Dict[str, Any] = kwargs.get("motion_data", {}) or {}
+        hook_data: Dict[str, Any] = kwargs.get("hook_data", {}) or {}
         video_id = kwargs.get("video_id", "daily_short")
         video_type = script.get("video_type", "news")
         is_news = video_type == "news"
         out_dir = Path("output") / video_id
         out_dir.mkdir(parents=True, exist_ok=True)
         vcfg = self.config.video
+
+        # Check for approved hook contract
+        approved_hook = hook_data.get("approved_hook", {})
+        if approved_hook and isinstance(approved_hook, dict):
+            hook = approved_hook.get("text", "").strip() or script.get("hook", "").strip()
+            hook_lead_entity = approved_hook.get("paired_visual_entity", "")
+            hook_lead_path = approved_hook.get("paired_visual_path", "")
+            hook_headline = approved_hook.get("headline_overlay", "")
+        else:
+            hook = script.get("hook", "").strip()
+            hook_lead_entity = ""
+            hook_lead_path = ""
+            hook_headline = ""
+
+        # Map VFX plan items by scene_id / index
+        vfx_plan_items = vfx_data.get("vfx_plan", [])
+        vfx_map: Dict[str, Dict[str, Any]] = {}
+        for item in vfx_plan_items:
+            if isinstance(item, dict) and item.get("scene_id"):
+                vfx_map[item["scene_id"]] = item
 
         scenes: List[Dict[str, Any]] = script.get("scenes", [])
         hook = script.get("hook", "").strip()
@@ -114,7 +138,7 @@ class VideoProducerAgent(BaseAgent):
         # Opening Hook: always present at the start of the video, with 100% voice-matched visual
         if hook:
             first_scene = scenes[0] if scenes else {}
-            hook_entity = extract_entity_from_hindi(hook) or ""
+            hook_entity = hook_lead_entity or extract_entity_from_hindi(hook) or ""
             if not hook_entity and first_scene:
                 hook_entity = (first_scene.get("image_query", "") or
                                extract_entity_from_hindi(first_scene.get("narration", "")) or "")
@@ -125,7 +149,7 @@ class VideoProducerAgent(BaseAgent):
             if is_news and first_scene:
                 first_url = (first_scene.get("sources") or [""])[0]
                 hook_pub = by_url.get(first_url, {}).get("image_url", "")
-            hook_preferred = lead_image if not is_news else hook_pub
+            hook_preferred = hook_lead_path or (lead_image if not is_news else hook_pub)
             beats.append({
                 "kind": "hook",
                 "text": hook,
@@ -344,6 +368,20 @@ class VideoProducerAgent(BaseAgent):
             self.logger.warning("pictures are weakly matched to the narration (%.2f) — check the visual prompts",
                                 avg_match)
 
+        # Build and verify frame-accurate timeline with SynchronizationEngine
+        sync_engine = SynchronizationEngine(fps=self.renderer.fps)
+        timeline = sync_engine.build_timeline(
+            beats=beats,
+            durations=voice.durations,
+            seg_owner=seg_owner,
+            assets=assets,
+            fps=self.renderer.fps,
+            tail=0.5,
+        )
+        sync_report = sync_engine.verify_sync(timeline)
+        self.logger.info("Timeline synchronization verified: valid=%s, drift=%.4fs, segments=%d",
+                         sync_report.is_valid, sync_report.drift_seconds, sync_report.segment_count)
+
         # ---- 3. motion-graphics layers --------------------------------------
         # Editor Director: today's look (different every day, learns from yesterday's review)
         editor = EditorDirector(self.config.llm.gemini_api_key)
@@ -443,8 +481,13 @@ class VideoProducerAgent(BaseAgent):
                                               stat=_stat(p.get("say", "")) if b["kind"] == "item" and k > 0 else "")
                 if b["kind"] in ("section", "outro"):
                     fx = "dip"
+                elif b["kind"] == "hook":
+                    hook_vfx = vfx_map.get("scene_000_hook", {})
+                    fx = hook_vfx.get("transition_effect", "punch")
                 elif k == 0:  # a new story: snappy broadcast transition
-                    fx = fx_cycle[b.get("n", ci) % len(fx_cycle)]
+                    scene_key = f"scene_{b.get('n', ci):03d}"
+                    sc_vfx = vfx_map.get(scene_key, {})
+                    fx = sc_vfx.get("transition_effect") or fx_cycle[b.get("n", ci) % len(fx_cycle)]
                 else:         # next line of the same story: straight cut, like TV news
                     fx = "cut"
                 clips.append(SceneClip(bg, frame, pdur, chip=chip, story_start=(k == 0), fx=fx,
@@ -518,7 +561,7 @@ class VideoProducerAgent(BaseAgent):
             data={"video_path": final_path, "audio_path": voice.audio_path, "captions_srt": srt_path, "duration": round(duration, 1),
                   "first_image": first_image, "media_credits": list(dict.fromkeys(credits)),
                   "voice_provider": voice.provider, "editor_recipe": {k: v for k, v in recipe.items() if k != "notes"},
-                  "editor_review": review, "render_qa": qa, "beats": len(beats), "visual_parts": len(clips),
+                  "editor_review": review, "render_qa": qa, "sync_qa": vars(sync_report), "beats": len(beats), "visual_parts": len(clips),
                   "images_found": sum(1 for a in assets.values() if a),
                   "ai_images": sum(1 for a in assets.values() if a and a.source == "ai"),
                   "visual_match": fig, "storage_urls": storage_urls},

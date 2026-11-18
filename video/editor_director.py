@@ -93,10 +93,40 @@ class EditorDirector:
     @staticmethod
     def theme(recipe: Dict[str, Any], base: Optional[dict] = None) -> dict:
         t = dict(base or {})
-        acc, dark, hi = recipe["palette"]
+        # If base already provides a clear brand/creative palette, preserve it
+        if base and base.get("primary_color"):
+            acc = base.get("primary_color")
+            dark = base.get("background_color", "#0B0F1A")
+            hi = base.get("caption_highlight", "#FFD60A")
+        else:
+            acc, dark, hi = recipe.get("palette", ["#E50914", "#0B0F1A", "#FFD60A"])
         t.update({"primary_color": acc, "background_color": dark, "secondary_color": dark,
-                  "caption_highlight": hi, "theme_name": f"editor-{acc}"})
+                  "caption_highlight": hi, "theme_name": base.get("theme_name") if base and base.get("theme_name") else f"editor-{acc}"})
         return t
+
+    def unify_creative_plan(
+        self,
+        creative_brief: Optional[Dict[str, Any]] = None,
+        vfx_plan: Optional[List[Dict[str, Any]]] = None,
+        motion_plan: Optional[List[Dict[str, Any]]] = None,
+        video_type: str = "news",
+    ) -> Dict[str, Any]:
+        """Harmonizes CreativeDirector, VFX, and Motion Graphics into a unified master recipe."""
+        recipe = self.plan(video_type)
+        if creative_brief:
+            if creative_brief.get("primary_color"):
+                recipe["palette"] = [
+                    creative_brief.get("primary_color", "#E50914"),
+                    creative_brief.get("background_color", "#0B0F1A"),
+                    creative_brief.get("caption_highlight", "#FFD60A"),
+                ]
+            if creative_brief.get("color_grade"):
+                recipe["grade"] = creative_brief.get("color_grade")
+
+        # Attach unified sub-plans
+        recipe["vfx_plan"] = vfx_plan or []
+        recipe["motion_plan"] = motion_plan or []
+        return recipe
 
     # ---------------------------------------------------------------- review
     def review(self, video_path: str, recipe: Dict[str, Any], out_dir: str, learn: bool = True) -> Dict[str, Any]:

@@ -20,6 +20,7 @@ import pytz
 from agents.analytics_manager import AnalyticsManagerAgent
 from agents.creative_director import CreativeDirectorAgent
 from agents.fact_verifier import FactVerifierAgent
+from agents.hook_director import HookDirectorAgent
 from agents.motion_graphics import MotionGraphicsAgent
 from agents.prompt_engineer import PromptEngineerAgent
 from agents.publisher import PublisherAgent
@@ -34,9 +35,11 @@ from agents.vfx_agent import VFXAgent
 from core.configuration import AppConfig
 from core.history import HistoryStore
 from core.llm_client import build_llm
+from core.production_context import ProductionContext
 from core.state_manager import PipelineState, StateManager, VideoState
 from telegram.bot import TelegramNotifier, esc
 from telegram.reports import TelegramReportBuilder
+from video.qa_inspector import VideoQAInspector
 
 logger = logging.getLogger("core.orchestrator")
 
@@ -71,10 +74,17 @@ class DailyOrchestrator:
         self.script_agent = ScriptManagerAgent(config, self.state, llm=self.llm)
         self.verifier_agent = FactVerifierAgent(config, self.state, llm=self.llm)
         self.quality_agent = QualityManagerAgent(config, self.state)
+        self.hook_agent = HookDirectorAgent(config, self.state)
         self.creative_agent = CreativeDirectorAgent(config, self.state, history=self.history)
         self.motion_agent = MotionGraphicsAgent(config, self.state)
         self.vfx_agent = VFXAgent(config, self.state)
         self.producer_agent = VideoProducerAgent(config, self.state)
+        self.qa_inspector = VideoQAInspector(
+            target_width=config.video.width,
+            target_height=config.video.height,
+            target_fps=config.video.fps,
+            max_duration=getattr(config.video, "news_max_duration", 59.0),
+        )
         self.seo_agent = SEOManagerAgent(config, self.state, llm=self.llm)
         self.thumbnail_agent = ThumbnailDesignerAgent(config, self.state)
         self.publisher_agent = PublisherAgent(config, self.state)
@@ -144,6 +154,14 @@ class DailyOrchestrator:
             script = script_data.get("script", script_data)
             llm_used = script_data.get("llm", "")
 
+            # Hook Director: Evaluate viral archetypes & enforce visual pairing contract
+            hook_res = await self._stage(vid, "hook_director", lambda: self.hook_agent.execute(
+                research_data=research, script=script, video_type=task.video_type), require_success=False)
+            if hook_res and hook_res.get("approved_hook"):
+                app_h = hook_res["approved_hook"]
+                if app_h.get("text"):
+                    script["hook"] = app_h["text"]
+
             self.state.update_state(vid, state=PipelineState.VERIFYING, title=script.get("title", ""))
             verification = await self._stage(vid, "fact_verification", lambda: self.verifier_agent.execute(
                 script=script, research_data=research))
@@ -157,9 +175,30 @@ class DailyOrchestrator:
             vfx = await self._stage(vid, "vfx_direction", lambda: self.vfx_agent.execute(
                 script=script, creative_brief=creative), require_success=False)
 
+            motion = await self._stage(vid, "motion_graphics", lambda: self.motion_agent.execute(
+                script=script, hook=script.get("hook", ""), out_dir=f"output/{vid}"), require_success=False)
+
             self.state.update_state(vid, state=PipelineState.RENDERING)
             production = await self._stage(vid, "video_production", lambda: self.producer_agent.execute(
-                video_id=vid, script=script, creative_brief=creative, research_data=research, vfx_data=vfx))
+                video_id=vid, script=script, creative_brief=creative, research_data=research,
+                vfx_data=vfx, motion_data=motion, hook_data=hook_res))
+
+            # Independent Post-Render Quality Assurance
+            video_path = production.get("video_path", "")
+            qa_verdict = self.qa_inspector.verify_video(video_path)
+            logger.info("Independent Video QA verdict: %s (score: %.1f, failures: %s, warnings: %s)",
+                        qa_verdict.verdict, qa_verdict.overall_score, qa_verdict.critical_failures, qa_verdict.warnings)
+
+            if qa_verdict.verdict == "FAIL":
+                # If failure is due to slight duration overflow, attempt auto-repair
+                if any("exceeds Shorts limit" in f for f in qa_verdict.critical_failures):
+                    repaired = self.qa_inspector.auto_repair_video(video_path, max_duration=SHORTS_HARD_LIMIT)
+                    if repaired:
+                        qa_verdict = self.qa_inspector.verify_video(repaired)
+                        production["duration"] = self.qa_inspector.inspect_streams(repaired).duration
+
+                if qa_verdict.verdict == "FAIL":
+                    raise StageError("post_render_qa", "; ".join(qa_verdict.critical_failures))
 
             dur = float(production.get("duration") or 0)
             if dur > SHORTS_HARD_LIMIT or (0 < dur < 15):

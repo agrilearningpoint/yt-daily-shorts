@@ -292,6 +292,38 @@ class StateManager:
             return None
         return json.loads(row["data_json"])
 
+    def invalidate_checkpoints(
+        self, video_id: str, stages: List[str]
+    ) -> int:
+        """Delete saved checkpoints for specific stages to prevent stale cache reuse."""
+        if not stages:
+            return 0
+        placeholders = ",".join("?" for _ in stages)
+        with self._lock:
+            conn = self._conn()
+            cur = conn.execute(
+                f"DELETE FROM checkpoints WHERE video_id = ? AND stage IN ({placeholders})",
+                [video_id, *stages],
+            )
+            count = cur.rowcount
+            conn.commit()
+            conn.close()
+        return count
+
+    def invalidate_downstream(
+        self, video_id: str, from_stage: str
+    ) -> List[str]:
+        """Invalidate all stages that depend on ``from_stage``."""
+        try:
+            from core.production_context import STAGE_DEPENDENCY_GRAPH
+            downstream = STAGE_DEPENDENCY_GRAPH.get(from_stage, [])
+        except ImportError:
+            downstream = []
+
+        if downstream:
+            self.invalidate_checkpoints(video_id, downstream)
+        return downstream
+
     # ------------------------------------------------------------------
     # Agent logs
     # ------------------------------------------------------------------

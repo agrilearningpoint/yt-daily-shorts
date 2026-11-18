@@ -1,0 +1,269 @@
+"""Typed data contracts for all pipeline agents and stages.
+
+Provides validated dataclass structures for inputs, outputs, and shared production
+context across the entire multi-agent YouTube Shorts generation system.
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional
+
+
+class VideoFormat(str, Enum):
+    NEWS = "news"
+    KNOWLEDGE = "knowledge"
+
+
+class VisualAssetType(str, Enum):
+    PUBLISHER_PHOTO = "publisher_photo"
+    WIKIPEDIA_PHOTO = "wikipedia_photo"
+    COMMONS_PHOTO = "commons_photo"
+    STOCK_PHOTO = "stock_photo"
+    STOCK_VIDEO = "stock_video"
+    DESIGNED_CARD = "designed_card"
+    AI_ILLUSTRATION = "ai_illustration"
+
+
+# ---------------------------------------------------------------------------
+# Research & Fact Checking Contracts
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ResearchItem:
+    title: str
+    source_url: str
+    source_name: str
+    summary: str = ""
+    image_url: str = ""
+    region: str = "national"  # national | international | today
+    seed: str = ""
+    evidence: str = ""
+
+
+@dataclass
+class ResearchContext:
+    video_type: str
+    topic_category: str
+    day_name: str
+    items: List[ResearchItem] = field(default_factory=list)
+    sources: List[str] = field(default_factory=list)
+    daily_context: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class FactVerificationReport:
+    verdict: str  # pass | fixed | fail | skipped
+    confidence: float
+    issues: List[str] = field(default_factory=list)
+    all_verified: bool = True
+    verified_sources: List[str] = field(default_factory=list)
+    dropped_scenes: List[int] = field(default_factory=list)
+    corrected_scenes: Dict[int, str] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Creative & Hook Contracts
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CreativeBrief:
+    theme_name: str
+    primary_color: str
+    secondary_color: str
+    background_color: str
+    caption_highlight: str
+    transition_style: str
+    music_mood: str
+    font_name: str = "Mukta-ExtraBold"
+    color_grade: str = "broadcast_crisp"
+    editorial_tone: str = "authoritative_breaking"  # breaking | investigative | educational
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+class HookArchetype(str, Enum):
+    CURIOSITY_GAP = "curiosity_gap"
+    UNEXPECTED_FACT = "unexpected_fact"
+    STRONG_STATEMENT = "strong_statement"
+    DIRECT_IMPACT = "direct_impact"
+    BREAKING_NEWS = "breaking_news"
+    EMOTIONAL_INTRIGUE = "emotional_intrigue"
+
+
+@dataclass
+class HookCandidate:
+    archetype: HookArchetype
+    text: str
+    impact_score: float         # 0-100: First-second attention grabbing
+    curiosity_score: float      # 0-100: Compelling intrigue
+    clarity_score: float        # 0-100: Clear, direct meaning
+    factual_score: float        # 0-100: Strict adherence to research facts
+    naturalness_score: float    # 0-100: Natural spoken Hindi phrasing
+    visual_potential: float     # 0-100: Matches high-impact visual
+    composite_score: float = 0.0
+    visual_pairing: str = ""    # Subject/entity required for visual pairing
+
+
+@dataclass
+class ApprovedHook:
+    text: str
+    archetype: str
+    composite_score: float
+    visual_pairing_query: str
+    headline_chip: str
+    entity_hint: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Script & Narration Contracts
+# ---------------------------------------------------------------------------
+
+@dataclass
+class VisualBeatSpec:
+    beat_index: int
+    say_text: str
+    entity: str = ""
+    search_query: str = ""
+    visual_type: VisualAssetType = VisualAssetType.WIKIPEDIA_PHOTO
+    publisher_image: str = ""
+    publisher_name: str = ""
+    article_url: str = ""
+
+
+@dataclass
+class ScriptScene:
+    scene_number: int
+    narration: str
+    on_screen_text: str
+    visual_keywords: str
+    image_query: str
+    category: str
+    headline: str
+    section: str = "national"  # national | international | today
+    sources: List[str] = field(default_factory=list)
+    beats: List[VisualBeatSpec] = field(default_factory=list)
+
+
+@dataclass
+class ApprovedScript:
+    title: str
+    hook: ApprovedHook
+    scenes: List[ScriptScene] = field(default_factory=list)
+    outro: str = ""
+    video_type: str = "news"
+    total_words: int = 0
+    estimated_duration: float = 0.0
+    sources: List[str] = field(default_factory=list)
+
+    def word_count(self) -> int:
+        return (len(self.hook.text.split())
+                + sum(len(s.narration.split()) for s in self.scenes)
+                + len(self.outro.split()))
+
+
+# ---------------------------------------------------------------------------
+# Synchronization, VFX & Motion Graphics Contracts
+# ---------------------------------------------------------------------------
+
+@dataclass
+class WordTimingItem:
+    word: str
+    start: float  # seconds from video start
+    end: float    # seconds from video start
+
+
+@dataclass
+class TimelineSegmentContract:
+    scene_id: str
+    segment_id: str
+    text: str
+    audio_path: str
+    audio_start: float
+    audio_end: float
+    measured_duration: float
+    visual_id: str
+    visual_path: str
+    visual_start: float
+    visual_end: float
+    visual_source: str
+    transition_effect: str
+    camera_motion: str
+    overlay_path: Optional[str] = None
+    chip_path: Optional[str] = None
+    sfx_cue: Optional[str] = None
+    captions: List[WordTimingItem] = field(default_factory=list)
+
+
+@dataclass
+class VFXPlanItem:
+    scene_id: str
+    transition_effect: str  # clean_cut, whip_pan, punch, flash, light_leak, dip
+    camera_motion: str      # push_in, pull_out, pan_left, pan_right, subtle_drift
+    color_grade: str
+    intensity: float = 1.0
+    sfx_type: Optional[str] = None
+
+
+@dataclass
+class MotionGraphicsPlanItem:
+    scene_id: str
+    overlay_path: str
+    headline: str
+    category_badge: str
+    story_counter: str
+    is_hook: bool = False
+    progress_percent: float = 0.0
+
+
+@dataclass
+class MasterEditingTimeline:
+    video_id: str
+    total_duration: float
+    segments: List[TimelineSegmentContract] = field(default_factory=list)
+    master_audio_path: str = ""
+    captions_ass_path: str = ""
+    captions_srt_path: str = ""
+    music_track_path: Optional[str] = None
+    music_volume: float = 0.10
+    color_grade_filter: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Quality & Output Artifact Contracts
+# ---------------------------------------------------------------------------
+
+@dataclass
+class QualityVerificationVerdict:
+    approved: bool
+    overall_score: float
+    script_passed: bool
+    voice_passed: bool
+    visuals_passed: bool
+    sync_passed: bool
+    technical_passed: bool
+    measured_duration: float
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ProductionArtifacts:
+    video_id: str
+    video_path: str
+    thumbnail_path: str
+    captions_srt_path: str
+    captions_ass_path: str
+    voiceover_path: str
+    timings_json_path: str
+    measured_duration: float
+    youtube_id: str = ""
+    youtube_url: str = ""
+    telegram_delivered: bool = False
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
