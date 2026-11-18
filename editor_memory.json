@@ -584,6 +584,27 @@
     "flash_color": "white"
    },
    "score": 4.0
+  },
+  {
+   "at": "2026-11-18T10:16+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "punch",
+     "whip"
+    ],
+    "motion": "slow_push",
+    "grade": "punchy",
+    "zoom": 1.14,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 5.0
   }
  ],
  "option_scores": {
@@ -608,20 +629,20 @@
    "n": 10
   },
   "vignette=true": {
-   "sum": 74.0,
-   "n": 13
+   "sum": 79.0,
+   "n": 14
   },
   "ticker=true": {
-   "sum": 144.0,
-   "n": 26
+   "sum": 149.0,
+   "n": 27
   },
   "flash_color=\"white\"": {
-   "sum": 126.0,
-   "n": 23
+   "sum": 131.0,
+   "n": 24
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 105.0,
-   "n": 20
+   "sum": 110.0,
+   "n": 21
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -636,8 +657,8 @@
    "n": 4
   },
   "zoom=1.14": {
-   "sum": 52.0,
-   "n": 10
+   "sum": 57.0,
+   "n": 11
   },
   "vignette=false": {
    "sum": 70.0,
@@ -672,16 +693,16 @@
    "n": 2
   },
   "grade=\"punchy\"": {
-   "sum": 31.0,
-   "n": 6
+   "sum": 36.0,
+   "n": 7
   },
   "cut_fx=[\"glitch\", \"whip\", \"flash\"]": {
    "sum": 6.0,
    "n": 1
   },
   "motion=\"slow_push\"": {
-   "sum": 40.0,
-   "n": 7
+   "sum": 45.0,
+   "n": 8
   },
   "palette=[\"#FF7A00\", \"#101828\", \"#FFFFFF\"]": {
    "sum": 5.0,
@@ -692,8 +713,8 @@
    "n": 1
   },
   "cut_fx=[\"punch\", \"whip\"]": {
-   "sum": 27.0,
-   "n": 5
+   "sum": 32.0,
+   "n": 6
   },
   "cut_fx=[\"whip\"]": {
    "sum": 21.0,
@@ -713,9 +734,6 @@
   }
  },
  "notes": [
-  "Eliminate visual repetition: Ensure no two adjacent tiles use the exact same or near-identical image. Find distinct visuals or use dynamic motion graphics to vary the look every 2-3 seconds.",
-  "Upgrade generic visuals: Replace all cartoon images, generic stock photos (e.g., random buildings, abstract patterns, generic people/scenes), and logos with high-quality, specific, and impactful real-world footage or professional news graphics directly illustrating the headline.",
-  "Strengthen the hook: The first tile (0) needs a more compelling and visually striking image directly related to a major headline to instantly grab viewer attention, rather than a generic scene or a date.",
   "Replace the generic calendar intro (Tile 0) with a dynamic, high-impact visual and a compelling headline to instantly hook viewers.",
   "Eliminate all instances of repetitive or near-identical images in adjacent tiles; each 3-second segment needs a distinct visual to maintain engagement.",
   "Ensure every picture is highly relevant to its accompanying text and avoid generic stock-like images (e.g., Tiles 8, 9, 14, 23).",
@@ -724,6 +742,9 @@
   "Replace the static subscribe end-card with a seamless visual loop back to the opening frame.",
   "Strengthen the opening hook: Tile 0 needs a dynamic, attention-grabbing visual and a punchy headline that summarizes the top story, not just a generic calendar.",
   "Increase visual variety: Avoid using the same or highly similar imagery in consecutive tiles. Use diverse B-roll, different angles, or relevant graphics to keep visuals fresh every 2-3 seconds.",
-  "Replace generic/placeholder images: For specific news stories, use impactful, relevant visuals instead of generic stock photos (e.g., factories, flags, cityscapes). Immediately fix the placeholder tile (33)."
+  "Replace generic/placeholder images: For specific news stories, use impactful, relevant visuals instead of generic stock photos (e.g., factories, flags, cityscapes). Immediately fix the placeholder tile (33).",
+  "Avoid using static national emblems and repeated graphics consecutively across multiple tiles.",
+  "Ensure the opening tile (tile 0) immediately features a strong, relevant photo alongside the main headline instead of generic visuals.",
+  "Maintain high visual variety by replacing repetitive stock image loops with fresh, dynamic news footage."
  ]
 }
