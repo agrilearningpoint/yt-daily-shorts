@@ -252,7 +252,7 @@ class VideoRenderer:
             self._beat_clip(clips[idx], durs[idx], idx, out_clip, t0=t0_offsets[idx])
             return idx, out_clip
 
-        max_workers = min(4, os.cpu_count() or 4)
+        max_workers = min(2, os.cpu_count() or 2)
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             for idx, p in pool.map(_render_one, range(len(clips))):
                 paths[idx] = p
