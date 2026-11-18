@@ -52,7 +52,7 @@ class TelegramNotifier:
     def send_video(self, video_path: str, caption: str = "", thumb_path: Optional[str] = None) -> bool:
         if not self.enabled or not Path(video_path).exists():
             return False
-        if Path(video_path).stat().st_size > 48 * 1024 * 1024:
+        if Path(video_path).stat().st_size > 50 * 1024 * 1024:
             logger.info("Video too large for Telegram bot upload; skipped.")
             return False
         files = {}
@@ -65,6 +65,15 @@ class TelegramNotifier:
             resp = requests.post(self._api("sendVideo"), data=data, files=files, timeout=180)
             if resp.status_code != 200:
                 logger.warning("Telegram sendVideo %s: %s", resp.status_code, resp.text[:200])
+                # Fallback to sendDocument
+                for f in files.values():
+                    f.seek(0)
+                doc_files = {"document": files["video"]}
+                if "thumbnail" in files:
+                    doc_files["thumbnail"] = files["thumbnail"]
+                resp = requests.post(self._api("sendDocument"), data={"chat_id": self.chat_id, "caption": caption[:1000]}, files=doc_files, timeout=180)
+                if resp.status_code != 200:
+                    logger.warning("Telegram sendDocument fallback %s: %s", resp.status_code, resp.text[:200])
             return resp.status_code == 200
         except Exception as exc:
             logger.warning("Telegram sendVideo failed: %s", exc)
@@ -75,3 +84,33 @@ class TelegramNotifier:
                     f.close()
                 except Exception:
                     pass
+
+
+if __name__ == "__main__":
+    import argparse
+    import os
+    import sys
+
+    parser = argparse.ArgumentParser(description="Send video or message to Telegram")
+    parser.add_argument("--video", type=str, help="Path to video file")
+    parser.add_argument("--caption", type=str, default="", help="Video caption")
+    parser.add_argument("--thumb", type=str, default=None, help="Path to thumbnail")
+    parser.add_argument("--message", type=str, default="", help="Text message to send")
+    parser.add_argument("--token", type=str, default="", help="Bot token (or env YT_TELEGRAM_BOT_TOKEN)")
+    parser.add_argument("--chat-id", type=str, default="", help="Chat ID (or env YT_TELEGRAM_CHAT_ID)")
+    args = parser.parse_args()
+
+    token = args.token or os.environ.get("YT_TELEGRAM_BOT_TOKEN", "")
+    chat_id = args.chat_id or os.environ.get("YT_TELEGRAM_CHAT_ID", "-1003886311757")
+    notifier = TelegramNotifier(token, chat_id)
+    if not notifier.enabled:
+        print("Error: bot_token or chat_id is missing.")
+        sys.exit(1)
+    if args.video:
+        ok = notifier.send_video(args.video, caption=args.caption, thumb_path=args.thumb)
+        print("Video sent successfully" if ok else "Failed to send video")
+        sys.exit(0 if ok else 1)
+    elif args.message:
+        ok = notifier.send_message(args.message)
+        print("Message sent successfully" if ok else "Failed to send message")
+        sys.exit(0 if ok else 1)
