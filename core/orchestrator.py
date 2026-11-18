@@ -186,19 +186,19 @@ class DailyOrchestrator:
             # Independent Post-Render Quality Assurance
             video_path = production.get("video_path", "")
             qa_verdict = self.qa_inspector.verify_video(video_path)
-            logger.info("Independent Video QA verdict: %s (score: %.1f, failures: %s, warnings: %s)",
-                        qa_verdict.verdict, qa_verdict.overall_score, qa_verdict.critical_failures, qa_verdict.warnings)
+            logger.info("Independent Video QA: approved=%s, score=%.1f, errors=%s, warnings=%s",
+                        qa_verdict.approved, qa_verdict.overall_score, qa_verdict.errors, qa_verdict.warnings)
 
-            if qa_verdict.verdict == "FAIL":
+            if not qa_verdict.approved:
                 # If failure is due to slight duration overflow, attempt auto-repair
-                if any("exceeds Shorts limit" in f for f in qa_verdict.critical_failures):
+                if any("exceeds Shorts limit" in f for f in qa_verdict.errors):
                     repaired = self.qa_inspector.auto_repair_video(video_path, max_duration=SHORTS_HARD_LIMIT)
                     if repaired:
                         qa_verdict = self.qa_inspector.verify_video(repaired)
                         production["duration"] = self.qa_inspector.inspect_streams(repaired).duration
 
-                if qa_verdict.verdict == "FAIL":
-                    raise StageError("post_render_qa", "; ".join(qa_verdict.critical_failures))
+                if not qa_verdict.approved:
+                    raise StageError("post_render_qa", "; ".join(qa_verdict.errors))
 
             dur = float(production.get("duration") or 0)
             if dur > SHORTS_HARD_LIMIT or (0 < dur < 15):

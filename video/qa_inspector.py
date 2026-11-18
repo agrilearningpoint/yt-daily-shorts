@@ -148,10 +148,15 @@ class VideoQAInspector:
         path = Path(file_path)
         if not path.exists():
             return QualityVerificationVerdict(
-                verdict="FAIL",
+                approved=False,
                 overall_score=0.0,
-                pillar_scores=pillars,
-                critical_failures=[f"File not found: {file_path}"],
+                script_passed=True,
+                voice_passed=False,
+                visuals_passed=False,
+                sync_passed=False,
+                technical_passed=False,
+                measured_duration=0.0,
+                errors=[f"File not found: {file_path}"],
             )
 
         if path.stat().st_size < 200_000:
@@ -219,20 +224,19 @@ class VideoQAInspector:
         # Calculate overall score
         total_score = sum(max(0.0, s) for s in pillars.values()) / len(pillars)
 
-        verdict = "PASS"
-        if failures:
-            verdict = "FAIL"
-        elif total_score < 75.0 or warnings:
-            verdict = "WARN"
+        approved = (len(failures) == 0 and total_score >= 60.0)
 
         report = QualityVerificationVerdict(
-            verdict=verdict,
+            approved=approved,
             overall_score=round(total_score, 1),
-            pillar_scores={k: round(max(0.0, v), 1) for k, v in pillars.items()},
-            critical_failures=failures,
+            script_passed=True,
+            voice_passed=streams.has_audio,
+            visuals_passed=streams.has_video and not bool(black_stretches),
+            sync_passed=pillars["sync"] >= 70.0,
+            technical_passed=pillars["technical"] >= 70.0,
+            measured_duration=round(effective_duration, 2),
+            errors=failures,
             warnings=warnings,
-            auto_repair_attempted=False,
-            auto_repair_succeeded=False,
         )
         return report
 
