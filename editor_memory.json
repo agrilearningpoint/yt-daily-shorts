@@ -605,6 +605,26 @@
     "flash_color": "white"
    },
    "score": 5.0
+  },
+  {
+   "at": "2026-11-18T12:46+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "flash"
+    ],
+    "motion": "parallax_pan",
+    "grade": "neutral",
+    "zoom": 1.1,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 3.0
   }
  ],
  "option_scores": {
@@ -621,36 +641,36 @@
    "n": 9
   },
   "grade=\"neutral\"": {
-   "sum": 45.0,
-   "n": 7
+   "sum": 48.0,
+   "n": 8
   },
   "zoom=1.1": {
-   "sum": 59.0,
-   "n": 10
+   "sum": 62.0,
+   "n": 11
   },
   "vignette=true": {
    "sum": 79.0,
    "n": 14
   },
   "ticker=true": {
-   "sum": 149.0,
-   "n": 27
+   "sum": 152.0,
+   "n": 28
   },
   "flash_color=\"white\"": {
-   "sum": 131.0,
-   "n": 24
+   "sum": 134.0,
+   "n": 25
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 110.0,
-   "n": 21
+   "sum": 113.0,
+   "n": 22
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
    "n": 1
   },
   "motion=\"parallax_pan\"": {
-   "sum": 32.0,
-   "n": 6
+   "sum": 35.0,
+   "n": 7
   },
   "grade=\"warm_film\"": {
    "sum": 20.0,
@@ -661,8 +681,8 @@
    "n": 11
   },
   "vignette=false": {
-   "sum": 70.0,
-   "n": 13
+   "sum": 73.0,
+   "n": 14
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -725,8 +745,8 @@
    "n": 3
   },
   "cut_fx=[\"flash\"]": {
-   "sum": 31.0,
-   "n": 6
+   "sum": 34.0,
+   "n": 7
   },
   "grade=\"news_crisp\"": {
    "sum": 5.0,
@@ -734,9 +754,6 @@
   }
  },
  "notes": [
-  "Replace the generic calendar intro (Tile 0) with a dynamic, high-impact visual and a compelling headline to instantly hook viewers.",
-  "Eliminate all instances of repetitive or near-identical images in adjacent tiles; each 3-second segment needs a distinct visual to maintain engagement.",
-  "Ensure every picture is highly relevant to its accompanying text and avoid generic stock-like images (e.g., Tiles 8, 9, 14, 23).",
   "Replace generic stock photos (such as airplanes and petrol pumps) with authentic news footage.",
   "Avoid full-screen text slides; keep subject photos visible behind breaking news headlines.",
   "Replace the static subscribe end-card with a seamless visual loop back to the opening frame.",
@@ -745,6 +762,9 @@
   "Replace generic/placeholder images: For specific news stories, use impactful, relevant visuals instead of generic stock photos (e.g., factories, flags, cityscapes). Immediately fix the placeholder tile (33).",
   "Avoid using static national emblems and repeated graphics consecutively across multiple tiles.",
   "Ensure the opening tile (tile 0) immediately features a strong, relevant photo alongside the main headline instead of generic visuals.",
-  "Maintain high visual variety by replacing repetitive stock image loops with fresh, dynamic news footage."
+  "Maintain high visual variety by replacing repetitive stock image loops with fresh, dynamic news footage.",
+  "The first frame (Tile 0) must be a strong, instantly hooking headline with a relevant, dynamic image, not a generic channel intro graphic.",
+  "Significantly increase visual variety; avoid static repetition of images across neighboring tiles. Aim for a distinct visual change every 2-3 seconds using diverse footage or dynamic graphics.",
+  "Replace all generic/stock images (e.g., astrological wheels, random buildings, generic trains, flags) with specific, high-quality visuals directly illustrating the news story."
  ]
 }
