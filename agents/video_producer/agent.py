@@ -113,14 +113,23 @@ class VideoProducerAgent(BaseAgent):
         fig: Dict[str, Any] = {"avg_match": -1, "picture_parts": 0, "no_picture_parts": 0}
         # Opening Hook: always present at the start of the video, with 100% voice-matched visual
         if hook:
-            hook_entity = extract_entity_from_hindi(hook) or ""
-            hook_theme = detect_topic_theme(hook)
-            hook_search = hook_entity or (topic_kw if not is_news else "Breaking News India")
             first_scene = scenes[0] if scenes else {}
+            hook_entity = extract_entity_from_hindi(hook) or ""
+            if not hook_entity and first_scene:
+                hook_entity = (first_scene.get("image_query", "") or
+                               extract_entity_from_hindi(first_scene.get("narration", "")) or "")
+            hook_search = (hook_entity or
+                           first_scene.get("visual_keywords", "") or
+                           (topic_kw if not is_news else "Parliament of India building New Delhi"))
+            hook_pub = ""
+            if is_news and first_scene:
+                first_url = (first_scene.get("sources") or [""])[0]
+                hook_pub = by_url.get(first_url, {}).get("image_url", "")
+            hook_preferred = lead_image if not is_news else hook_pub
             beats.append({
                 "kind": "hook",
                 "text": hook,
-                "chip": "आज की बड़ी खबरें" if is_news else (first_scene.get("on_screen_text", "") or "विशेष जानकारी"),
+                "chip": first_scene.get("on_screen_text", "") or ("आज की बड़ी खबर" if is_news else "विशेष जानकारी"),
                 "category": "बड़ी खबर",
                 "parts": [{
                     "say": hook,
@@ -128,7 +137,7 @@ class VideoProducerAgent(BaseAgent):
                     "entity": hook_entity,
                     "search": hook_search,
                     "source": "",
-                    "preferred": lead_image if not is_news else "",
+                    "preferred": hook_preferred,
                 }],
             })
         for i, s in enumerate(scenes):
@@ -380,7 +389,7 @@ class VideoProducerAgent(BaseAgent):
                     if is_news:
                         frame = self.motion_engine.compose_broadcast_overlay(
                             out_path=str(out_dir / f"ov_{i:03d}_{k}.png"),
-                            headline=b.get("chip") or hook[:65],
+                            headline=hook[:75],
                             category="बड़ी खबर",
                             story_index=0,
                             total_stories=n_items,

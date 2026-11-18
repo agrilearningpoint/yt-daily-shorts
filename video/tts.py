@@ -351,7 +351,7 @@ class TTSEngine:
                 elif chunk["type"] == "WordBoundary":
                     start = chunk["offset"] / 1e7
                     words.append(WordTiming(chunk["text"], start, start + chunk["duration"] / 1e7))
-        if out_file.stat().st_size < 2000:
+        if not out_file.exists() or out_file.stat().st_size < 1000:
             raise TTSError("edge-tts returned no audio")
         return words
 
@@ -386,6 +386,17 @@ class TTSEngine:
                 last_exc = exc
                 logger.warning("edge-tts attempt %d (%s) failed: %s", attempt + 1, voice, exc)
                 await asyncio.sleep(2 * (attempt + 1))
+        if self.gemini:
+            try:
+                raw_wav = str(out_file.with_suffix(".wav"))
+                await asyncio.to_thread(self.gemini.synthesize, clean, "clear Hindi TV news anchor", raw_wav)
+                if Path(raw_wav).exists():
+                    self._trim_segment_silence(Path(raw_wav))
+                    duration = probe_duration(raw_wav)
+                    return Segment(text=clean, audio_path=raw_wav, duration=duration,
+                                   words=distribute_words(clean, duration))
+            except Exception as g_exc:
+                logger.warning("Segment Gemini fallback failed: %s", g_exc)
         if self.strict:
             raise TTSError(f"TTS failed after retries: {last_exc}")
         duration = max(1.5, len(clean.split()) / 2.35)
@@ -395,8 +406,13 @@ class TTSEngine:
                        words=distribute_words(clean, duration))
 
     async def synthesize_segments(self, texts: List[str], out_dir: str) -> List[Segment]:
-        return [await self.synthesize_segment(t, str(Path(out_dir) / f"voice_{i:02d}.mp3"))
-                for i, t in enumerate(texts)]
+        segments = []
+        for i, t in enumerate(texts):
+            seg = await self.synthesize_segment(t, str(Path(out_dir) / f"voice_{i:02d}.mp3"))
+            segments.append(seg)
+            if i < len(texts) - 1:
+                await asyncio.sleep(0.12)
+        return segments
 
     # -- main API ------------------------------------------------------------
     async def voice_beats(self, texts: List[str], out_dir: str, style: str = "") -> VoiceResult:

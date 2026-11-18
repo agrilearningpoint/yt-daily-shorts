@@ -663,17 +663,17 @@ class MediaCollector:
         ai = [("ai", lambda: self._agnes(visual or search, dest, mode)),
               ("ai-cf", lambda: self._cloudflare(visual or search, dest, mode)),
               ("ai-hf", lambda: self._huggingface(visual or search, dest, mode))]
+        tail = []
+        if self.use_wikimedia:
+            tail.append(("commons", self._checked(
+                lambda: search and self._commons(" ".join(search.split()[:3]), dest), vlm_desc)))
         if hint == "ai":
             order = ai + ent + clips + stock
         elif hint == "stock":
             order = ent + clips + stock + tail + ai
         else:  # authentic real photo/entity first, then real stock footage/photos, Wikimedia Commons, then AI
             order = ent + stock + clips + tail + ai
-        tail = []
-        if self.use_wikimedia:
-            tail.append(("commons", self._checked(
-                lambda: search and self._commons(" ".join(search.split()[:3]), dest), vlm_desc)))
-        for name, fn in steps + order + tail:
+        for name, fn in steps + order:
             try:
                 asset = fn()
             except Exception as exc:

@@ -261,6 +261,13 @@ class SemanticVisualMatcher:
         self.timeout = timeout
         self._cache: Dict[str, Optional[str]] = {}
 
+    @staticmethod
+    def _is_graphic_or_flag(url: str) -> bool:
+        u = (url or "").lower()
+        return (u.endswith(".svg") or ".svg." in u or
+                any(k in u for k in ("flag_of", "emblem_of", "seal_of", "symbol_",
+                                     "coat_of_arms", "logo", "insignia", "map_of", "locator", "diagram")))
+
     def fetch_wikipedia_lead_image(self, entity_title: str, dest_path: Path) -> Optional[str]:
         """Fetch the official primary photo of a Wikipedia entity (English or Hindi Wikipedia)."""
         if not entity_title:
@@ -277,10 +284,24 @@ class SemanticVisualMatcher:
             if r.status_code == 200:
                 data = r.json()
                 img_url = (data.get("originalimage") or {}).get("source") or (data.get("thumbnail") or {}).get("source")
-                if img_url and self._download_image(img_url, dest_path):
-                    logger.info("Semantic Matcher: Found EN Wikipedia image for '%s' -> %s", entity_title, img_url)
-                    self._cache[key] = str(dest_path)
-                    return str(dest_path)
+                if img_url:
+                    # If the lead image is a vector flag, emblem, or seal, try a real photo first
+                    if self._is_graphic_or_flag(img_url):
+                        real_photo = (
+                            self.search_wikimedia_commons(f"{entity_title} building", dest_path) or
+                            self.search_wikimedia_commons(f"{entity_title} headquarters", dest_path) or
+                            self.search_wikimedia_commons(f"{entity_title} photo", dest_path) or
+                            self.search_wikimedia_commons(entity_title, dest_path)
+                        )
+                        if real_photo and Path(real_photo).exists():
+                            logger.info("Semantic Matcher: Replaced vector graphic with real Commons photo for '%s'", entity_title)
+                            self._cache[key] = str(dest_path)
+                            return str(dest_path)
+
+                    if self._download_image(img_url, dest_path):
+                        logger.info("Semantic Matcher: Found EN Wikipedia image for '%s' -> %s", entity_title, img_url)
+                        self._cache[key] = str(dest_path)
+                        return str(dest_path)
         except Exception as e:
             logger.debug("EN Wikipedia fetch failed for '%s': %s", entity_title, e)
 
@@ -292,10 +313,20 @@ class SemanticVisualMatcher:
             if r.status_code == 200:
                 data = r.json()
                 img_url = (data.get("originalimage") or {}).get("source") or (data.get("thumbnail") or {}).get("source")
-                if img_url and self._download_image(img_url, dest_path):
-                    logger.info("Semantic Matcher: Found HI Wikipedia image for '%s' -> %s", entity_title, img_url)
-                    self._cache[key] = str(dest_path)
-                    return str(dest_path)
+                if img_url:
+                    if self._is_graphic_or_flag(img_url):
+                        real_photo = (
+                            self.search_wikimedia_commons(f"{entity_title} photo", dest_path) or
+                            self.search_wikimedia_commons(entity_title, dest_path)
+                        )
+                        if real_photo and Path(real_photo).exists():
+                            self._cache[key] = str(dest_path)
+                            return str(dest_path)
+
+                    if self._download_image(img_url, dest_path):
+                        logger.info("Semantic Matcher: Found HI Wikipedia image for '%s' -> %s", entity_title, img_url)
+                        self._cache[key] = str(dest_path)
+                        return str(dest_path)
         except Exception as e:
             logger.debug("HI Wikipedia fetch failed for '%s': %s", entity_title, e)
 
@@ -310,10 +341,11 @@ class SemanticVisualMatcher:
         params = {
             "action": "query",
             "generator": "search",
-            "gsrsearch": f"{query} filetype:bitmap",
-            "gsrlimit": 5,
+            "gsrsearch": f"{query} filetype:bitmap -filetype:svg",
+            "gsrnamespace": "6",
+            "gsrlimit": 8,
             "prop": "imageinfo",
-            "iiprop": "url|size|extmetadata",
+            "iiprop": "url|size|mime",
             "format": "json"
         }
         try:
@@ -324,12 +356,15 @@ class SemanticVisualMatcher:
                     infos = page.get("imageinfo", [])
                     if infos:
                         img_url = infos[0].get("url")
+                        mime = infos[0].get("mime", "")
                         width = infos[0].get("width", 0)
                         height = infos[0].get("height", 0)
-                        if img_url and width >= 400 and height >= 400:
-                            if self._download_image(img_url, dest_path):
-                                logger.info("Semantic Matcher: Found Wikimedia Commons image for '%s'", query)
-                                return str(dest_path)
+                        if (img_url and mime in ("image/jpeg", "image/png", "image/webp")
+                                and not self._is_graphic_or_flag(img_url)):
+                            if width >= 400 and height >= 400:
+                                if self._download_image(img_url, dest_path):
+                                    logger.info("Semantic Matcher: Found Wikimedia Commons image for '%s'", query)
+                                    return str(dest_path)
         except Exception as e:
             logger.debug("Wikimedia search error for '%s': %s", query, e)
         return None
