@@ -63,7 +63,8 @@ class FactVerifierAgent(BaseAgent):
         if drop and script.get("video_type") == "news":
             from core.duration import MIN_NEWS_STORIES
             keep = [s for s in script.get("scenes", []) if int(s.get("scene_number", 0)) not in drop]
-            if len(keep) >= MIN_NEWS_STORIES:
+            min_req = MIN_NEWS_STORIES if len(script.get("scenes", [])) >= MIN_NEWS_STORIES else max(1, len(script.get("scenes", [])) - 3)
+            if len(keep) >= min_req:
                 self.logger.info("Dropping %d unsupported stories: %s", len(drop), sorted(drop))
                 script["scenes"] = keep
                 for n, s in enumerate(keep, 1):

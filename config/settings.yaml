@@ -45,14 +45,14 @@ video:
   target_duration: 52
   min_duration: 25
   max_duration: 58
-  news_max_duration: 140
-  news_target_duration: 120
-  news_national_count: 16
-  news_international_count: 4
+  news_max_duration: 150
+  news_target_duration: 130
+  news_national_count: 17
+  news_international_count: 5
   output_format: "mp4"
   background_music: true
   music_volume: 0.10
-  news_headline_count: 20
+  news_headline_count: 22
   depth_motion: true
   show_headline_chips: true
   sound_effects: true

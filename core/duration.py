@@ -14,7 +14,7 @@ VOICE_SPEED = 1.05
 # Everything that estimates length must use these, or a script the writer accepts gets rejected later.
 WORDS_PER_SEC = {k: round(v * VOICE_SPEED, 3) for k, v in _BASE_WORDS_PER_SEC.items()}
 SHORTS_HARD_LIMIT = 179.0                         # YouTube Shorts max is 180 s
-MIN_NEWS_STORIES = 12                             # below this we skip the day instead of padding with old news
+MIN_NEWS_STORIES = 20                             # 20+ news headlines for rapid-fire bulletin
 
 
 def words_of(script: Dict[str, Any]) -> int:

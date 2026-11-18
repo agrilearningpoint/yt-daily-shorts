@@ -23,8 +23,8 @@ Return ONLY valid JSON:
 {
  "hook": "...",
  "national": [
-   1. "national": 16 DIFFERENT Indian stories (national politics, government, states, economy)
-   2. "international": 4 DIFFERENT world stories (world leaders, wars/diplomacy)
+   1. "national": 17 DIFFERENT Indian stories (national politics, government, states, economy)
+   2. "international": 5 DIFFERENT world stories (world leaders, wars/diplomacy)
  ],
  "national": [{"on_screen_text": "...", "src": 1, "parts": [...]}],
  "international": [{"on_screen_text": "...", "src": 7, "parts": [...]}]

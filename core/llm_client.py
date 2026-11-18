@@ -299,8 +299,8 @@ class MockLLMProvider(BaseLLMProvider):
                 hit = re.search(pattern, prompt)
                 return int(hit.group(1)) if hit else default
 
-            n_nat = _count(r"(\d+)\s+DIFFERENT Indian stories", 16)
-            n_int = _count(r"(\d+)\s+DIFFERENT world stories", 4)
+            n_nat = _count(r"(\d+)\s+DIFFERENT Indian stories", 17)
+            n_int = _count(r"(\d+)\s+DIFFERENT world stories", 5)
             topics = ["डिजिटल इंडिया", "इसरो मिशन", "किसान योजना", "रेलवे विस्तार",
                       "निर्यात वृद्धि", "शिक्षा नीति"]
 
@@ -322,8 +322,8 @@ class MockLLMProvider(BaseLLMProvider):
             return {
                 "title": "आज की बड़ी खबरें",
                 "hook": f"आज की सबसे बड़ी खबर: {topics[0]} पर सरकार का बड़ा फैसला",
-                "national": [story(i, "national") for i in range(max(n_nat, 4))],
-                "international": [story(i, "international") for i in range(max(n_int, 2))],
+                "national": [story(i, "national") for i in range(max(n_nat, 16))],
+                "international": [story(i, "international") for i in range(max(n_int, 5))],
                 "sources": ["https://pib.gov.in", "https://ddnews.gov.in"],
             }
         if "SEO_METADATA" in prompt:

@@ -148,8 +148,14 @@ class ScriptManagerAgent(BaseAgent):
         if t:
             return t
         v = self.config.video
-        return {"national": v.news_national_count, "international": v.news_international_count,
-                "min_national": v.news_national_count - 6, "min_international": min(5, v.news_international_count)}
+        nat = getattr(v, "news_national_count", 17)
+        intl = getattr(v, "news_international_count", 5)
+        return {
+            "national": nat,
+            "international": intl,
+            "min_national": max(15, nat - 2),
+            "min_international": max(5, intl - 1),
+        }
 
     def _normalize_scenes(self, script: Script) -> None:
         """Auto-split parts > 9 words and cap story length <= 20 words so LLM overshoots never fail."""
@@ -203,13 +209,26 @@ class ScriptManagerAgent(BaseAgent):
                 s.narration = " ".join(pt["say"] for pt in new_parts if pt.get("say"))
 
     def fit_news(self, script: Script, max_w: int) -> None:
-        """LLMs overshoot length: normalize parts/stories and drop extra stories instead of failing."""
+        """Ensure 20+ news stories fit within word limits by trimming per-story length before ever dropping stories."""
         self._normalize_scenes(script)
         t = self._targets()
         need = {"national": t["min_national"], "international": t["min_international"]}
         sec = lambda s: "international" if s.section == "international" else "national"
-        # very long stories first, then trailing ones, while words exceed the budget
-        while script.word_count() > max_w:
+
+        # Stage 1: Tighten any story exceeding 12 words down to 10-12 words
+        if script.word_count() > max_w:
+            for s in script.scenes:
+                words = s.narration.split()
+                if len(words) > 12 and s.section != "today":
+                    trimmed = " ".join(words[:11]).rstrip("।,?.") + "।"
+                    s.narration = trimmed
+                    if s.parts:
+                        s.parts[0]["say"] = trimmed
+                        s.parts = s.parts[:1]
+
+        # Stage 2: Only drop surplus stories if count is strictly greater than 20
+        total_stories = sum(1 for s in script.scenes if s.section != "today")
+        while script.word_count() > max_w and total_stories > 20:
             counts = {k: sum(1 for s in script.scenes if sec(s) == k) for k in need}
             cand = [s for s in script.scenes
                     if counts[sec(s)] > need[sec(s)] and s.section != "today"]
@@ -218,6 +237,7 @@ class ScriptManagerAgent(BaseAgent):
             victim = max(cand, key=lambda s: (len(s.narration.split()) > 14, sec(s) == "national",
                                               len(s.narration.split()), s.scene_number))
             script.scenes.remove(victim)
+            total_stories -= 1
         for i, s in enumerate(script.scenes, 1):
             s.scene_number = i
 

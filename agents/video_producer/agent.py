@@ -16,12 +16,16 @@ import pytz
 
 from agents.base_agent import AgentResult, BaseAgent
 from video.vision_check import make_vision_check
-from video.media_collector import MediaCollector
+from video.media_collector import MediaCollector, MediaAsset
 from video.renderer import SceneClip, VideoRenderer
 from video.scene_composer import (SceneComposer, compose_chip, compose_frame, compose_ticker,
                                   compose_title_card)
 from video.editor_director import EditorDirector
 from video.tts import GeminiTTS, TTSEngine, probe_duration
+from video.semantic_matcher import (SemanticVisualMatcher, extract_entity_from_hindi,
+                                    detect_topic_theme)
+from video.motion_graphics import MotionGraphicsEngine
+from video.vfx_engine import VFXEngine
 
 HINDI_MONTHS = ["जनवरी", "फरवरी", "मार्च", "अप्रैल", "मई", "जून", "जुलाई", "अगस्त", "सितंबर", "अक्टूबर", "नवंबर", "दिसंबर"]
 CATEGORY_BADGES = {
@@ -72,6 +76,9 @@ class VideoProducerAgent(BaseAgent):
                                             if getattr(config.media, "vision_check", True) else None))
         self.renderer = VideoRenderer(config.video.width, config.video.height, config.video.fps)
         self.renderer.depth_motion = bool(getattr(config.video, "depth_motion", True))
+        self.motion_engine = MotionGraphicsEngine(channel_name=getattr(config.general, "channel_name", "BHARAT KI SOCH"))
+        self.vfx_engine = VFXEngine(color_grade=getattr(config.video, "color_grade", "broadcast_crisp"))
+        self.semantic_matcher = SemanticVisualMatcher()
 
     def _date_label(self) -> str:
         now = datetime.now(pytz.timezone(self.config.general.timezone))
@@ -104,15 +111,26 @@ class VideoProducerAgent(BaseAgent):
         by_url = {i.get("source_url"): i for i in items}
         beats: List[Dict[str, Any]] = []
         fig: Dict[str, Any] = {"avg_match": -1, "picture_parts": 0, "no_picture_parts": 0}
-        # Opening: the date/festival line replaces the generic hook when the script has a "today" block
-        today_scenes = [sc for sc in scenes if sc.get("section") == "today"]
-        if not today_scenes and hook:
-            first = (scenes[0].get("parts") or [{}])[0] if scenes else {}
-            beats.append({"kind": "hook", "text": hook, "chip": "", "category": "",
-                          "parts": [{"say": hook, "visual": first.get("visual", "") or topic_kw,
-                                     "entity": first.get("entity", "") or (scenes[0].get("image_query", "") if scenes else ""),
-                                     "search": first.get("search", "") or topic_kw, "source": first.get("source", ""),
-                                     "preferred": lead_image}]})
+        # Opening Hook: always present at the start of the video, with 100% voice-matched visual
+        if hook:
+            hook_entity = extract_entity_from_hindi(hook) or ""
+            hook_theme = detect_topic_theme(hook)
+            hook_search = hook_entity or (topic_kw if not is_news else "Breaking News India")
+            first_scene = scenes[0] if scenes else {}
+            beats.append({
+                "kind": "hook",
+                "text": hook,
+                "chip": "आज की बड़ी खबरें" if is_news else (first_scene.get("on_screen_text", "") or "विशेष जानकारी"),
+                "category": "बड़ी खबर",
+                "parts": [{
+                    "say": hook,
+                    "visual": hook,
+                    "entity": hook_entity,
+                    "search": hook_search,
+                    "source": "",
+                    "preferred": lead_image if not is_news else "",
+                }],
+            })
         for i, s in enumerate(scenes):
             parts = [dict(p) for p in (s.get("parts") or [])] or [{
                 "say": s["narration"], "visual": s.get("visual_keywords", ""), "entity": s.get("image_query", ""),
@@ -141,6 +159,9 @@ class VideoProducerAgent(BaseAgent):
             # trading) → देश → दुनिया. The "today" block needs no announcement, it IS the opening.
             withsec, seen = [], set()
             for b in beats:
+                if b["kind"] == "hook":
+                    withsec.append(b)
+                    continue
                 sec = scenes[b["n"] - 1].get("section", "national") if b["kind"] == "item" else ""
                 if sec and sec not in seen:
                     seen.add(sec)
@@ -203,22 +224,72 @@ class VideoProducerAgent(BaseAgent):
             tempo = min(total_audio / max_d, 1.06)   # never chipmunk the anchor
             self.logger.warning("Voice %.1fs > %ss — tempo %.3f", total_audio, max_d, tempo)
 
-        # ---- 2. one picture per small part (parallel) -------------------------
+        # ---- 2. semantic visual sourcing (Wikipedia / Wikimedia / MediaCollector) ----
         specs = []
         for i, b in enumerate(beats):
             for k, p in enumerate(b["parts"]):
                 specs.append({**p, "dest": str(out_dir / f"src_{i:03d}_{k}.jpg"), "_beat": i, "_part": k})
-        found = self.media.find_visuals(specs, mode="news" if is_news else "knowledge")
-        assets: Dict[tuple, Any] = {(sp["_beat"], sp["_part"]): a for sp, a in zip(specs, found)}
-        # A part with no matching picture keeps its story's own picture (never a random one).
+
+        assets: Dict[tuple, Any] = {}
+        unresolved_specs = []
+
+        for sp in specs:
+            key = (sp["_beat"], sp["_part"])
+            say_text = sp.get("say", "")
+            entity = sp.get("entity", "") or extract_entity_from_hindi(say_text)
+            dest = Path(sp["dest"])
+
+            # 1. High-precision Semantic Match via Wikipedia / Wikimedia
+            if entity:
+                matched_path, credit = self.semantic_matcher.resolve_accurate_visual(
+                    spoken_text=say_text,
+                    entity_hint=entity,
+                    search_hint=sp.get("search", ""),
+                    dest_path=dest,
+                )
+                if matched_path and Path(matched_path).exists():
+                    assets[key] = MediaAsset(
+                        path=str(matched_path),
+                        source="wikipedia",
+                        credit=credit,
+                        labels=entity,
+                        match=1.0,
+                    )
+                    continue
+
+            # 2. Publisher article photo if available
+            pub_img = sp.get("publisher", "")
+            if pub_img and self.semantic_matcher._download_image(pub_img, dest):
+                assets[key] = MediaAsset(
+                    path=str(dest),
+                    source="publisher",
+                    credit=sp.get("publisher_name", "News Publisher"),
+                    labels="news article image",
+                    match=0.95,
+                )
+                continue
+
+            unresolved_specs.append(sp)
+
+        # 3. For any remaining specs, query MediaCollector
+        if unresolved_specs:
+            found = self.media.find_visuals(unresolved_specs, mode="news" if is_news else "knowledge")
+            for sp, a in zip(unresolved_specs, found):
+                if a and getattr(a, "path", None) and Path(a.path).exists():
+                    assets[(sp["_beat"], sp["_part"])] = a
+
+        # 4. Strict intra-story resolution only: NEVER borrow from another story
         missing = 0
         for i, b in enumerate(beats):
             n = len(b["parts"])
             for k in range(n):
                 if not assets.get((i, k)):
-                    near = [assets.get((i, j)) for j in sorted(range(n), key=lambda j: abs(j - k)) if j != k]
-                    assets[(i, k)] = next((a for a in near if a), None)
-                    if not assets[(i, k)]:
+                    # Only borrow from other parts of the EXACT SAME beat
+                    same_story = [assets.get((i, j)) for j in range(n) if j != k and assets.get((i, j))]
+                    if same_story:
+                        assets[(i, k)] = same_story[0]
+                    else:
+                        assets[(i, k)] = None
                         missing += 1
         scored = [a.match for a in assets.values() if a and getattr(a, "match", -1) >= 0]
         avg_match = sum(scored) / len(scored) if scored else -1
@@ -235,6 +306,8 @@ class VideoProducerAgent(BaseAgent):
         recipe = editor.plan("news" if is_news else "knowledge")
         theme = EditorDirector.theme(recipe, theme)
         composer = SceneComposer(theme, channel_name=self.config.general.channel_name)
+        if "grade" not in recipe or not recipe.get("grade"):
+            recipe["grade"] = self.vfx_engine.color_grade
         self.renderer.recipe = recipe
         ticker_y = 0
         self.renderer.ticker = None
@@ -243,7 +316,7 @@ class VideoProducerAgent(BaseAgent):
             if heads:
                 self.renderer.ticker = compose_ticker(composer, str(out_dir / "ticker.png"), heads)
                 ticker_y = self.renderer.ticker_y
-        fx_cycle = recipe.get("cut_fx") or ["flash"]
+        fx_cycle = ["punch", "whip", "flash", "glitch", "light"]
         default_badge = "आज की बड़ी खबरें" if is_news else CATEGORY_BADGES.get(research.get("day_name", ""), "रोचक जानकारी")
         date_label = self._date_label()
         n_items = sum(1 for b in beats if b["kind"] == "item")
@@ -267,33 +340,66 @@ class VideoProducerAgent(BaseAgent):
                 bg = str(out_dir / f"bg_{i:03d}_{k}.jpg")
                 chip = None
                 if b["kind"] == "hook":
-                    big = script.get("title", "")[:60] if is_news else (scenes[0].get("on_screen_text", "") if scenes else "")
-                    compose_title_card(composer, bg, big or hook[:40], date_label, asset.path if asset else None, seed=ci)
+                    composer.compose_background(asset.path if asset else None, bg, seed=ci,
+                                                card_text="" if asset else hook[:50])
+                    if is_news:
+                        frame = self.motion_engine.compose_broadcast_overlay(
+                            out_path=str(out_dir / f"ov_{i:03d}_{k}.png"),
+                            headline=b.get("chip") or hook[:65],
+                            category="बड़ी खबर",
+                            story_index=0,
+                            total_stories=n_items,
+                            date_str=date_label,
+                            is_hook=True,
+                        )
+                    else:
+                        big = script.get("title", "")[:60] or (scenes[0].get("on_screen_text", "") if scenes else "")
+                        compose_title_card(composer, bg, big or hook[:40], date_label, asset.path if asset else None, seed=ci)
+                        frame = compose_frame(composer, str(out_dir / f"ov_{i:03d}_{k}.png"), "विशेष", ci, total_clips,
+                                              "", date_label)
                 elif b["kind"] == "section":
                     nxt = next((assets.get((j, 0)) for j in range(i + 1, len(beats)) if assets.get((j, 0))), None)
                     compose_title_card(composer, bg, b["big"], b["small"], nxt.path if nxt else first_image, seed=ci)
+                    frame = compose_frame(composer, str(out_dir / f"ov_{i:03d}_{k}.png"), b["big"], ci, total_clips,
+                                          "", date_label)
                 elif b["kind"] == "outro":
                     compose_title_card(composer, bg, "लाइक + सब्सक्राइब", self.config.general.channel_name,
                                        first_image, seed=ci)
+                    frame = compose_frame(composer, str(out_dir / f"ov_{i:03d}_{k}.png"), "सब्सक्राइब", ci, total_clips,
+                                          "", date_label)
                 else:
                     composer.compose_background(asset.path if asset else None, bg, seed=ci,
                                                 card_text="" if asset else b["chip"])
                     if asset and asset.source == "ai":
                         _stamp(bg, "सांकेतिक चित्र (AI)")
-                    if vcfg.show_headline_chips and b["chip"] and asset and k == 0:
-                        chip = compose_chip(composer, str(out_dir / f"chip_{i:03d}.png"), b["chip"])
-                if is_news and b["kind"] == "item" and b.get("sec_n"):
-                    counter = f"{b['sec_n']:02d}/{b['sec_of']}"
-                else:
-                    counter = f"{b['n']:02d}/{n_items}" if (is_news and b["kind"] == "item") else ""
-                badge = (b.get("category") or default_badge) if b["kind"] not in ("outro", "section") else ""
-                frame = compose_frame(composer, str(out_dir / f"ov_{i:03d}_{k}.png"), badge, ci, total_clips,
-                                      counter, date_label if not is_news else "",
-                                      ticker_y=ticker_y if b["kind"] == "item" else 0,
-                                      stat=_stat(p.get("say", "")) if b["kind"] == "item" and k > 0 else "")
+                    if is_news:
+                        headline_txt = b["chip"] or p.get("say", "")
+                        cat_txt = b.get("category", "") or "राष्ट्रीय"
+                        story_idx = b.get("n", ci + 1)
+                        frame = self.motion_engine.compose_broadcast_overlay(
+                            out_path=str(out_dir / f"ov_{i:03d}_{k}.png"),
+                            headline=headline_txt,
+                            category=cat_txt,
+                            story_index=story_idx,
+                            total_stories=n_items,
+                            date_str=date_label,
+                            is_hook=False,
+                        )
+                    else:
+                        if vcfg.show_headline_chips and b["chip"] and asset and k == 0:
+                            chip = compose_chip(composer, str(out_dir / f"chip_{i:03d}.png"), b["chip"])
+                        if is_news and b["kind"] == "item" and b.get("sec_n"):
+                            counter = f"{b['sec_n']:02d}/{b['sec_of']}"
+                        else:
+                            counter = f"{b['n']:02d}/{n_items}" if (is_news and b["kind"] == "item") else ""
+                        badge = (b.get("category") or default_badge) if b["kind"] not in ("outro", "section") else ""
+                        frame = compose_frame(composer, str(out_dir / f"ov_{i:03d}_{k}.png"), badge, ci, total_clips,
+                                              counter, date_label if not is_news else "",
+                                              ticker_y=ticker_y if b["kind"] == "item" else 0,
+                                              stat=_stat(p.get("say", "")) if b["kind"] == "item" and k > 0 else "")
                 if b["kind"] in ("section", "outro"):
                     fx = "dip"
-                elif k == 0:  # a new story: one clean broadcast transition
+                elif k == 0:  # a new story: snappy broadcast transition
                     fx = fx_cycle[b.get("n", ci) % len(fx_cycle)]
                 else:         # next line of the same story: straight cut, like TV news
                     fx = "cut"

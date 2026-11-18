@@ -20,6 +20,7 @@ import pytz
 from agents.analytics_manager import AnalyticsManagerAgent
 from agents.creative_director import CreativeDirectorAgent
 from agents.fact_verifier import FactVerifierAgent
+from agents.motion_graphics import MotionGraphicsAgent
 from agents.prompt_engineer import PromptEngineerAgent
 from agents.publisher import PublisherAgent
 from agents.quality_manager import QualityManagerAgent
@@ -29,6 +30,7 @@ from agents.self_learning import SelfLearningAgent
 from agents.seo_manager import SEOManagerAgent
 from agents.thumbnail_designer import ThumbnailDesignerAgent
 from agents.video_producer import VideoProducerAgent
+from agents.vfx_agent import VFXAgent
 from core.configuration import AppConfig
 from core.history import HistoryStore
 from core.llm_client import build_llm
@@ -70,6 +72,8 @@ class DailyOrchestrator:
         self.verifier_agent = FactVerifierAgent(config, self.state, llm=self.llm)
         self.quality_agent = QualityManagerAgent(config, self.state)
         self.creative_agent = CreativeDirectorAgent(config, self.state, history=self.history)
+        self.motion_agent = MotionGraphicsAgent(config, self.state)
+        self.vfx_agent = VFXAgent(config, self.state)
         self.producer_agent = VideoProducerAgent(config, self.state)
         self.seo_agent = SEOManagerAgent(config, self.state, llm=self.llm)
         self.thumbnail_agent = ThumbnailDesignerAgent(config, self.state)
@@ -150,9 +154,12 @@ class DailyOrchestrator:
 
             creative = await self._stage(vid, "creative_direction", lambda: self.creative_agent.execute(script=script))
 
+            vfx = await self._stage(vid, "vfx_direction", lambda: self.vfx_agent.execute(
+                script=script, creative_brief=creative), require_success=False)
+
             self.state.update_state(vid, state=PipelineState.RENDERING)
             production = await self._stage(vid, "video_production", lambda: self.producer_agent.execute(
-                video_id=vid, script=script, creative_brief=creative, research_data=research))
+                video_id=vid, script=script, creative_brief=creative, research_data=research, vfx_data=vfx))
 
             dur = float(production.get("duration") or 0)
             if dur > SHORTS_HARD_LIMIT or (0 < dur < 15):

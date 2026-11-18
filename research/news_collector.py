@@ -35,22 +35,28 @@ class ProcessedNewsItem:
     coverage: int = 0            # other outlets reporting the same story (independent corroboration)
 
 
-def _fallback_items(n: int = 3) -> List[ProcessedNewsItem]:
+def _fallback_items(n: int = 30) -> List[ProcessedNewsItem]:
     now = datetime.now(timezone.utc).isoformat()
     base = [
         ProcessedNewsItem("भारत के डिजिटल इंफ्रास्ट्रक्चर और UPI का वैश्विक विस्तार",
-                          "UPI को कई नए देशों में स्वीकृति मिली है।", "https://pib.gov.in", "PIB Hindi", now, 1.0, 0.95),
+                          "UPI को कई नए देशों में स्वीकृति मिली है।", "https://pib.gov.in", "PIB Hindi", now, 1.0, 0.95, region="national"),
         ProcessedNewsItem("इसरो के नए उपग्रह मिशन की तैयारी",
-                          "इसरो ने आगामी उपग्रह प्रक्षेपण के परीक्षण पूरे किए।", "https://www.isro.gov.in", "ISRO", now, 1.0, 0.92),
-        ProcessedNewsItem("भारतीय निर्यात में वृद्धि",
-                          "वाणिज्य मंत्रालय के आंकड़ों में निर्यात में तेजी।", "https://pib.gov.in", "PIB Hindi", now, 1.0, 0.88),
+                          "इसरो ने आगामी उपग्रह प्रक्षेपण के परीक्षण पूरे किए।", "https://www.isro.gov.in", "ISRO", now, 1.0, 0.92, region="national"),
+        ProcessedNewsItem("भारतीय निर्यात में उल्लेखनीय वृद्धि",
+                          "वाणिज्य मंत्रालय के आंकड़ों में निर्यात में तेजी।", "https://pib.gov.in", "PIB Hindi", now, 1.0, 0.88, region="national"),
+        ProcessedNewsItem("वैश्विक शिखर सम्मेलन में महत्वपूर्ण समझौते",
+                          "विश्व नेताओं ने आर्थिक सहयोग और व्यापार पर चर्चा की।", "https://ddnews.gov.in", "DD News", now, 1.0, 0.90, region="international"),
+        ProcessedNewsItem("अंतरराष्ट्रीय ऊर्जा और जलवायु वार्ता",
+                          "प्रमुख देशों ने स्वच्छ ऊर्जा विकास पर नए लक्ष्य तय किए।", "https://ddnews.gov.in", "DD News", now, 1.0, 0.85, region="international"),
     ]
     out = list(base)
     i = 0
-    while len(out) < n:
+    target_len = max(n, 30)
+    while len(out) < target_len:
         b = base[i % len(base)]
+        reg = "international" if (i % 4 == 0) else "national"
         out.append(ProcessedNewsItem(f"{b.title} ({len(out) + 1})", b.summary, b.source_url + f"#s{len(out)}",
-                                     b.source_name, now, b.reliability_score, b.importance_score - 0.01 * len(out)))
+                                     b.source_name, now, b.reliability_score, b.importance_score - 0.005 * len(out), region=reg))
         i += 1
     return out
 
@@ -138,11 +144,14 @@ class NewsCollector:
             if not self.allow_offline_fallback:
                 raise RuntimeError("No news could be collected from any feed (strict mode).")
             logger.warning("No feeds reachable — using OFFLINE sample news (dry-run only)")
-            processed = _fallback_items(target_count)
+            processed = _fallback_items(max(target_count + 10, 30))
 
-        intl_n = max(8, target_count // 5)
-        intl = [p for p in processed if p.region == "international"][:intl_n]
-        nat = [p for p in processed if p.region != "international"][:max(target_count - len(intl), 0)]
-        out = nat + intl
+        if target_count < 10:
+            out = processed[:target_count]
+        else:
+            intl_n = max(5, target_count // 5)
+            intl = [p for p in processed if p.region == "international"][:intl_n]
+            nat = [p for p in processed if p.region != "international"][:max(target_count - len(intl), 0)]
+            out = nat + intl
         out.sort(key=lambda x: x.importance_score, reverse=True)
         return out

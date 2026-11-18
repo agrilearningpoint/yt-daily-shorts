@@ -43,6 +43,10 @@ GRADES = {
     "cool_studio": "colorbalance=rs=-0.03:bs=0.05,eq=contrast=1.07:saturation=1.05",
     "punchy": "eq=contrast=1.15:saturation=1.25,unsharp=5:5:0.8",
     "neutral": "eq=contrast=1.03:saturation=1.04",
+    "broadcast_crisp": "eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4",
+    "vivid_news": "eq=contrast=1.15:saturation=1.25,unsharp=5:5:0.9",
+    "cinematic_warm": "colorbalance=rs=0.06:gs=0.02:bs=-0.04,eq=contrast=1.08:saturation=1.10",
+    "punchy_hdr": "eq=contrast=1.18:saturation=1.22:brightness=0.01,unsharp=7:7:1.0",
 }
 
 

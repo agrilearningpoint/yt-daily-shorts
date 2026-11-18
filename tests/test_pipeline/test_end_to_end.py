@@ -35,6 +35,7 @@ async def test_full_pipeline_dry_run(tmp_path, monkeypatch):
     cfg.general.strict_mode = False
     cfg.llm.allow_mock = True
     cfg.video.background_music = False
+    cfg.video.depth_motion = False
     cfg.database.sqlite_path = str(tmp_path / "e2e.db")
     state = StateManager(cfg.database.sqlite_path)
     orch = DailyOrchestrator(cfg, state, HistoryStore(str(tmp_path / "h.json")))

@@ -9,9 +9,11 @@ Word-synced Hindi captions (ASS) are burned in during the final pass.
 from __future__ import annotations
 
 import logging
+import os
 import random
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -167,7 +169,7 @@ class VideoRenderer:
             "cut": "",
         }.get(fx, ",fade=t=in:st=0:d=0.12:color=white")
 
-    def _beat_clip(self, clip: SceneClip, length: float, idx: int, out: str) -> str:
+    def _beat_clip(self, clip: SceneClip, length: float, idx: int, out: str, t0: float = 0.0) -> str:
         frames = max(int(round(length * self.fps)), 2)
         z, x, y = self._motion(idx, frames)
         if clip.fx == "punch":  # quick zoom-punch into the new picture
@@ -203,7 +205,7 @@ class VideoRenderer:
             fc += (f";{last}drawbox=x=0:y={self.ticker_y}:w=iw:h=84:color=0x0C0C12@0.88:t=fill[tb]")
             last = "[tb]"
             fc += (f";[{n}:v]format=rgba[tk];{last}[tk]overlay="
-                   f"x='W-mod((t+{self._t0:.3f})*{speed},w+W)':y={self.ticker_y}:shortest=1[t1]")
+                   f"x='W-mod((t+{t0:.3f})*{speed},w+W)':y={self.ticker_y}:shortest=1[t1]")
             last, n = "[t1]", n + 1
         fc += f";{last}[1:v]overlay=0:0[f]"
         last = "[f]"
@@ -238,11 +240,22 @@ class VideoRenderer:
         durs = quantize_durations([c.duration / tempo for c in clips], fps=self.fps, tail=TAIL)
         # frame-accurate lengths so cuts stay in sync with the voice
         self._prepare_depth(clips, durs, work)
-        paths = []
-        self._t0 = 0.0
-        for i, c in enumerate(clips):
-            paths.append(self._beat_clip(c, durs[i], i, str(work / f"clip_{i:03d}.mp4")))
-            self._t0 += durs[i]
+        paths = [None] * len(clips)
+        t0_offsets = []
+        cur_t0 = 0.0
+        for d in durs:
+            t0_offsets.append(cur_t0)
+            cur_t0 += d
+
+        def _render_one(idx: int) -> tuple:
+            out_clip = str(work / f"clip_{idx:03d}.mp4")
+            self._beat_clip(clips[idx], durs[idx], idx, out_clip, t0=t0_offsets[idx])
+            return idx, out_clip
+
+        max_workers = min(4, os.cpu_count() or 4)
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            for idx, p in pool.map(_render_one, range(len(clips))):
+                paths[idx] = p
         concat_list = work / "list.txt"
         concat_list.write_text("".join(f"file '{Path(p).resolve().as_posix()}'\n" for p in paths))
         video_only = work / "video.mp4"
@@ -295,7 +308,7 @@ class VideoRenderer:
 
         vmap, vcodec = ["-map", "0:v"], ["-c:v", "copy"]
         if captions and Path(captions).exists():
-            fonts = (ROOT / "assets" / "fonts").as_posix()
+            fonts = (ROOT / "assets" / "fonts").resolve().as_posix().replace(":", "\\:")
             cap = Path(captions).resolve().as_posix().replace(":", "\\:")
             fc.append(f"[0:v]ass='{cap}':fontsdir='{fonts}'[vcap]")
             vmap = ["-map", "[vcap]"]
