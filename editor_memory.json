@@ -564,6 +564,26 @@
     "flash_color": "white"
    },
    "score": 6.0
+  },
+  {
+   "at": "2026-11-18T04:45+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "punch"
+    ],
+    "motion": "kenburns_in",
+    "grade": "cool_studio",
+    "zoom": 1.18,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 4.0
   }
  ],
  "option_scores": {
@@ -592,16 +612,16 @@
    "n": 13
   },
   "ticker=true": {
-   "sum": 140.0,
-   "n": 25
+   "sum": 144.0,
+   "n": 26
   },
   "flash_color=\"white\"": {
-   "sum": 122.0,
-   "n": 22
+   "sum": 126.0,
+   "n": 23
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 101.0,
-   "n": 19
+   "sum": 105.0,
+   "n": 20
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -620,8 +640,8 @@
    "n": 10
   },
   "vignette=false": {
-   "sum": 66.0,
-   "n": 12
+   "sum": 70.0,
+   "n": 13
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -632,20 +652,20 @@
    "n": 1
   },
   "zoom=1.18": {
-   "sum": 29.0,
-   "n": 5
+   "sum": 33.0,
+   "n": 6
   },
   "cut_fx=[\"flash\", \"punch\", \"glitch\"]": {
    "sum": 7.0,
    "n": 1
   },
   "motion=\"kenburns_in\"": {
-   "sum": 16.0,
-   "n": 3
+   "sum": 20.0,
+   "n": 4
   },
   "grade=\"cool_studio\"": {
-   "sum": 39.0,
-   "n": 7
+   "sum": 43.0,
+   "n": 8
   },
   "palette=[\"#7C3AED\", \"#120B2E\", \"#FACC15\"]": {
    "sum": 12.0,
@@ -680,8 +700,8 @@
    "n": 4
   },
   "cut_fx=[\"punch\"]": {
-   "sum": 11.0,
-   "n": 2
+   "sum": 15.0,
+   "n": 3
   },
   "cut_fx=[\"flash\"]": {
    "sum": 31.0,
@@ -693,9 +713,6 @@
   }
  },
  "notes": [
-  "Replace the static calendar intro (Tile 0) with an engaging real-world news action frame and clear headline.",
-  "Eliminate consecutive duplicate frames (such as repeated bus, leopard, and SCO shots) to increase visual cuts.",
-  "Swap generic stock footage of skies and planes with relevant news imagery, and shorten the ending call-to-action screen.",
   "Eliminate visual repetition: Ensure no two adjacent tiles use the exact same or near-identical image. Find distinct visuals or use dynamic motion graphics to vary the look every 2-3 seconds.",
   "Upgrade generic visuals: Replace all cartoon images, generic stock photos (e.g., random buildings, abstract patterns, generic people/scenes), and logos with high-quality, specific, and impactful real-world footage or professional news graphics directly illustrating the headline.",
   "Strengthen the hook: The first tile (0) needs a more compelling and visually striking image directly related to a major headline to instantly grab viewer attention, rather than a generic scene or a date.",
@@ -704,6 +721,9 @@
   "Ensure every picture is highly relevant to its accompanying text and avoid generic stock-like images (e.g., Tiles 8, 9, 14, 23).",
   "Replace generic stock photos (such as airplanes and petrol pumps) with authentic news footage.",
   "Avoid full-screen text slides; keep subject photos visible behind breaking news headlines.",
-  "Replace the static subscribe end-card with a seamless visual loop back to the opening frame."
+  "Replace the static subscribe end-card with a seamless visual loop back to the opening frame.",
+  "Strengthen the opening hook: Tile 0 needs a dynamic, attention-grabbing visual and a punchy headline that summarizes the top story, not just a generic calendar.",
+  "Increase visual variety: Avoid using the same or highly similar imagery in consecutive tiles. Use diverse B-roll, different angles, or relevant graphics to keep visuals fresh every 2-3 seconds.",
+  "Replace generic/placeholder images: For specific news stories, use impactful, relevant visuals instead of generic stock photos (e.g., factories, flags, cityscapes). Immediately fix the placeholder tile (33)."
  ]
 }
