@@ -48,6 +48,11 @@ def parse_args() -> argparse.Namespace:
         help="Run without uploading to YouTube or making billable API calls",
     )
     parser.add_argument(
+        "--allow-mock",
+        action="store_true",
+        help="Allow mock LLM provider when no API keys are configured (for local testing)",
+    )
+    parser.add_argument(
         "--status",
         action="store_true",
         help="Display today's pipeline status and recent videos",
@@ -83,6 +88,8 @@ async def main_async() -> int:
     config = load_config()
     if args.dry_run:
         config.set_dry_run(True)
+    if args.allow_mock:
+        config.llm.allow_mock = True
     logger.info("Mode: dry_run=%s strict=%s", config.general.dry_run, config.general.strict_mode)
 
     if args.healthcheck:

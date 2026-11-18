@@ -253,6 +253,7 @@ _ENV_MAP: Dict[str, tuple] = {
     "YT_CLOUDFLARE_R2_SECRET_KEY": ("media", "r2_secret_key"),
     "YT_DRY_RUN": ("general", "dry_run"),
     "YT_STRICT_MODE": ("general", "strict_mode"),
+    "YT_ALLOW_MOCK": ("llm", "allow_mock"),
     "YT_DEBUG": ("general", "debug"),
     "YT_TIMEZONE": ("general", "timezone"),
     "YT_CHANNEL_NAME": ("general", "channel_name"),
