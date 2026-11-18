@@ -645,6 +645,26 @@
     "flash_color": "white"
    },
    "score": 4.0
+  },
+  {
+   "at": "2026-11-18T16:10+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "flash"
+    ],
+    "motion": "parallax_pan",
+    "grade": "cool_studio",
+    "zoom": 1.14,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 5.0
   }
  ],
  "option_scores": {
@@ -673,36 +693,36 @@
    "n": 15
   },
   "ticker=true": {
-   "sum": 156.0,
-   "n": 29
+   "sum": 161.0,
+   "n": 30
   },
   "flash_color=\"white\"": {
-   "sum": 138.0,
-   "n": 26
+   "sum": 143.0,
+   "n": 27
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 117.0,
-   "n": 23
+   "sum": 122.0,
+   "n": 24
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
    "n": 1
   },
   "motion=\"parallax_pan\"": {
-   "sum": 35.0,
-   "n": 7
+   "sum": 40.0,
+   "n": 8
   },
   "grade=\"warm_film\"": {
    "sum": 24.0,
    "n": 5
   },
   "zoom=1.14": {
-   "sum": 57.0,
-   "n": 11
+   "sum": 62.0,
+   "n": 12
   },
   "vignette=false": {
-   "sum": 73.0,
-   "n": 14
+   "sum": 78.0,
+   "n": 15
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -725,8 +745,8 @@
    "n": 4
   },
   "grade=\"cool_studio\"": {
-   "sum": 43.0,
-   "n": 8
+   "sum": 48.0,
+   "n": 9
   },
   "palette=[\"#7C3AED\", \"#120B2E\", \"#FACC15\"]": {
    "sum": 12.0,
@@ -765,8 +785,8 @@
    "n": 3
   },
   "cut_fx=[\"flash\"]": {
-   "sum": 34.0,
-   "n": 7
+   "sum": 39.0,
+   "n": 8
   },
   "grade=\"news_crisp\"": {
    "sum": 5.0,
@@ -774,9 +794,6 @@
   }
  },
  "notes": [
-  "Strengthen the opening hook: Tile 0 needs a dynamic, attention-grabbing visual and a punchy headline that summarizes the top story, not just a generic calendar.",
-  "Increase visual variety: Avoid using the same or highly similar imagery in consecutive tiles. Use diverse B-roll, different angles, or relevant graphics to keep visuals fresh every 2-3 seconds.",
-  "Replace generic/placeholder images: For specific news stories, use impactful, relevant visuals instead of generic stock photos (e.g., factories, flags, cityscapes). Immediately fix the placeholder tile (33).",
   "Avoid using static national emblems and repeated graphics consecutively across multiple tiles.",
   "Ensure the opening tile (tile 0) immediately features a strong, relevant photo alongside the main headline instead of generic visuals.",
   "Maintain high visual variety by replacing repetitive stock image loops with fresh, dynamic news footage.",
@@ -785,6 +802,9 @@
   "Replace all generic/stock images (e.g., astrological wheels, random buildings, generic trains, flags) with specific, high-quality visuals directly illustrating the news story.",
   "Avoid repeating the same national emblem graphic and static studio background across multiple consecutive tiles to maintain visual engagement.",
   "Ensure the opening tile (tile 0) immediately features a dynamic news subject and strong headline instead of an empty logo or placeholder.",
-  "Eliminate duplicate images appearing side-by-side to ensure every frame offers a distinct visual change."
+  "Eliminate duplicate images appearing side-by-side to ensure every frame offers a distinct visual change.",
+  "Remove generic stock market logos and plain brand graphics like Nifty50 and TOI which add no visual storytelling value.",
+  "Eliminate duplicate or consecutive repetitive logo screens (like multiple NIA seal placeholders) to maintain high visual pacing.",
+  "Ensure the final tiles loop seamlessly back to the news content instead of ending with static subscribe cards."
  ]
 }
