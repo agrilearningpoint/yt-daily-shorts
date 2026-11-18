@@ -268,6 +268,11 @@ class VideoProducerAgent(BaseAgent):
                     match=0.95,
                 )
                 continue
+            elif sp.get("article_page"):
+                art_asset = self.media.article_image(sp["article_page"], dest)
+                if art_asset and Path(art_asset.path).exists():
+                    assets[key] = art_asset
+                    continue
 
             unresolved_specs.append(sp)
 
@@ -277,6 +282,36 @@ class VideoProducerAgent(BaseAgent):
             for sp, a in zip(unresolved_specs, found):
                 if a and getattr(a, "path", None) and Path(a.path).exists():
                     assets[(sp["_beat"], sp["_part"])] = a
+
+        # 3b. Guaranteed real photo fallback: search Wikimedia Commons with topic/entity keywords
+        CATEGORY_SEARCH_MAP = {
+            "national": "Parliament of India building New Delhi",
+            "international": "United Nations headquarters New York",
+            "politics": "New Parliament House New Delhi",
+            "finance": "Bombay Stock Exchange building Mumbai",
+            "railways": "Vande Bharat Express train India",
+            "space": "ISRO rocket launch Sriharikota",
+            "defence": "Indian Army soldiers parade",
+            "weather": "India gate New Delhi winter morning",
+            "temple": "Kashi Vishwanath Temple Varanasi",
+            "general": "New Delhi India Gate landmark",
+        }
+        for sp in unresolved_specs:
+            key = (sp["_beat"], sp["_part"])
+            if not assets.get(key):
+                dest = Path(sp["dest"])
+                sec = sp.get("section") or "national"
+                theme = detect_topic_theme(sp.get("say", "")) or sec
+                search_term = CATEGORY_SEARCH_MAP.get(theme) or CATEGORY_SEARCH_MAP.get(sec) or "Parliament of India building"
+                real_photo = self.semantic_matcher.search_wikimedia_commons(search_term, dest)
+                if real_photo and Path(real_photo).exists():
+                    assets[key] = MediaAsset(
+                        path=str(real_photo),
+                        source="commons",
+                        credit=f"Image: Wikimedia Commons / {search_term}",
+                        labels=search_term,
+                        match=0.85,
+                    )
 
         # 4. Strict intra-story resolution only: NEVER borrow from another story
         missing = 0

@@ -25,20 +25,56 @@ _UA = {"User-Agent": "YTDailyShortsSemanticMatcher/2.0 (educational-automation)"
 
 # High-frequency Hindi entities mapped directly to exact English Wikipedia titles
 COMMON_ENTITY_MAP: Dict[str, str] = {
+    # Temples & Places
     "बांकेबिहारी": "Banke Bihari Temple",
     "बांके बिहारी": "Banke Bihari Temple",
     "वृंदावन": "Vrindavan",
+    "अयोध्या": "Ayodhya",
+    "राम मंदिर": "Ram Mandir, Ayodhya",
+    "काशी विश्वनाथ": "Kashi Vishwanath Temple",
+    "वाराणसी": "Varanasi",
+    "मथुरा": "Mathura",
+    "उज्जैन": "Ujjain",
+    "महाकाल": "Mahakaleshwar Jyotirlinga",
+    "केदारनाथ": "Kedarnath Temple",
+    "बद्रीनाथ": "Badrinath Temple",
+    "अक्षय नवमी": "Amla Navami",
+
+    # Finance & Economy
     "सेंसेक्स": "BSE SENSEX",
     "निफ्टी": "NIFTY 50",
     "शेयर बाजार": "Stock market",
     "शेयर बाज़ार": "Stock market",
+    "बॉम्बे स्टॉक एक्सचेंज": "BSE",
     "सोने": "Gold",
     "सोना": "Gold",
     "चांदी": "Silver",
+    "जूलरी": "Jewellery",
+    "गहने": "Jewellery",
     "आरबीआई": "Reserve Bank of India",
     "रिजर्व बैंक": "Reserve Bank of India",
+    "बजट": "Union budget of India",
+    "जीडीपी": "Economy of India",
+    "रुपया": "Indian rupee",
+    "डॉलर": "United States dollar",
+
+    # Judiciary & Law
     "सुप्रीम कोर्ट": "Supreme Court of India",
+    "सर्वोच्च न्यायालय": "Supreme Court of India",
     "हाईकोर्ट": "High court",
+    "हाई कोर्ट": "High court",
+    "सीजेआई": "Chief Justice of India",
+    "संजीव खन्ना": "Sanjiv Khanna",
+    "डीवाई चंद्रचूड़": "D. Y. Chandrachud",
+    "सूर्यकांत": "Surya Kant (judge)",
+    "अदालत": "Court",
+    "न्यायालय": "Court",
+    "न्यायाधीश": "Judge",
+    "वकील": "Lawyer",
+    "कंटेम्प्ट": "Contempt of court",
+    "अवमानना": "Contempt of court",
+
+    # Indian Political Leaders
     "पीएम मोदी": "Narendra Modi",
     "नरेंद्र मोदी": "Narendra Modi",
     "अमित शाह": "Amit Shah",
@@ -46,17 +82,77 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "सोनिया गांधी": "Sonia Gandhi",
     "राजनाथ सिंह": "Rajnath Singh",
     "योगी आदित्यनाथ": "Yogi Adityanath",
+    "शिवराज सिंह चौहान": "Shivraj Singh Chouhan",
+    "शिवराज सिंह": "Shivraj Singh Chouhan",
+    "शिवराज": "Shivraj Singh Chouhan",
+    "गौरव भाटिया": "Gaurav Bhatia",
+    "अश्विनी वैष्णव": "Ashwini Vaishnaw",
+    "एस जयशंकर": "S. Jaishankar",
+    "जयशंकर": "S. Jaishankar",
+    "निर्मला सीतारमण": "Nirmala Sitharaman",
+    "नितिन गडकरी": "Nitin Gadkari",
+    "अरविंद केजरीवाल": "Arvind Kejriwal",
+    "ममता बनर्जी": "Mamata Banerjee",
+    "नीतीश कुमार": "Nitish Kumar",
+    "तेजस्वी यादव": "Tejashwi Yadav",
+    "अखिलेश यादव": "Akhilesh Yadav",
+    "मायावती": "Mayawati",
+    "देवेंद्र फडणवीस": "Devendra Fadnavis",
+    "एकनाथ शिंदे": "Eknath Shinde",
+    "उद्धव ठाकरे": "Uddhav Thackeray",
+    "एमके स्टालिन": "M. K. Stalin",
+    "चंद्रबाबू नायडू": "N. Chandrababu Naidu",
+    "हेमंत सोरेन": "Hemant Soren",
+
+    # Political Parties
+    "भाजपा": "Bharatiya Janata Party",
+    "बीजेपी": "Bharatiya Janata Party",
+    "कांग्रेस": "Indian National Congress",
+    "आप": "Aam Aadmi Party",
+    "शिवसेना": "Shiv Sena",
+    "तृणमूल": "All India Trinamool Congress",
+    "सपा": "Samajwadi Party",
+    "बसपा": "Bahujan Samaj Party",
+    "राजद": "Rashtriya Janata Dal",
+    "जदयू": "Janata Dal (United)",
+
+    # Institutions, Space & Defence
     "इसरो": "ISRO",
     "डीआरडीओ": "Defence Research and Development Organisation",
     "भारतीय सेना": "Indian Army",
+    "थलसेना": "Indian Army",
     "वायुसेना": "Indian Air Force",
     "नौसेना": "Indian Navy",
+    "सुरक्षा बल": "Central Armed Police Forces",
+    "सीआरपीएफ": "Central Reserve Police Force",
+    "बीएसएफ": "Border Security Force",
+    "संसद": "Parliament of India",
+    "नया संसद": "New Parliament House, New Delhi",
+    "लोकसभा": "Lok Sabha",
+    "राज्यसभा": "Rajya Sabha",
+    "कैबिनेट": "Cabinet of India",
+    "मंत्रिमंडल": "Cabinet of India",
+    "चुनाव आयोग": "Election Commission of India",
     "वंदे भारत": "Vande Bharat Express",
     "भारतीय रेलवे": "Indian Railways",
     "रेलवे": "Indian Railways",
     "ट्रेन": "Indian Railways",
-    "चुनाव आयोग": "Election Commission of India",
-    "संसद": "Parliament of India",
+
+    # Exams & Education
+    "नीट": "National Eligibility cum Entrance Test (Undergraduate)",
+    "यूपीएससी": "Union Public Service Commission",
+    "सीबीएसई": "Central Board of Secondary Education",
+    "शिक्षा नीति": "National Education Policy 2020",
+    "सरकारी नौकरी": "Civil Services of India",
+
+    # Cinema & Culture
+    "सलमान खान": "Salman Khan",
+    "शाहरुख खान": "Shah Rukh Khan",
+    "अमिताभ बच्चन": "Amitabh Bachchan",
+    "बॉलीवुड": "Hindi cinema",
+    "सिनेमा": "Cinema of India",
+
+    # World Leaders & Countries
     "ट्रंप": "Donald Trump",
     "डोनाल्ड ट्रंप": "Donald Trump",
     "बाइडन": "Joe Biden",
@@ -68,16 +164,54 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "चीन": "China",
     "पाकिस्तान": "Pakistan",
     "अमेरिका": "United States",
+    "जापान": "Japan",
+    "फ्रांस": "France",
+    "ब्रिटेन": "United Kingdom",
+    "कनाडा": "Canada",
+    "ईरान": "Iran",
+    "होर्मुज": "Strait of Hormuz",
+    "संयुक्त राष्ट्र": "United Nations",
+    "यूएन": "United Nations",
+    "डब्ल्यूएचओ": "World Health Organization",
+
+    # Technology & Companies
+    "एनवीडिया": "Nvidia",
+    "गूगल": "Google",
+    "माइक्रोसॉफ्ट": "Microsoft",
+    "एपल": "Apple Inc.",
+    "सैमसंग": "Samsung",
+    "टाटा": "Tata Group",
+    "रिलायंस": "Reliance Industries",
+    "अडानी": "Adani Group",
+    "अडाणी": "Adani Group",
+
+    # States & Cities
+    "दिल्ली": "Delhi",
+    "नई दिल्ली": "New Delhi",
+    "मुंबई": "Mumbai",
+    "भोपाल": "Bhopal",
+    "मध्य प्रदेश": "Madhya Pradesh",
+    "उत्तर प्रदेश": "Uttar Pradesh",
+    "बिहार": "Bihar",
+    "कश्मीर": "Kashmir",
+    "लद्दाख": "Ladakh",
+    "कुलगाम": "Kulgam",
+    "पंजाब": "Punjab",
+    "हरियाणा": "Haryana",
+    "राजस्थान": "Rajasthan",
+    "गुजरात": "Gujarat",
+    "महाराष्ट्र": "Maharashtra",
+
+    # Weather & Nature
     "मौसम": "Weather",
     "कोहरा": "Fog",
     "प्रदूषण": "Air pollution in Delhi",
-    "दिवाली": "Diwali",
-    "छठ": "Chhath",
-    "होली": "Holi",
-    "क्रिकेट": "Cricket",
-    "बीसीसीआई": "Board of Control for Cricket in India",
-    "रोहित शर्मा": "Rohit Sharma",
-    "विराट कोहली": "Virat Kohli",
+    "विमान": "Aircraft",
+    "हवाई जहाज": "Aircraft",
+    "प्लेन": "Aircraft",
+    "क्रैश": "Aviation accident",
+    "किसान": "Farmer",
+    "खेती": "Agriculture in India",
 }
 
 # Topic category icons and visual motifs
@@ -113,7 +247,7 @@ def detect_topic_theme(text: str) -> str:
 
 
 def extract_entity_from_hindi(text: str) -> Optional[str]:
-    """Find known entities in a Hindi sentence."""
+    """Find known entities in a Hindi sentence in priority order."""
     for hindi_kw, english_title in COMMON_ENTITY_MAP.items():
         if hindi_kw in text:
             return english_title
@@ -123,32 +257,47 @@ def extract_entity_from_hindi(text: str) -> Optional[str]:
 class SemanticVisualMatcher:
     """Matches spoken lines with authentic, topic-accurate images with zero cross-story contamination."""
 
-    def __init__(self, timeout: int = 4):
+    def __init__(self, timeout: int = 6):
         self.timeout = timeout
         self._cache: Dict[str, Optional[str]] = {}
 
     def fetch_wikipedia_lead_image(self, entity_title: str, dest_path: Path) -> Optional[str]:
-        """Fetch the official primary photo of a Wikipedia entity."""
+        """Fetch the official primary photo of a Wikipedia entity (English or Hindi Wikipedia)."""
         if not entity_title:
             return None
         key = f"wiki_{entity_title}"
         if key in self._cache:
             return self._cache[key]
 
-        encoded = urllib.parse.quote(entity_title.replace(" ", "_"))
-        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{encoded}"
-
+        # 1. Try English Wikipedia
+        encoded_en = urllib.parse.quote(entity_title.replace(" ", "_"))
+        url_en = f"https://en.wikipedia.org/api/rest_v1/page/summary/{encoded_en}"
         try:
-            r = requests.get(url, headers=_UA, timeout=self.timeout)
+            r = requests.get(url_en, headers=_UA, timeout=self.timeout)
             if r.status_code == 200:
                 data = r.json()
                 img_url = (data.get("originalimage") or {}).get("source") or (data.get("thumbnail") or {}).get("source")
                 if img_url and self._download_image(img_url, dest_path):
-                    logger.info("Semantic Matcher: Found Wikipedia image for '%s' -> %s", entity_title, img_url)
+                    logger.info("Semantic Matcher: Found EN Wikipedia image for '%s' -> %s", entity_title, img_url)
                     self._cache[key] = str(dest_path)
                     return str(dest_path)
         except Exception as e:
-            logger.debug("Wikipedia image fetch failed for '%s': %s", entity_title, e)
+            logger.debug("EN Wikipedia fetch failed for '%s': %s", entity_title, e)
+
+        # 2. Try Hindi Wikipedia
+        encoded_hi = urllib.parse.quote(entity_title.replace(" ", "_"))
+        url_hi = f"https://hi.wikipedia.org/api/rest_v1/page/summary/{encoded_hi}"
+        try:
+            r = requests.get(url_hi, headers=_UA, timeout=self.timeout)
+            if r.status_code == 200:
+                data = r.json()
+                img_url = (data.get("originalimage") or {}).get("source") or (data.get("thumbnail") or {}).get("source")
+                if img_url and self._download_image(img_url, dest_path):
+                    logger.info("Semantic Matcher: Found HI Wikipedia image for '%s' -> %s", entity_title, img_url)
+                    self._cache[key] = str(dest_path)
+                    return str(dest_path)
+        except Exception as e:
+            logger.debug("HI Wikipedia fetch failed for '%s': %s", entity_title, e)
 
         self._cache[key] = None
         return None

@@ -355,6 +355,21 @@ class TTSEngine:
             raise TTSError("edge-tts returned no audio")
         return words
 
+    @staticmethod
+    def _trim_segment_silence(path: Path) -> None:
+        """Trim long encoder silence padding at start/end to a crisp 0.08s breath pause."""
+        ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+        tmp = path.with_suffix(".tmp.mp3")
+        af = ("silenceremove=start_periods=1:start_duration=0.02:start_threshold=-40dB,"
+              "areverse,silenceremove=start_periods=1:start_duration=0.02:start_threshold=-40dB,areverse,"
+              "apad=pad_dur=0.08")
+        res = subprocess.run([ffmpeg, "-y", "-i", str(path), "-af", af, "-c:a", "libmp3lame", "-b:a", "192k", str(tmp)],
+                             capture_output=True, timeout=60)
+        if res.returncode == 0 and tmp.exists() and tmp.stat().st_size > 1000:
+            tmp.replace(path)
+        elif tmp.exists():
+            tmp.unlink(missing_ok=True)
+
     async def synthesize_segment(self, text: str, output_path: str) -> Segment:
         out_file = Path(output_path)
         out_file.parent.mkdir(parents=True, exist_ok=True)
@@ -363,9 +378,10 @@ class TTSEngine:
         for attempt, voice in enumerate([self.voice, self.voice, self.fallback_voice]):
             try:
                 words = await self._synth(clean, out_file, voice)
-                duration = probe_duration(str(out_file)) or (words[-1].end + 0.3 if words else 0.0)
+                self._trim_segment_silence(out_file)
+                duration = probe_duration(str(out_file)) or (words[-1].end + 0.1 if words else 0.0)
                 return Segment(text=clean, audio_path=str(out_file), duration=duration,
-                               words=words or distribute_words(clean, duration))
+                               words=distribute_words(clean, duration))
             except Exception as exc:
                 last_exc = exc
                 logger.warning("edge-tts attempt %d (%s) failed: %s", attempt + 1, voice, exc)
@@ -397,7 +413,7 @@ class TTSEngine:
                         if s and s[-1] not in "।.?!":
                             s += "।"
                         parts_joined.append(s)
-                    joined = " <short pause> ".join(parts_joined)
+                    joined = " ".join(parts_joined)
                     raw = str(out / "voice_gemini.wav")
                     model = await asyncio.to_thread(self.gemini.synthesize, joined, style, raw)
                     self._normalise(raw, final)

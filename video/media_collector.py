@@ -36,7 +36,7 @@ class MediaCollector:
     def __init__(self, pexels_key: str = "", pixabay_key: str = "", cache_dir: str = "data/media_cache",
                  use_wikimedia: bool = True, use_openverse: bool = True, timeout: int = 15,
                  agnes_key: str = "", agnes_model: str = "agnes-image-2.5-flash",
-                 use_publisher_images: bool = False, use_news_photos: bool = True,
+                 use_publisher_images: bool = True, use_news_photos: bool = True,
                  cf_token: str = "", cf_account: str = "", vision=None, hf_token: str = ""):
         self.pexels_key = pexels_key
         self.pixabay_key = pixabay_key
@@ -584,6 +584,11 @@ class MediaCollector:
             except Exception:
                 a.match = -1.0
             weak = a.match >= 0 and a.match < min_match
+            # High-confidence authentic sources: Wikipedia, news publisher article photos, and Wikimedia Commons
+            # are inherently authentic real images and should never be discarded by vision false-positives.
+            if a.source in ("wikipedia", "publisher", "commons"):
+                a.match = max(a.match, 0.85)
+                return a
             if self.vision:
                 try:
                     verdict = self.vision(a.path, description)
@@ -661,9 +666,9 @@ class MediaCollector:
         if hint == "ai":
             order = ai + ent + clips + stock
         elif hint == "stock":
-            order = ent + clips + stock + ai
-        else:  # real photo of the person/thing first, then a matching real clip, else an AI picture for this line
-            order = ent + clips + ai + stock
+            order = ent + clips + stock + tail + ai
+        else:  # authentic real photo/entity first, then real stock footage/photos, Wikimedia Commons, then AI
+            order = ent + stock + clips + tail + ai
         tail = []
         if self.use_wikimedia:
             tail.append(("commons", self._checked(

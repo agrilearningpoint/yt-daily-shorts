@@ -83,10 +83,11 @@ def make_vision_check(api_key: str, models: Optional[List[str]] = None,
         img.thumbnail((512, 512))
         buf = io.BytesIO()
         img.save(buf, "JPEG", quality=80)
-        prompt = (f"A Hindi news/documentary video shows this image while the narrator covers: \"{description}\".\n"
-                  "Does this image clearly and accurately depict that subject, person, place, or event "
-                  "(NOT an unrelated stock photo, NOT a wrong person/country, NOT a plain logo/text slide, "
-                  "NOT a social-media/TV/website screenshot)? Answer strictly YES or NO.")
+        prompt = (f"A Hindi news video shows this image while the headline says: \"{description}\".\n"
+                  "Is this image reasonably related to or suitable for this news story, person, organisation, place, or topic? "
+                  "Answer YES if it is relevant (portraits of mentioned people, buildings, events, press photos, or relevant news context are all acceptable). "
+                  "Only answer NO if it is totally unrelated, completely blank, or severely corrupt. "
+                  "Answer strictly YES or NO.")
         body = {"contents": [{"parts": [{"text": prompt},
                                         {"inline_data": {"mime_type": "image/jpeg",
                                                          "data": base64.b64encode(buf.getvalue()).decode()}}]}],

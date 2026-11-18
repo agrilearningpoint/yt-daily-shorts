@@ -67,7 +67,7 @@ editorial_calendar:
   sunday: "Economy, Society and World Affairs"
 
 tts:
-  provider_order: ["gemini", "edge"]
+  provider_order: ["edge", "gemini"]
   gemini_models: ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"]
   gemini_voice: "auto"
   gemini_fallback_voice: "Charon"
