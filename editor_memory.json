@@ -665,6 +665,26 @@
     "flash_color": "white"
    },
    "score": 5.0
+  },
+  {
+   "at": "2026-11-19T04:41+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "whip"
+    ],
+    "motion": "kenburns_mix",
+    "grade": "punchy",
+    "zoom": 1.18,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 6.0
   }
  ],
  "option_scores": {
@@ -677,8 +697,8 @@
    "n": 4
   },
   "motion=\"kenburns_mix\"": {
-   "sum": 52.0,
-   "n": 9
+   "sum": 58.0,
+   "n": 10
   },
   "grade=\"neutral\"": {
    "sum": 48.0,
@@ -689,20 +709,20 @@
    "n": 11
   },
   "vignette=true": {
-   "sum": 83.0,
-   "n": 15
+   "sum": 89.0,
+   "n": 16
   },
   "ticker=true": {
-   "sum": 161.0,
-   "n": 30
+   "sum": 167.0,
+   "n": 31
   },
   "flash_color=\"white\"": {
-   "sum": 143.0,
-   "n": 27
+   "sum": 149.0,
+   "n": 28
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 122.0,
-   "n": 24
+   "sum": 128.0,
+   "n": 25
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -733,8 +753,8 @@
    "n": 1
   },
   "zoom=1.18": {
-   "sum": 37.0,
-   "n": 7
+   "sum": 43.0,
+   "n": 8
   },
   "cut_fx=[\"flash\", \"punch\", \"glitch\"]": {
    "sum": 7.0,
@@ -753,8 +773,8 @@
    "n": 2
   },
   "grade=\"punchy\"": {
-   "sum": 36.0,
-   "n": 7
+   "sum": 42.0,
+   "n": 8
   },
   "cut_fx=[\"glitch\", \"whip\", \"flash\"]": {
    "sum": 6.0,
@@ -777,8 +797,8 @@
    "n": 6
   },
   "cut_fx=[\"whip\"]": {
-   "sum": 25.0,
-   "n": 5
+   "sum": 31.0,
+   "n": 6
   },
   "cut_fx=[\"punch\"]": {
    "sum": 15.0,
@@ -794,9 +814,6 @@
   }
  },
  "notes": [
-  "Avoid using static national emblems and repeated graphics consecutively across multiple tiles.",
-  "Ensure the opening tile (tile 0) immediately features a strong, relevant photo alongside the main headline instead of generic visuals.",
-  "Maintain high visual variety by replacing repetitive stock image loops with fresh, dynamic news footage.",
   "The first frame (Tile 0) must be a strong, instantly hooking headline with a relevant, dynamic image, not a generic channel intro graphic.",
   "Significantly increase visual variety; avoid static repetition of images across neighboring tiles. Aim for a distinct visual change every 2-3 seconds using diverse footage or dynamic graphics.",
   "Replace all generic/stock images (e.g., astrological wheels, random buildings, generic trains, flags) with specific, high-quality visuals directly illustrating the news story.",
@@ -805,6 +822,9 @@
   "Eliminate duplicate images appearing side-by-side to ensure every frame offers a distinct visual change.",
   "Remove generic stock market logos and plain brand graphics like Nifty50 and TOI which add no visual storytelling value.",
   "Eliminate duplicate or consecutive repetitive logo screens (like multiple NIA seal placeholders) to maintain high visual pacing.",
-  "Ensure the final tiles loop seamlessly back to the news content instead of ending with static subscribe cards."
+  "Ensure the final tiles loop seamlessly back to the news content instead of ending with static subscribe cards.",
+  "Replace generic stock calendar, weather, and building graphics with contextual news visuals.",
+  "Ensure strict adherence to the 2-3 second visual change rule without repeating similar subject frames consecutively.",
+  "Fix the opening tile (0) to feature a cleaner hook headline and avoid cluttered text placement."
  ]
 }
