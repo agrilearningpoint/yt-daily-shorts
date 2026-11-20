@@ -53,10 +53,34 @@ async def test_scene_understanding_synthetic_fallback(scene_agent, tmp_path):
         has_audio=True,
     )
 
-    result = await scene_agent.execute(manifest=manifest)
+    result = await scene_agent.execute(manifest=manifest, allow_synthetic=True)
     assert result.success is True
     assert result.data["total_scenes"] >= 3
     keyframe_dir = Path(result.data["keyframe_dir"])
     assert keyframe_dir.exists()
     keyframes = list(keyframe_dir.glob("*.jpg"))
     assert len(keyframes) >= 3
+
+
+@pytest.mark.asyncio
+async def test_scene_understanding_inaccessible_video_fails_honestly(scene_agent):
+    manifest = SourceVideoManifest(
+        video_id="lv_inaccessible",
+        source_uri="missing.mp4",
+        is_local_file=True,
+        local_path="non_existent_file.mp4",
+        sha256="123456",
+        duration=30.0,
+        width=1920,
+        height=1080,
+        fps=30.0,
+        video_codec="h264",
+        audio_codec="aac",
+        audio_channels=2,
+        audio_sample_rate=44100,
+        has_audio=True,
+    )
+    result = await scene_agent.execute(manifest=manifest)
+    assert result.success is False
+    assert result.data.get("scene_analysis_status") == "video_inaccessible"
+

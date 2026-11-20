@@ -388,7 +388,12 @@ class VideoProducerAgent(BaseAgent):
         recipe = editor.plan("news" if is_news else "knowledge")
         theme = EditorDirector.theme(recipe, theme)
         composer = SceneComposer(theme, channel_name=self.config.general.channel_name)
-        if "grade" not in recipe or not recipe.get("grade"):
+        master_timeline = kwargs.get("master_timeline")
+        if master_timeline and getattr(master_timeline, "color_grade_filter", None):
+            recipe["grade"] = getattr(master_timeline, "color_grade_filter", "") or recipe.get("grade", "broadcast_crisp")
+        elif vfx_data and vfx_data.get("color_grade"):
+            recipe["grade"] = vfx_data["color_grade"]
+        elif "grade" not in recipe or not recipe.get("grade"):
             recipe["grade"] = self.vfx_engine.color_grade
         self.renderer.recipe = recipe
         ticker_y = 0

@@ -1,8 +1,9 @@
 """Rights and Attribution Agent.
 
-Assesses copyright risks, determines fair use and fair dealing compliance,
-enforces maximum clip duration thresholds, generates mandatory on-screen credits,
-and formats YouTube description legal notices.
+Assesses copyright risks, license statuses, and fair use/dealing considerations.
+Evaluates provenance without assuming short clip duration or government ownership
+automatically grants legal clearance. Flags review-required statuses and formats
+mandatory attribution disclaimers.
 """
 
 from __future__ import annotations
@@ -19,15 +20,9 @@ from core.agent_contracts import (
 from core.configuration import AppConfig
 from core.state_manager import StateManager
 
-# Known public domain or government broadcast entities in India
-PUBLIC_TRUST_BROADCASTERS = [
-    "sansad tv", "rajya sabha", "lok sabha", "dd news", "pib", "doordarshan",
-    "isro", "drdo", "nasa", "pmo india", "press information bureau",
-]
-
 
 class RightsAttributionAgent(BaseAgent):
-    """Enforces copyright safety, clip length limits, and attribution standards."""
+    """Enforces copyright safety, license assessment, and attribution standards."""
 
     name: str = "RightsAttributionAgent"
 
@@ -62,13 +57,14 @@ class RightsAttributionAgent(BaseAgent):
             script: Optional[AdaptedShortScript] = kwargs.get("adapted_script")
             rights_record = self._evaluate_rights(manifest, clips, script)
 
-        is_safe = rights_record.risk_level in ("low", "medium") and not rights_record.replacement_recommended
+        review_required = rights_record.risk_level in ("medium", "high") or rights_record.replacement_recommended
 
         result_data = {
             "rights_record": rights_record,
             "risk_level": rights_record.risk_level,
             "fair_use_score": rights_record.fair_use_score,
-            "is_safe": is_safe,
+            "license_status": rights_record.license_type,
+            "review_required": review_required,
             "on_screen_credit": rights_record.mandatory_on_screen_credit,
             "description_attribution": rights_record.description_attribution_text,
         }
@@ -76,7 +72,11 @@ class RightsAttributionAgent(BaseAgent):
         agent_res = AgentResult(
             success=True,
             data=result_data,
-            metadata={"video_id": video_id, "risk_level": rights_record.risk_level, "safe": is_safe},
+            metadata={
+                "video_id": video_id,
+                "risk_level": rights_record.risk_level,
+                "review_required": review_required,
+            },
         )
         self.save_result(video_id, agent_res)
         return agent_res
@@ -87,71 +87,73 @@ class RightsAttributionAgent(BaseAgent):
         clips: List[SelectedClip],
         script: Optional[AdaptedShortScript],
     ) -> MediaRightsRecord:
-        """Assess copyright licensing, clip duration limits, and required disclaimers."""
+        """Assess copyright licensing, fair dealing factors, and required disclaimers.
+
+        NOTE: Neither short duration (e.g. <= 8s), nor government identity, nor disclaimers
+        constitute automated legal immunity. All third-party broadcast footage requires
+        explicit licensing review.
+        """
         source_uri = manifest.source_uri if manifest else "unknown"
-        author = (manifest.author if manifest else "") or (manifest.title if manifest else "")
-        author_lower = author.lower()
+        author = (manifest.author if manifest else "") or (manifest.title if manifest else "Unknown Broadcaster")
+        declared_license = (manifest.license if manifest else "unknown") or "unknown"
         warnings: List[str] = []
 
-        is_gov_or_public = any(pb in author_lower for pb in PUBLIC_TRUST_BROADCASTERS) or any(
-            pb in source_uri.lower() for pb in PUBLIC_TRUST_BROADCASTERS
-        )
-
         max_clip_dur = max((c.duration for c in clips), default=0.0)
-        # Check if any scene in script exceeds 8.0s for source_clip
         if script:
             for sc in script.scenes:
-                if sc.scene_type == "source_clip" and sc.duration > 8.0:
-                    max_clip_dur = max(max_clip_dur, sc.duration)
+                if sc.scene_type == "source_clip" and sc.duration > max_clip_dur:
+                    max_clip_dur = sc.duration
 
-        # Enforce threshold
-        replacement_recommended = False
-        if is_gov_or_public:
+        # Determine license status honestly
+        if declared_license.lower() in ("cc0", "cc-by", "cc-by-sa", "public_domain"):
+            license_type = declared_license.lower()
+            fair_use_score = 0.90
             risk_level = "low"
-            fair_use_score = 0.95
-            max_allowed = 12.0
-            source_label = author if author else "Official Broadcast / Sansad TV / DD News"
+            replacement_recommended = False
         else:
-            max_allowed = 8.0
+            license_type = "proprietary_broadcast_unlicensed"
+            # Even under commentary / transformative news reporting, risk is not zero
             if max_clip_dur > 8.0:
                 risk_level = "high"
-                fair_use_score = 0.50
+                fair_use_score = 0.40
                 replacement_recommended = True
                 warnings.append(
-                    f"Direct broadcast clip duration ({max_clip_dur:.1f}s) exceeds the safe 8.0s threshold. "
-                    "Recommend replacing with Wikimedia Commons photos and animated infographics."
+                    f"Direct broadcast clip duration ({max_clip_dur:.1f}s) exceeds conservative news fair dealing threshold (8s). "
+                    "Recommend replacing with licensed stock, Wikimedia Commons photos, or motion graphics."
                 )
-            elif max_clip_dur > 5.0:
+            elif max_clip_dur > 4.0:
                 risk_level = "medium"
-                fair_use_score = 0.75
-                warnings.append("Clip duration between 5s and 8s; maintain clear commentary and visible attribution.")
+                fair_use_score = 0.70
+                replacement_recommended = False
+                warnings.append("Clip duration 4-8s; requires prominent transformative commentary and visible source attribution.")
             else:
-                risk_level = "low"
-                fair_use_score = 0.88
-            source_label = author if author else "Third-Party Media / News Broadcast"
+                risk_level = "medium"  # Never 'low' for proprietary third-party commercial news
+                fair_use_score = 0.75
+                replacement_recommended = False
 
+        source_label = author if author else "News Broadcast"
         on_screen_credit = f"Credit / Source: {source_label}"
 
         disclaimer = (
             "==========================================================\n"
-            "COPYRIGHT & FAIR USE DISCLAIMER:\n"
+            "COPYRIGHT & FAIR DEALING NOTICE:\n"
             "This video contains transformative commentary, news reporting, and educational critique.\n"
-            "Under Section 107 of the US Copyright Act and Section 52 of the Indian Copyright Act 1957,\n"
-            "allowance is made for 'fair use' / 'fair dealing' for purposes such as criticism, comment,\n"
-            f"news reporting, teaching, scholarship, and research.\n\n"
-            f"Original Footage / Source Material: {source_label}\n"
+            "Reference is made to Section 52 of the Indian Copyright Act 1957 and Section 107 of the US Copyright Act.\n"
+            "No copyright ownership is claimed over third-party broadcast footage or quoted material.\n\n"
+            f"Source / Credit: {source_label}\n"
             f"Source Reference: {source_uri}\n"
-            "All copyrights belong to their respective legal owners.\n"
+            f"License Status: {license_type}\n"
+            "All copyrights remain with their respective legal rights holders.\n"
             "=========================================================="
         )
 
         return MediaRightsRecord(
             source_uri=source_uri,
             source_owner=source_label,
-            license_type="public_domain" if is_gov_or_public else "fair_use_commentary",
+            license_type=license_type,
             risk_level=risk_level,
             fair_use_score=fair_use_score,
-            max_clip_duration_seconds=max_allowed,
+            max_clip_duration_seconds=8.0,
             mandatory_on_screen_credit=on_screen_credit,
             description_attribution_text=disclaimer,
             warnings=warnings,

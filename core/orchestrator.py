@@ -18,10 +18,14 @@ from typing import Any, Dict, List, Optional
 import pytz
 
 from agents.analytics_manager import AnalyticsManagerAgent
+from agents.audio_sound_design import AudioSoundDesignAgent
 from agents.creative_director import CreativeDirectorAgent
+from agents.daily_opening_director import DailyOpeningDirectorAgent
 from agents.fact_verifier import FactVerifierAgent
 from agents.hook_director import HookDirectorAgent
+from agents.master_editing_director import MasterEditingDirectorAgent
 from agents.motion_graphics import MotionGraphicsAgent
+from agents.news_visual_sourcing import NewsVisualSourcingAgent
 from agents.prompt_engineer import PromptEngineerAgent
 from agents.publisher import PublisherAgent
 from agents.quality_manager import QualityManagerAgent
@@ -32,6 +36,7 @@ from agents.seo_manager import SEOManagerAgent
 from agents.thumbnail_designer import ThumbnailDesignerAgent
 from agents.video_producer import VideoProducerAgent
 from agents.vfx_agent import VFXAgent
+from agents.visual_audio_match_qa import VisualAudioMatchQAAgent
 from core.configuration import AppConfig
 from core.history import HistoryStore
 from core.llm_client import build_llm
@@ -69,6 +74,7 @@ class DailyOrchestrator:
         self.notifier = TelegramNotifier(config.telegram.bot_token, config.telegram.chat_id)
         self.llm = build_llm(config.llm, allow_mock=not config.general.strict_mode)
 
+        self.daily_opening_agent = DailyOpeningDirectorAgent(config, self.state)
         self.research_agent = ResearchManagerAgent(config, self.state, history=self.history, llm=self.llm)
         self.prompt_agent = PromptEngineerAgent(config, self.state)
         self.script_agent = ScriptManagerAgent(config, self.state, llm=self.llm)
@@ -76,9 +82,13 @@ class DailyOrchestrator:
         self.quality_agent = QualityManagerAgent(config, self.state)
         self.hook_agent = HookDirectorAgent(config, self.state)
         self.creative_agent = CreativeDirectorAgent(config, self.state, history=self.history)
+        self.visual_sourcing_agent = NewsVisualSourcingAgent(config, self.state)
         self.motion_agent = MotionGraphicsAgent(config, self.state)
         self.vfx_agent = VFXAgent(config, self.state)
+        self.audio_sound_agent = AudioSoundDesignAgent(config, self.state)
+        self.master_editing_agent = MasterEditingDirectorAgent(config, self.state)
         self.producer_agent = VideoProducerAgent(config, self.state)
+        self.visual_audio_qa_agent = VisualAudioMatchQAAgent(config, self.state)
         self.qa_inspector = VideoQAInspector(
             target_width=config.video.width,
             target_height=config.video.height,
@@ -136,6 +146,12 @@ class DailyOrchestrator:
             self._preflight()
 
             self.state.update_state(vid, state=PipelineState.RESEARCHING)
+            opening_brief = None
+            if task.video_type == "news":
+                opening_res = await self._stage(vid, "daily_opening", lambda: self.daily_opening_agent.execute(), require_success=False)
+                if opening_res:
+                    opening_brief = opening_res.get("opening_brief")
+
             research = await self._stage(vid, "research", lambda: self.research_agent.execute(
                 video_type=task.video_type, topic_category=task.topic_category, day_name=task.day_name))
 
@@ -172,16 +188,33 @@ class DailyOrchestrator:
 
             creative = await self._stage(vid, "creative_direction", lambda: self.creative_agent.execute(script=script))
 
+            visual_res = await self._stage(vid, "news_visual_sourcing", lambda: self.visual_sourcing_agent.execute(
+                script=script, research_items=research.get("items", []), out_dir=f"output/{vid}/visuals"), require_success=False)
+            visual_assets = visual_res.get("visual_assets", []) if visual_res else []
+
             vfx = await self._stage(vid, "vfx_direction", lambda: self.vfx_agent.execute(
                 script=script, creative_brief=creative), require_success=False)
 
             motion = await self._stage(vid, "motion_graphics", lambda: self.motion_agent.execute(
-                script=script, hook=script.get("hook", ""), out_dir=f"output/{vid}"), require_success=False)
+                script=script, hook=script.get("hook", ""), opening_brief=opening_brief, out_dir=f"output/{vid}/overlays"), require_success=False)
+
+            audio_sound = await self._stage(vid, "audio_sound_design", lambda: self.audio_sound_agent.execute(
+                video_id=vid, script=script, duration=55.0, video_type=task.video_type), require_success=False)
+            audio_mix_plan = audio_sound.get("mix_plan") if audio_sound else None
+
+            master_edit = await self._stage(vid, "master_editing_director", lambda: self.master_editing_agent.execute(
+                video_id=vid, script=script, opening_brief=opening_brief, visual_assets=visual_assets,
+                vfx_data=vfx or {}, motion_data=motion or {}, audio_mix_plan=audio_mix_plan), require_success=False)
+            master_timeline = master_edit.get("master_timeline") if master_edit else None
 
             self.state.update_state(vid, state=PipelineState.RENDERING)
             production = await self._stage(vid, "video_production", lambda: self.producer_agent.execute(
                 video_id=vid, script=script, creative_brief=creative, research_data=research,
-                vfx_data=vfx, motion_data=motion, hook_data=hook_res))
+                vfx_data=vfx, motion_data=motion, hook_data=hook_res, master_timeline=master_timeline))
+
+            # Visual Audio Match Quality Assurance
+            qa_match = await self._stage(vid, "visual_audio_match_qa", lambda: self.visual_audio_qa_agent.execute(
+                video_id=vid, timeline=master_timeline, video_path=production.get("video_path", "")), require_success=False)
 
             # Independent Post-Render Quality Assurance
             video_path = production.get("video_path", "")

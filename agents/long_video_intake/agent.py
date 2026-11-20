@@ -1,8 +1,8 @@
 """Long Video Intake Agent.
 
 Validates source video URLs or local video files, probes stream properties via ffprobe,
-verifies container integrity and media permissions, generates SHA-256 fingerprints,
-and produces a validated SourceVideoManifest.
+verifies container integrity and media accessibility, generates full-file SHA-256 fingerprints,
+and produces a validated SourceVideoManifest without fabricated duration or fake access.
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -50,8 +49,9 @@ class LongVideoIntakeAgent(BaseAgent):
             )
 
         is_local = bool(file_path and Path(file_path).exists())
-        target_path: Path
+        target_path: Optional[Path] = None
         source_uri: str
+        access_status: str
 
         if is_local:
             target_path = Path(file_path)
@@ -61,47 +61,53 @@ class LongVideoIntakeAgent(BaseAgent):
                     success=False,
                     errors=[f"Provided file_path is not a valid file: {file_path}"],
                 )
+            access_status = "accessible_local"
         else:
             source_uri = source_url or ""
-            # Validate URL structure
             parsed = urlparse(source_uri)
             if not parsed.scheme or not parsed.netloc:
                 return AgentResult(
                     success=False,
                     errors=[f"Invalid source URL format: {source_uri}"],
                 )
-            # In Phase 1, remote URLs may have a pre-staged or downloaded mock path provided in kwargs
+
+            # Check if pre-staged download exists
             staged_path = kwargs.get("staged_path")
             if staged_path and Path(staged_path).exists():
                 target_path = Path(staged_path)
                 is_local = True
+                access_status = "accessible_staged"
             else:
-                # Stub reference for remote URL if not yet downloaded
-                target_path = Path(f"output/repurposing/remote_{abs(hash(source_uri))}.mp4")
+                access_status = "remote_unfetched"
 
-        # Compute SHA-256 fingerprint if local file exists
-        file_hash = ""
-        if is_local and target_path.is_file():
-            file_hash = self._compute_file_hash(target_path)
+        # Compute SHA-256 fingerprint
+        if is_local and target_path and target_path.is_file():
+            file_hash = self._compute_full_file_hash(target_path)
         else:
             hasher = hashlib.sha256()
             hasher.update(source_uri.encode("utf-8"))
-            file_hash = hasher.hexdigest()[:32]
+            file_hash = hasher.hexdigest()
 
         video_id = custom_id or f"lv_{file_hash[:12]}"
         output_dir = Path("output") / "repurposing" / video_id
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Probe streams
+        # Probe streams honestly — no fabricated 600.0s duration!
         probe_data = self._probe_media(target_path if is_local else None, source_uri=source_uri)
+
+        # For remote unfetched URLs with no staged media, duration is 0.0 unless provided explicitly
+        if not is_local:
+            duration = float(kwargs.get("duration", probe_data["duration"]))
+        else:
+            duration = probe_data["duration"]
 
         manifest = SourceVideoManifest(
             video_id=video_id,
             source_uri=source_uri,
             is_local_file=is_local,
-            local_path=str(target_path.resolve()) if is_local else "",
+            local_path=str(target_path.resolve()) if (is_local and target_path) else "",
             sha256=file_hash,
-            duration=probe_data["duration"],
+            duration=duration,
             width=probe_data["width"],
             height=probe_data["height"],
             fps=probe_data["fps"],
@@ -120,28 +126,34 @@ class LongVideoIntakeAgent(BaseAgent):
             "manifest": manifest,
             "manifest_dict": manifest.to_dict(),
             "workspace_dir": str(output_dir),
+            "source_access_status": access_status,
         }
 
         agent_res = AgentResult(
             success=True,
             data=result_data,
-            metadata={"video_id": video_id, "file_hash": file_hash, "is_local": is_local},
+            metadata={
+                "video_id": video_id,
+                "file_hash": file_hash,
+                "is_local": is_local,
+                "source_access_status": access_status,
+            },
         )
         self.save_result(video_id, agent_res)
         return agent_res
 
-    def _compute_file_hash(self, path: Path, max_bytes: int = 16 * 1024 * 1024) -> str:
-        """Compute SHA-256 on up to 16MB chunk to stay fast on multi-gigabyte video files."""
+    def _compute_full_file_hash(self, path: Path) -> str:
+        """Compute SHA-256 across the entire file in 1MB chunks."""
         hasher = hashlib.sha256()
         with open(path, "rb") as f:
-            chunk = f.read(max_bytes)
-            hasher.update(chunk)
+            while chunk := f.read(1024 * 1024):
+                hasher.update(chunk)
         return hasher.hexdigest()
 
     def _probe_media(self, path: Optional[Path], source_uri: str = "") -> Dict[str, Any]:
-        """Probe media container and stream attributes via ffprobe or smart fallback."""
+        """Probe media container and stream attributes via ffprobe honestly."""
         default_info: Dict[str, Any] = {
-            "duration": 600.0,
+            "duration": 0.0,
             "width": 1920,
             "height": 1080,
             "fps": 30.0,
@@ -155,7 +167,6 @@ class LongVideoIntakeAgent(BaseAgent):
         }
 
         if not path or not path.exists():
-            # For remote URLs or test stubs, extract metadata clues from URL
             if "youtube.com" in source_uri or "youtu.be" in source_uri:
                 default_info["title"] = "YouTube Video Stream"
             return default_info
@@ -172,7 +183,7 @@ class LongVideoIntakeAgent(BaseAgent):
             if proc.returncode == 0 and proc.stdout:
                 data = json.loads(proc.stdout)
                 fmt = data.get("format", {})
-                duration = float(fmt.get("duration", default_info["duration"]))
+                duration = float(fmt.get("duration", 0.0))
                 tags = fmt.get("tags", {})
                 title = tags.get("title", "")
                 author = tags.get("artist", "")
@@ -214,6 +225,6 @@ class LongVideoIntakeAgent(BaseAgent):
                     "author": author,
                 }
         except Exception as exc:
-            self.logger.warning("ffprobe probe failed for %s (%s). Using fallback metadata.", path, exc)
+            self.logger.warning("ffprobe probe failed for %s (%s).", path, exc)
 
         return default_info

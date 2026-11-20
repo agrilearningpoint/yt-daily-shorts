@@ -199,6 +199,10 @@ class TimelineSegmentContract:
     chip_path: Optional[str] = None
     sfx_cue: Optional[str] = None
     captions: List[WordTimingItem] = field(default_factory=list)
+    motion_preset_id: Optional[str] = None
+    is_video_asset: bool = False
+    video_trim_start: float = 0.0
+    video_trim_end: float = 0.0
 
 
 @dataclass
@@ -209,6 +213,7 @@ class VFXPlanItem:
     color_grade: str
     intensity: float = 1.0
     sfx_type: Optional[str] = None
+    motion_preset_id: Optional[str] = None
 
 
 @dataclass
@@ -220,6 +225,7 @@ class MotionGraphicsPlanItem:
     story_counter: str
     is_hook: bool = False
     progress_percent: float = 0.0
+    motion_preset_id: Optional[str] = None
 
 
 @dataclass
@@ -233,6 +239,9 @@ class MasterEditingTimeline:
     music_track_path: Optional[str] = None
     music_volume: float = 0.10
     color_grade_filter: str = ""
+    audio_mix_plan: Optional[Any] = None
+    opening_brief: Optional[Any] = None
+    visual_assets: List[Any] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -249,6 +258,20 @@ class QualityVerificationVerdict:
     sync_passed: bool
     technical_passed: bool
     measured_duration: float
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+
+@dataclass
+class VisualAudioMatchResult:
+    approved: bool
+    overall_match_score: float
+    pre_render_passed: bool
+    post_render_passed: bool
+    sync_drift_seconds: float
+    av_alignment_score: float
+    semantic_match_ratio: float
+    checks: Dict[str, Any] = field(default_factory=dict)
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
@@ -460,4 +483,100 @@ class RepurposingJobResult:
     rights_records: Dict[str, MediaRightsRecord] = field(default_factory=dict)
     status: str = "completed"
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Daily Opening, Audio Sound Design & Visual Sourcing Contracts
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DailyOpeningBrief:
+    date_iso: str
+    date_hi: str
+    weekday_hi: str
+    panchang: Dict[str, Any] = field(default_factory=dict)
+    festivals: List[str] = field(default_factory=list)
+    national_observances: List[str] = field(default_factory=list)
+    international_observances: List[str] = field(default_factory=list)
+    on_this_day_events: List[str] = field(default_factory=list)
+    selected_special_day: str = ""
+    verified_facts: List[str] = field(default_factory=list)
+    evidence_sources: List[str] = field(default_factory=list)
+    opening_hook_candidates: List[Dict[str, Any]] = field(default_factory=list)
+    selected_hook: str = ""
+    spoken_script: str = ""
+    visual_beats: List[Dict[str, Any]] = field(default_factory=list)
+    motion_preset_ids: List[str] = field(default_factory=list)
+    sound_cue_ids: List[str] = field(default_factory=list)
+    confidence: float = 1.0
+    verification_status: str = "verified"  # verified, partial, fallback
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class SoundCueContract:
+    cue_id: str
+    scene_id: str
+    sound_type: str  # sting, transition, whoosh, impact, bed, riser, click
+    sound_path: str
+    start_time: float
+    end_time: float
+    gain_db: float = -6.0
+    fade_in: float = 0.05
+    fade_out: float = 0.05
+    ducking_priority: int = 1  # 0 = no ducking, 1 = normal, 2 = high priority (voice over it)
+    trigger_type: str = "transition"  # transition, overlay, headline, hook, outro
+    source_license: str = "cc0"
+    attribution: str = ""
+    required_or_optional: str = "optional"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class AudioMixPlan:
+    mix_id: str
+    total_duration: float
+    narration_audio_path: str
+    background_bed_path: str
+    bed_volume: float = 0.10
+    ducked_volume: float = 0.03
+    sound_cues: List[SoundCueContract] = field(default_factory=list)
+    target_loudness_lufs: float = -14.0
+    true_peak_limit_db: float = -1.0
+    output_master_audio_path: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class NewsVisualAsset:
+    asset_id: str
+    story_id: str
+    asset_type: str  # photo, video_broll, graphic_chart, map
+    local_path: str
+    source_provider: str  # wikimedia, publisher, openverse, pexels, pixabay, official_gov
+    original_source_url: str = ""
+    source_page_url: str = ""
+    creator: str = ""
+    license_name: str = ""
+    license_url: str = ""
+    attribution_required: bool = False
+    attribution_text: str = ""
+    event_match_score: float = 1.0
+    visual_description: str = ""
+    actual_event_or_stock: str = "actual_event"  # actual_event, institutional_broll, stock, illustrative_graphic
+    is_ai_generated: bool = False
+    visual_confidence: float = 1.0
+    quality_score: float = 1.0
+    download_status: str = "ready"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
 

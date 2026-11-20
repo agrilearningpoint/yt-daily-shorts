@@ -2,7 +2,7 @@
 
 Transcribes audio from long video files or extracts existing captions, aligns
 sentence- and word-level timestamps, performs speaker tracking/diarization,
-and normalizes Devanagari Hindi text.
+and normalizes Devanagari Hindi text. Never fabricates placeholder transcripts.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ class TranscriptionDiarizationAgent(BaseAgent):
         self.ffmpeg_path = shutil.which("ffmpeg") or "ffmpeg"
 
     def validate_input(self, **kwargs: Any) -> bool:
-        """Verify that either a manifest, an audio path, a transcript, or pre-extracted segments are provided."""
+        """Verify that either a manifest, an audio path, a caption path, a transcript, or pre-extracted segments are provided."""
         return bool(
             kwargs.get("manifest")
             or kwargs.get("audio_track_path")
@@ -59,8 +59,9 @@ class TranscriptionDiarizationAgent(BaseAgent):
 
         segments: List[TranscriptSegment] = []
         audio_path = kwargs.get("audio_track_path", "")
+        transcription_status = "unprocessed"
 
-        # 1. Pre-computed or injected segments (e.g. testing or checkpointed)
+        # 1. Pre-computed or injected segments (testing or checkpointed)
         if kwargs.get("segments"):
             raw_segs = kwargs["segments"]
             for idx, item in enumerate(raw_segs):
@@ -88,17 +89,20 @@ class TranscriptionDiarizationAgent(BaseAgent):
                             language=item.get("language", "hi"),
                         )
                     )
+            transcription_status = "provided_segments"
 
         # 2. Existing Captions / SRT / VTT file
         elif kwargs.get("existing_captions_path") and Path(kwargs["existing_captions_path"]).exists():
             cap_file = Path(kwargs["existing_captions_path"])
             segments = self._parse_srt_or_vtt(cap_file)
+            transcription_status = "extracted_captions"
 
         # 3. Raw text transcript provided
         elif kwargs.get("raw_transcript"):
             raw_text = str(kwargs["raw_transcript"]).strip()
-            total_duration = manifest.duration if manifest else 300.0
+            total_duration = manifest.duration if manifest and manifest.duration > 0 else 30.0
             segments = self._segment_raw_text(raw_text, total_duration)
+            transcription_status = "parsed_raw_transcript"
 
         # 4. Extract audio and transcribe using Whisper adapter
         else:
@@ -109,15 +113,24 @@ class TranscriptionDiarizationAgent(BaseAgent):
                     self._extract_audio(Path(local_video), extracted_audio)
                 audio_path = str(extracted_audio)
                 segments = await self._transcribe_audio(extracted_audio, manifest)
+                transcription_status = "whisper_transcribed" if segments else "audio_empty"
             else:
-                # No local audio file, generate fallback informational segments from manifest
-                title = manifest.title if manifest else "News Bulletin"
-                fallback_text = f"नमस्कार, आज की प्रमुख खबरों में आपका स्वागत है। {title} पर विशेष चर्चा जारी है।"
-                segments = self._segment_raw_text(fallback_text, 30.0)
+                # No local media and no captions -> Honest failure! Never fabricate fake news transcripts.
+                return AgentResult(
+                    success=False,
+                    errors=[f"Source video media or audio track is not accessible for video_id={video_id}."],
+                    data={"transcription_status": "media_inaccessible"},
+                )
+
+        if not segments:
+            return AgentResult(
+                success=False,
+                errors=["No speech or transcript content could be extracted."],
+                data={"transcription_status": "transcription_empty"},
+            )
 
         # Diarize and track speaker profiles
         segments, speakers = self._diarize_and_profile_speakers(segments)
-
         full_text = " ".join(s.text for s in segments)
 
         result_data = {
@@ -127,12 +140,13 @@ class TranscriptionDiarizationAgent(BaseAgent):
             "segment_count": len(segments),
             "full_text": full_text,
             "audio_track_path": audio_path,
+            "transcription_status": transcription_status,
         }
 
         agent_res = AgentResult(
             success=True,
             data=result_data,
-            metadata={"video_id": video_id, "total_words": len(full_text.split())},
+            metadata={"video_id": video_id, "total_words": len(full_text.split()), "status": transcription_status},
         )
         self.save_result(video_id, agent_res)
         return agent_res
@@ -152,22 +166,14 @@ class TranscriptionDiarizationAgent(BaseAgent):
             ]
             subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True, timeout=120)
         except Exception as exc:
-            self.logger.warning("Audio extraction failed (%s). Creating silence fallback.", exc)
-            self._create_silent_wav(output_audio, 5.0)
-
-    def _create_silent_wav(self, path: Path, duration: float) -> None:
-        """Create a short valid WAV header if FFmpeg extraction fails."""
-        import wave
-        with wave.open(str(path), "wb") as w:
-            w.setnchannels(1)
-            w.setsampwidth(2)
-            w.setframerate(16000)
-            w.writeframes(b"\x00\x00" * int(16000 * duration))
+            self.logger.warning("Audio extraction failed (%s).", exc)
 
     async def _transcribe_audio(self, audio_path: Path, manifest: Optional[SourceVideoManifest]) -> List[TranscriptSegment]:
-        """Transcribe audio with faster-whisper or fall back to structured sentence generation."""
+        """Transcribe audio with faster-whisper adapter."""
+        if not audio_path.exists() or audio_path.stat().st_size < 1000:
+            return []
+
         try:
-            # Check for faster-whisper
             import faster_whisper  # type: ignore
             model_size = getattr(getattr(self.config, "transcription", None), "model_size", "small")
             whisper_model = faster_whisper.WhisperModel(model_size, device="auto", compute_type="default")
@@ -198,25 +204,19 @@ class TranscriptionDiarizationAgent(BaseAgent):
             if parsed_segs:
                 return parsed_segs
         except ImportError:
-            self.logger.info("faster-whisper not installed; using standard transcript parser adapter.")
+            self.logger.info("faster-whisper not installed in current environment.")
         except Exception as exc:
-            self.logger.warning("Whisper transcription failed (%s); using fallback segmenter.", exc)
+            self.logger.warning("Whisper transcription failed (%s).", exc)
 
-        # Fallback synthesis: distribute words evenly
-        fallback_text = (
-            "भारत सरकार का यह महत्वपूर्ण निर्णय आज संसद में प्रस्तुत किया गया। "
-            "वैज्ञानिकों ने इसे तकनीकी क्रांति का महत्वपूर्ण चरण बताया है। "
-            "इस विषय पर विभिन्न विशेषज्ञों की राय भी सामने आ रही है।"
-        )
-        duration = manifest.duration if manifest else 30.0
-        return self._segment_raw_text(fallback_text, duration)
+        return []
 
     def _segment_raw_text(self, text: str, total_duration: float) -> List[TranscriptSegment]:
         """Convert raw sentences into timed segments with word timestamps."""
-        # Split by Hindi danda (।) or standard full-stops / newlines
         sentences = [s.strip() for s in re.split(r"[।\.\n]+", text) if s.strip()]
         if not sentences:
-            sentences = [text.strip()] if text.strip() else ["महत्वपूर्ण जानकारी"]
+            sentences = [text.strip()] if text.strip() else []
+        if not sentences:
+            return []
 
         total_chars = sum(len(s) for s in sentences) or 1
         current_time = 0.0
@@ -224,10 +224,9 @@ class TranscriptionDiarizationAgent(BaseAgent):
 
         for idx, sentence in enumerate(sentences):
             fraction = len(sentence) / total_chars
-            seg_duration = max(2.5, fraction * total_duration)
+            seg_duration = max(2.0, fraction * total_duration)
             seg_end = current_time + seg_duration
 
-            # Build word timings
             words = sentence.split()
             word_list: List[WordTiming] = []
             if words:
@@ -318,10 +317,7 @@ class TranscriptionDiarizationAgent(BaseAgent):
         """Cluster segments into speakers and generate SpeakerProfiles."""
         speaker_durations: Dict[str, float] = {}
 
-        # Heuristic speaker turn detection: look for anchor intros or dialogue shifts
         for seg in segments:
-            # Detect anchor introductions
-            lower_text = seg.text.lower()
             if any(term in seg.text for term in ["नमस्कार", "स्वागत है", "बुलेटिन", "मुख्य समाचार"]):
                 seg.speaker_id = "SPEAKER_ANCHOR"
             elif any(term in seg.text for term in ["संवाददाता", "रिपोर्टर", "हमारे साथ जुड़ रहे हैं"]):

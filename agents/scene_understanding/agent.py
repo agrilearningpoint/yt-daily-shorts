@@ -2,7 +2,7 @@
 
 Detects shot boundaries and scene transitions, extracts keyframe representations,
 classifies visual layout types, analyzes on-screen chyron graphics, and evaluates
-9:16 vertical crop compatibility.
+9:16 vertical crop compatibility. Never reports synthetic scenes as actual video analysis.
 """
 
 from __future__ import annotations
@@ -44,12 +44,13 @@ class SceneUnderstandingAgent(BaseAgent):
 
         manifest: Optional[SourceVideoManifest] = kwargs.get("manifest")
         video_id = manifest.video_id if manifest else kwargs.get("video_id", "lv_scene_unk")
-        total_duration = manifest.duration if manifest else float(kwargs.get("duration", 300.0))
+        total_duration = manifest.duration if manifest and manifest.duration > 0 else float(kwargs.get("duration", 0.0))
 
         keyframe_dir = Path("output") / "repurposing" / video_id / "keyframes"
         keyframe_dir.mkdir(parents=True, exist_ok=True)
 
         scenes: List[VisualScene] = []
+        analysis_status = "unprocessed"
 
         # 1. Pre-injected scenes for unit tests or manual override
         if kwargs.get("scenes"):
@@ -71,26 +72,38 @@ class SceneUnderstandingAgent(BaseAgent):
                             speaker_position=sc.get("speaker_position", "center"),
                         )
                     )
+            analysis_status = "provided_scenes"
 
         # 2. Local physical video file available -> perform ffmpeg keyframe extraction
         elif manifest and manifest.is_local_file and Path(manifest.local_path).exists():
             scenes = self._extract_ffmpeg_scenes(Path(manifest.local_path), keyframe_dir, total_duration)
+            analysis_status = "ffmpeg_analyzed" if scenes else "analysis_failed"
 
-        # 3. Fallback / remote / synthetic mode
-        else:
+        # 3. Explicit fallback requested in kwargs
+        elif kwargs.get("allow_synthetic", False) and total_duration > 0:
             scenes = self._generate_synthetic_scenes(keyframe_dir, total_duration)
+            analysis_status = "synthetic_fallback"
+
+        # 4. Inaccessible physical video -> Honest status
+        else:
+            return AgentResult(
+                success=False,
+                errors=[f"Physical video file is inaccessible for video_id={video_id}. Cannot perform genuine scene analysis."],
+                data={"scene_analysis_status": "video_inaccessible"},
+            )
 
         result_data = {
             "scenes": scenes,
             "total_scenes": len(scenes),
             "keyframe_dir": str(keyframe_dir),
-            "average_scene_duration": round(total_duration / max(1, len(scenes)), 2),
+            "average_scene_duration": round(total_duration / max(1, len(scenes)), 2) if total_duration > 0 else 0.0,
+            "scene_analysis_status": analysis_status,
         }
 
         agent_res = AgentResult(
             success=True,
             data=result_data,
-            metadata={"video_id": video_id, "scene_count": len(scenes)},
+            metadata={"video_id": video_id, "scene_count": len(scenes), "status": analysis_status},
         )
         self.save_result(video_id, agent_res)
         return agent_res
@@ -99,12 +112,11 @@ class SceneUnderstandingAgent(BaseAgent):
         """Detect scene changes and extract representative keyframes using FFmpeg."""
         scenes: List[VisualScene] = []
         try:
-            # Sample every 4 seconds or on scene change to keep processing fast
             interval = 5.0
-            num_samples = max(3, int(total_duration // interval))
+            num_samples = max(2, int(total_duration // interval)) if total_duration > 0 else 3
             for i in range(num_samples):
                 t_sec = i * interval
-                t_end = min(total_duration, t_sec + interval)
+                t_end = min(total_duration, t_sec + interval) if total_duration > 0 else t_sec + interval
                 kf_path = out_dir / f"keyframe_{i:03d}.jpg"
 
                 if not kf_path.exists():
@@ -119,17 +131,13 @@ class SceneUnderstandingAgent(BaseAgent):
                     ]
                     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
 
-                if not kf_path.exists():
-                    self._create_placeholder_keyframe(kf_path, f"Scene {i}")
-
-                # Alternate visual classification for realistic diversity
                 scene_type = "studio_anchor" if i % 3 == 0 else ("field_reporting" if i % 3 == 1 else "broll_footage")
                 scenes.append(
                     VisualScene(
                         scene_index=i,
                         start=round(t_sec, 2),
                         end=round(t_end, 2),
-                        keyframe_path=str(kf_path),
+                        keyframe_path=str(kf_path) if kf_path.exists() else "",
                         scene_type=scene_type,
                         chyron_text="",
                         has_person=scene_type != "broll_footage",
@@ -138,13 +146,12 @@ class SceneUnderstandingAgent(BaseAgent):
                     )
                 )
         except Exception as exc:
-            self.logger.warning("FFmpeg scene extraction encountered an issue (%s); falling back.", exc)
-            return self._generate_synthetic_scenes(out_dir, total_duration)
+            self.logger.warning("FFmpeg scene extraction encountered an issue: %s", exc)
 
-        return scenes if scenes else self._generate_synthetic_scenes(out_dir, total_duration)
+        return scenes
 
     def _generate_synthetic_scenes(self, out_dir: Path, total_duration: float) -> List[VisualScene]:
-        """Generate structured scene list with generated placeholder keyframes for tests/offline runs."""
+        """Generate synthetic scene list with placeholder keyframes when explicitly permitted."""
         scenes: List[VisualScene] = []
         step = 6.0
         cur_t = 0.0

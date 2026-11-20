@@ -74,10 +74,51 @@ tts:
   news_style: "clear, confident Hindi TV news anchor, natural conversational pace, short breath pause after each story"
   knowledge_style: "warm, curious Hindi storyteller, natural conversational pace, expressive and unhurried"
   provider: "edge-tts"
-  voice: "hi-IN-MadhurNeural"
-  fallback_voice: "hi-IN-SwaraNeural"
+  voice: "hi-IN-SwaraNeural"
+  fallback_voice: "hi-IN-MadhurNeural"
+  news_voice: "hi-IN-SwaraNeural"
+  knowledge_voice: "hi-IN-MadhurNeural"
   rate: "+5%"
   pitch: "+0Hz"
+
+profiles:
+  daily_news_bulletin:
+    aspect_ratio: "9:16"
+    width: 1080
+    height: 1920
+    fps: 30
+    target_duration: 130
+    min_duration: 60
+    max_duration: 300
+    voice: "hi-IN-SwaraNeural"
+  news_short:
+    aspect_ratio: "9:16"
+    width: 1080
+    height: 1920
+    fps: 30
+    target_duration: 52
+    min_duration: 25
+    max_duration: 59.5
+    voice: "hi-IN-SwaraNeural"
+  repurposed_news_short:
+    aspect_ratio: "9:16"
+    width: 1080
+    height: 1920
+    fps: 30
+    target_duration: 50
+    min_duration: 25
+    max_duration: 59.5
+    voice: "hi-IN-SwaraNeural"
+  knowledge_short:
+    aspect_ratio: "9:16"
+    width: 1080
+    height: 1920
+    fps: 30
+    target_duration: 52
+    min_duration: 25
+    max_duration: 59.5
+    voice: "hi-IN-MadhurNeural"
+
 
 seo:
   max_title_length: 100

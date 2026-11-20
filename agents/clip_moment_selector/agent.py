@@ -99,7 +99,7 @@ class ClipMomentSelectorAgent(BaseAgent):
         segments: List[TranscriptSegment],
         scenes: List[VisualScene],
     ) -> List[SelectedClip]:
-        """Isolate the best 3-8s moments within the story's time window."""
+        """Isolate meaningful 3-8s soundbite moments snapped to natural speech pauses."""
         story_segs = [
             s for s in segments
             if (s.start >= story.start_time - 1.0 and s.end <= story.end_time + 1.0)
@@ -109,19 +109,21 @@ class ClipMomentSelectorAgent(BaseAgent):
 
         clips: List[SelectedClip] = []
 
-        # Find candidate soundbite: look for quotes or statements with strong sentiment or revelation
+        # Find soundbite candidates with strong sentiment, quote, or revelation
         for idx, seg in enumerate(story_segs):
             dur = seg.end - seg.start
-            # Target 3.0 to 8.0 seconds for Shorts soundbites
+            # Target 2.5 to 8.5 seconds
             if 2.5 <= dur <= 8.5:
-                # Determine crop focus from matching scene
                 crop_focus = "center"
                 matching_scene = next((sc for sc in scenes if sc.start <= seg.start <= sc.end), None)
                 if matching_scene:
                     crop_focus = matching_scene.speaker_position
 
-                is_hook = idx == 0 or any(k in seg.text for k in ["बड़ा फैसला", "खुलासा", "ऐतिहासिक", "महत्वपूर्ण"])
+                is_hook = idx == 0 or any(k in seg.text for k in ["बड़ा फैसला", "खुलासा", "ऐतिहासिक", "महत्वपूर्ण", "स्पष्ट कहा"])
                 purpose = "hook" if is_hook else "soundbite"
+
+                # Check audio quality based on confidence and speaker tags
+                audio_quality = "clean" if seg.confidence >= 0.90 else "background_noise"
 
                 clips.append(
                     SelectedClip(
@@ -132,7 +134,7 @@ class ClipMomentSelectorAgent(BaseAgent):
                         duration=round(dur, 2),
                         quote_text=seg.text,
                         speaker_id=seg.speaker_id,
-                        audio_quality="clean",
+                        audio_quality=audio_quality,
                         visual_quality="high",
                         crop_focus=crop_focus,
                         is_hook_candidate=is_hook,
@@ -143,19 +145,27 @@ class ClipMomentSelectorAgent(BaseAgent):
             if len(clips) >= 3:
                 break
 
-        # If no single segment fit 2.5-8.5s window, synthesize a clean clip from the first segment
+        # Fallback to contiguous concatenation if segments are too short
         if not clips and story_segs:
-            first_s = story_segs[0]
-            c_dur = min(6.0, max(3.0, first_s.end - first_s.start))
+            combined_text = []
+            c_start = story_segs[0].start
+            c_end = story_segs[0].end
+            spk = story_segs[0].speaker_id
+            for s in story_segs:
+                combined_text.append(s.text)
+                c_end = s.end
+                if (c_end - c_start) >= 3.0:
+                    break
+            c_dur = round(c_end - c_start, 2)
             clips.append(
                 SelectedClip(
                     clip_id=f"{story.story_id}_clip_01",
                     story_id=story.story_id,
-                    start_time=round(first_s.start, 2),
-                    end_time=round(first_s.start + c_dur, 2),
-                    duration=round(c_dur, 2),
-                    quote_text=first_s.text,
-                    speaker_id=first_s.speaker_id,
+                    start_time=round(c_start, 2),
+                    end_time=round(c_end, 2),
+                    duration=c_dur,
+                    quote_text=" ".join(combined_text),
+                    speaker_id=spk,
                     audio_quality="clean",
                     visual_quality="high",
                     crop_focus="center",

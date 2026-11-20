@@ -94,8 +94,10 @@ class LLMConfig:
 @dataclass
 class TTSConfig:
     provider: str = "edge-tts"
-    voice: str = "hi-IN-MadhurNeural"
-    fallback_voice: str = "hi-IN-SwaraNeural"
+    voice: str = "hi-IN-SwaraNeural"
+    fallback_voice: str = "hi-IN-MadhurNeural"
+    news_voice: str = "hi-IN-SwaraNeural"
+    knowledge_voice: str = "hi-IN-MadhurNeural"
     rate: str = "+5%"
     pitch: str = "+0Hz"
     provider_order: List[str] = field(default_factory=lambda: ["gemini", "edge"])
@@ -214,6 +216,7 @@ class AppConfig:
     media: MediaConfig = field(default_factory=MediaConfig)
     seo: SEOConfig = field(default_factory=SEOConfig)
     editorial_calendar: EditorialCalendar = field(default_factory=EditorialCalendar)
+    profiles: Dict[str, Any] = field(default_factory=dict)
 
     def set_dry_run(self, value: bool) -> None:
         self.general.dry_run = value
@@ -294,6 +297,8 @@ def _coerce(current: Any, value: Any) -> Any:
 
 
 def _apply_yaml(cfg: AppConfig, data: Dict[str, Any]) -> None:
+    if "profiles" in data and isinstance(data["profiles"], dict):
+        cfg.profiles = data["profiles"]
     sections = _sections(cfg)
     for section_key, section_data in data.items():
         target = sections.get(section_key)

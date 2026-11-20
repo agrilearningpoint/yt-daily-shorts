@@ -41,6 +41,7 @@ async def test_rights_public_domain_low_risk(rights_agent):
         audio_sample_rate=44100,
         has_audio=True,
         author="Sansad TV Official",
+        license="public_domain",
     )
     clip = SelectedClip(
         clip_id="c1",

@@ -28,7 +28,7 @@ from core.agent_contracts import (
 from core.configuration import AppConfig
 from core.state_manager import StateManager
 
-FACTOR_WEIGHTS: Dict[str, float] = {
+DEFAULT_FACTOR_WEIGHTS: Dict[str, float] = {
     "public_importance": 0.20,
     "emotional_impact": 0.15,
     "information_freshness": 0.15,
@@ -39,6 +39,8 @@ FACTOR_WEIGHTS: Dict[str, float] = {
     "narrative_closure": 0.05,
     "novelty": 0.05,
 }
+FACTOR_WEIGHTS = DEFAULT_FACTOR_WEIGHTS
+
 
 
 class ShortsOpportunityRankerAgent(BaseAgent):
@@ -48,6 +50,7 @@ class ShortsOpportunityRankerAgent(BaseAgent):
 
     def __init__(self, config: AppConfig, state_manager: StateManager) -> None:
         super().__init__(config, state_manager)
+        self.weights = getattr(config, "opportunity_weights", DEFAULT_FACTOR_WEIGHTS)
 
     def validate_input(self, **kwargs: Any) -> bool:
         """Verify stories or pre-calculated rankings are provided."""
@@ -83,8 +86,7 @@ class ShortsOpportunityRankerAgent(BaseAgent):
                             hook_angle=r.get("hook_angle", ""),
                         )
                     )
-
-        # 2. Evaluate each story
+        # 2. Evaluate each story objectively
         else:
             for story in stories:
                 dossier = evidence_dossiers.get(story.story_id, [])
@@ -99,19 +101,26 @@ class ShortsOpportunityRankerAgent(BaseAgent):
 
         top_picks_count = sum(1 for r in rankings if r.priority_flag == "top_pick")
         viable_count = sum(1 for r in rankings if r.priority_flag == "viable")
+        rejected_count = sum(1 for r in rankings if r.priority_flag == "rejected")
 
         result_data = {
             "rankings": rankings,
             "top_stories": top_stories,
             "top_picks_count": top_picks_count,
             "viable_count": viable_count,
+            "rejected_count": rejected_count,
             "highest_score": rankings[0].composite_score if rankings else 0.0,
         }
 
         agent_res = AgentResult(
             success=True,
             data=result_data,
-            metadata={"video_id": video_id, "evaluated_count": len(rankings)},
+            metadata={
+                "video_id": video_id,
+                "evaluated_count": len(rankings),
+                "top_picks": top_picks_count,
+                "rejected": rejected_count,
+            },
         )
         self.save_result(video_id, agent_res)
         return agent_res
@@ -120,65 +129,72 @@ class ShortsOpportunityRankerAgent(BaseAgent):
         """Apply the 9-factor scoring model to evaluate an extracted story."""
         factors: Dict[str, float] = {}
 
-        # 1. Public Importance (20%): category weight + entities
-        base_importance = 75.0
+        # 1. Public Importance (20%)
+        base_importance = 40.0
         if story.category in ("national", "science", "defense"):
-            base_importance += 15.0
+            base_importance += 40.0
         elif story.category in ("economy", "politics"):
+            base_importance += 30.0
+        elif story.category in ("international",):
+            base_importance += 25.0
+        else:
             base_importance += 10.0
-        if len(story.entities) >= 3:
-            base_importance += 5.0
+        if len(story.entities) >= 2:
+            base_importance += 10.0
         factors["public_importance"] = min(98.0, base_importance)
 
         # 2. Emotional / High-Impact Quotient (15%)
-        impact = 70.0
+        impact = 40.0
         impact_keywords = ["फैसला", "ऐतिहासिक", "चेतावनी", "बड़ा", "खुलासा", "क्रांति", "नया रिकॉर्ड", "संकट"]
         matches = sum(1 for k in impact_keywords if k in story.title or k in story.transcript_excerpt)
-        impact += min(25.0, matches * 8.0)
+        impact += min(45.0, matches * 12.0)
         factors["emotional_impact"] = min(96.0, impact)
 
         # 3. Information Freshness (15%)
-        freshness = 85.0
-        if "ताज़ा" in story.title or "आज" in story.title or "अभी" in story.transcript_excerpt:
-            freshness += 10.0
+        freshness = 50.0
+        if any(k in story.title or k in story.transcript_excerpt for k in ["ताज़ा", "आज", "अभी", "हाल ही"]):
+            freshness += 40.0
+        else:
+            freshness += 20.0
         factors["information_freshness"] = min(95.0, freshness)
 
         # 4. Factual Clarity & Evidence Strength (15%)
-        evidence_score = 75.0
         if dossier:
-            verified_ratio = sum(1 for c in dossier if c.status == "verified") / len(dossier)
-            evidence_score = 60.0 + (verified_ratio * 38.0)
-        factors["evidence_strength"] = min(98.0, evidence_score)
+            verified_count = sum(1 for c in dossier if c.status == "verified")
+            unverified_count = sum(1 for c in dossier if c.status == "unverified")
+            disputed_count = sum(1 for c in dossier if c.status == "disputed")
+            evidence_score = (verified_count * 90.0 + unverified_count * 30.0 - disputed_count * 40.0) / len(dossier)
+            evidence_score = max(10.0, min(98.0, evidence_score))
+        else:
+            evidence_score = 45.0
+        factors["evidence_strength"] = round(evidence_score, 1)
 
         # 5. Standalone Comprehensibility (10%)
-        factors["standalone_comprehensibility"] = min(95.0, 70.0 + (story.completeness_score * 25.0))
+        factors["standalone_comprehensibility"] = round(max(20.0, min(95.0, story.completeness_score * 95.0)), 1)
 
         # 6. Curiosity / Hook Potential (10%)
-        curiosity = 75.0
+        curiosity = 50.0
         if any(q in story.title for q in ["क्यों", "कैसे", "क्या", "रहस्य", "सच्चाई"]):
-            curiosity += 18.0
+            curiosity += 35.0
         factors["curiosity_potential"] = min(95.0, curiosity)
 
         # 7. Visual Appeal / Footage Usability (5%)
-        visual = 80.0
+        visual = 55.0
         if story.category in ("science", "defense", "national"):
-            visual += 12.0
+            visual += 30.0
         factors["visual_appeal"] = min(95.0, visual)
 
         # 8. Narrative Closure (5%)
-        factors["narrative_closure"] = 85.0
+        factors["narrative_closure"] = 60.0 if story.completeness_score >= 0.7 else 30.0
 
         # 9. Novelty / Uniqueness (5%)
-        factors["novelty"] = 82.0
+        factors["novelty"] = 70.0
 
         # Calculate composite score
-        composite = sum(factors[k] * FACTOR_WEIGHTS[k] for k in FACTOR_WEIGHTS)
+        weights = self.weights
+        composite = sum(factors[k] * weights.get(k, DEFAULT_FACTOR_WEIGHTS[k]) for k in factors)
         composite = round(composite, 2)
 
-        # Duration recommendation:
-        # If duration in source is < 35s or story is punchy statement -> 30s
-        # If story duration is 35-70s -> 45s
-        # If rich multi-entity knowledge -> 60s
         source_dur = story.end_time - story.start_time
         if source_dur <= 35.0 or factors["emotional_impact"] > 88.0:
             rec_dur = 30
@@ -187,19 +203,19 @@ class ShortsOpportunityRankerAgent(BaseAgent):
         else:
             rec_dur = 60
 
-        # Priority flag
-        if composite >= 82.0:
+        # Strict priority classification
+        if composite >= 80.0 and factors["evidence_strength"] >= 70.0:
             flag = "top_pick"
-        elif composite >= 68.0:
+        elif composite >= 65.0 and (factors["evidence_strength"] >= 45.0 or story.completeness_score >= 0.8):
             flag = "viable"
-        elif composite >= 50.0:
+        elif composite >= 40.0:
             flag = "backlog"
         else:
             flag = "rejected"
 
         rationale = (
-            f"उच्च स्कोर ({composite:.1f}/100) - जनहित महत्व: {factors['public_importance']:.0f}, "
-            f"तथ्य प्रमाण: {factors['evidence_strength']:.0f}, प्रभाव: {factors['emotional_impact']:.0f}।"
+            f"स्कोर {composite:.1f}/100 — जनहित: {factors['public_importance']:.0f}, "
+            f"प्रमाण: {factors['evidence_strength']:.0f}, प्रभाव: {factors['emotional_impact']:.0f}."
         )
 
         hook_angle = f"क्या आप जानते हैं {story.entities[0] if story.entities else 'भारत'} का यह बड़ा कदम?"

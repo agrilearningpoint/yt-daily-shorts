@@ -1,0 +1,73 @@
+{
+  "version": "1.0.0",
+  "library": "BHARAT KI SOCH Broadcast Sound Design",
+  "license": "CC0 / Original Sound Synthesis",
+  "categories": {
+    "news_opening": [
+      {
+        "id": "cue_news_intro_sting",
+        "file": "sting_news_intro.wav",
+        "type": "sting",
+        "gain_db": -4.0,
+        "duration": 1.8
+      },
+      {
+        "id": "cue_bulletin_impact",
+        "file": "impact_bulletin.wav",
+        "type": "impact",
+        "gain_db": -3.0,
+        "duration": 0.8
+      }
+    ],
+    "transitions": [
+      {
+        "id": "cue_transition_whoosh",
+        "file": "transition_whoosh.wav",
+        "type": "whoosh",
+        "gain_db": -6.0,
+        "duration": 0.6
+      },
+      {
+        "id": "cue_light_sweep",
+        "file": "transition_whoosh.wav",
+        "type": "whoosh",
+        "gain_db": -8.0,
+        "duration": 0.6
+      }
+    ],
+    "graphics": [
+      {
+        "id": "cue_headline_reveal",
+        "file": "headline_reveal.wav",
+        "type": "chime",
+        "gain_db": -6.0,
+        "duration": 0.5
+      },
+      {
+        "id": "cue_ticker_blip",
+        "file": "ticker_blip.wav",
+        "type": "click",
+        "gain_db": -12.0,
+        "duration": 0.15
+      }
+    ],
+    "background_beds": [
+      {
+        "id": "bed_daily_news",
+        "file": "news_bed_loop.wav",
+        "type": "bed",
+        "gain_db": -18.0,
+        "duration": 12.0
+      }
+    ],
+    "endings": [
+      {
+        "id": "cue_bulletin_closing",
+        "file": "ending_sting.wav",
+        "type": "sting",
+        "gain_db": -5.0,
+        "duration": 2.2
+      }
+    ]
+  }
+}
