@@ -4,8 +4,6 @@ import pytest
 
 from agents.rights_attribution.agent import RightsAttributionAgent
 from core.agent_contracts import (
-    AdaptedShortScene,
-    AdaptedShortScript,
     MediaRightsRecord,
     SelectedClip,
     SourceVideoManifest,
@@ -60,7 +58,10 @@ async def test_rights_public_domain_low_risk(rights_agent):
     assert rec.risk_level == "low"
     assert rec.fair_use_score >= 0.90
     assert "Sansad TV" in rec.mandatory_on_screen_credit
-    assert "Section 107" in rec.description_attribution_text or "Section 52" in rec.description_attribution_text
+    assert (
+        "Section 107" in rec.description_attribution_text
+        or "Section 52" in rec.description_attribution_text
+    )
 
 
 @pytest.mark.asyncio

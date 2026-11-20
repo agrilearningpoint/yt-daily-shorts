@@ -19,7 +19,7 @@ REPO = os.getenv("GITHUB_REPOSITORY", "agrilearningpoint/yt-daily-shorts")
 
 HEADERS = {
     "Accept": "application/vnd.github+json",
-    "User-Agent": "YTDailyShorts-WorkflowChecker/1.0"
+    "User-Agent": "YTDailyShorts-WorkflowChecker/1.0",
 }
 if TOKEN:
     HEADERS["Authorization"] = f"Bearer {TOKEN}"
@@ -56,13 +56,17 @@ def check_workflows():
             runs = data.get("workflow_runs", [])
             print(f"\nRecent Workflow Runs ({len(runs)}):")
             if not runs:
-                print("  (No workflow runs yet. Workflows will trigger on schedule or manual dispatch).")
+                print(
+                    "  (No workflow runs yet. Workflows will trigger on schedule or manual dispatch)."
+                )
             for run in runs:
                 status = run.get("status", "unknown")
                 conclusion = run.get("conclusion") or "running"
                 badge = "[SUCCESS]" if conclusion == "success" else (f"[{conclusion.upper()}]")
                 print(f"  {badge} Run #{run.get('run_number')}: {run.get('name')}")
-                print(f"    Status: {status} | Conclusion: {conclusion} | Event: {run.get('event')}")
+                print(
+                    f"    Status: {status} | Conclusion: {conclusion} | Event: {run.get('event')}"
+                )
                 print(f"    URL: {run.get('html_url')}")
         else:
             print(f"Failed fetching runs: HTTP {r.status_code} - {r.text[:200]}")

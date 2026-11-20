@@ -1,4 +1,5 @@
 """Quota-efficient YouTube Trending Scout using videos.list(chart=mostPopular) = 1 unit/call."""
+
 from __future__ import annotations
 
 import logging

@@ -1,4 +1,5 @@
 """Long-form pipeline + self-improvement loop tests (no network, no ffmpeg encode)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -41,16 +42,20 @@ async def test_script_writer_caches_chapters(tmp_path):
         async def generate_json(self, prompt, system_prompt=None, tier=""):
             calls["n"] += 1
             if "OUTLINE" in prompt or "outline" in prompt or "TOPIC:" in prompt:
-                return {"title": "टेस्ट फिल्म", "chapters": [
-                    {"title": f"अध्याय {i}", "point": "p", "visual_queries": ["temple"]}
-                    for i in range(1, 5)]}
+                return {
+                    "title": "टेस्ट फिल्म",
+                    "chapters": [
+                        {"title": f"अध्याय {i}", "point": "p", "visual_queries": ["temple"]}
+                        for i in range(1, 5)
+                    ],
+                }
             return {"narration": " ".join(["वाक्य"] * 400) + "।"}
 
     out = tmp_path / "film"
     w = ScriptWriter(FakeLLM(), words_per_chapter=100)
     first = await w.build("विषय", "", 20, 4, out)
     n_after_first = calls["n"]
-    second = await w.build("विषय", "", 20, 4, out)          # must hit the cache
+    second = await w.build("विषय", "", 20, 4, out)  # must hit the cache
     assert calls["n"] == n_after_first
     assert len(first["chapters"]) == len(second["chapters"]) == 4
     assert all(c["narration"] for c in second["chapters"])
@@ -62,7 +67,10 @@ async def test_script_writer_caches_chapters(tmp_path):
 def test_sentence_cues_follow_word_timings():
     from longform.render import sentence_cues
 
-    words = [{"word": w, "start": i * 0.5, "end": i * 0.5 + 0.4} for i, w in enumerate("एक दो तीन चार पांच छह".split())]
+    words = [
+        {"word": w, "start": i * 0.5, "end": i * 0.5 + 0.4}
+        for i, w in enumerate("एक दो तीन चार पांच छह".split())
+    ]
     cues = sentence_cues(["एक दो तीन। चार पांच छह।"], words, 3.0)
     assert len(cues) == 2
     assert cues[0]["start"] < cues[1]["start"]
@@ -103,8 +111,11 @@ def test_subtitle_png_renders_devanagari(tmp_path):
 def test_build_srt_numbers_and_timestamps(tmp_path):
     from longform.render import build_srt
 
-    out = build_srt([{"text": "एक।", "start": 0.0, "end": 1.5},
-                     {"text": "दो।", "start": 2.0, "end": 3.25}], tmp_path / "a.srt", offset=5.0)
+    out = build_srt(
+        [{"text": "एक।", "start": 0.0, "end": 1.5}, {"text": "दो।", "start": 2.0, "end": 3.25}],
+        tmp_path / "a.srt",
+        offset=5.0,
+    )
     body = Path(out).read_text(encoding="utf-8")
     assert "00:00:05,000 --> 00:00:06,500" in body
     assert "00:00:07,000 --> 00:00:08,250" in body
@@ -155,6 +166,7 @@ def test_error_analyst_agent_runs_without_state(tmp_path, monkeypatch):
     class StubConfig:
         class general:
             timezone = "Asia/Kolkata"
+
         class database:
             sqlite_path = str(tmp_path / "db.sqlite")
 
@@ -302,7 +314,9 @@ def test_target_chapter_seconds_fills_the_requested_window(tmp_path):
 
     pipe = P.LongFormPipeline(_Cfg(), llm=object())
     minutes, chapters = 22, 9
-    pipe.target_chapter_sec = max(30.0, (minutes * 60 - (P.CARD_SECONDS * chapters + 10)) / chapters)
+    pipe.target_chapter_sec = max(
+        30.0, (minutes * 60 - (P.CARD_SECONDS * chapters + 10)) / chapters
+    )
     film_seconds = pipe.target_chapter_sec * chapters + P.CARD_SECONDS * chapters + 10
     assert 20 * 60 < film_seconds <= 25 * 60
 
@@ -318,6 +332,7 @@ def test_fresh_run_clears_script_and_chapters(tmp_path, monkeypatch):
     for f in list(pipe.out.glob("*.json")):
         f.unlink(missing_ok=True)
     import shutil as _sh
+
     for d in sorted(pipe.out.glob("ch*")):
         _sh.rmtree(d, ignore_errors=True)
     assert not (tmp_path / "script.json").exists()
@@ -349,8 +364,9 @@ def test_thumbnail_tool_picks_a_mid_tone_frame(tmp_path):
 async def test_seo_metadata_falls_back_without_an_llm():
     from longform.seo import build_metadata
 
-    meta = await build_metadata(None, "सनातन की यात्रा",
-                                [{"title": "अध्याय 1", "point": "शुरुआत"}], ["00:00  अध्याय 1"], 1320.0)
+    meta = await build_metadata(
+        None, "सनातन की यात्रा", [{"title": "अध्याय 1", "point": "शुरुआत"}], ["00:00  अध्याय 1"], 1320.0
+    )
     assert meta["title"] == "सनातन की यात्रा"
     assert len(meta["tags"]) >= 10
     assert "अध्याय" in meta["description"]
@@ -364,11 +380,15 @@ async def test_seo_metadata_uses_the_llm_and_keeps_chapter_stamps():
     class FakeLLM:
         async def generate_json(self, prompt, tier="quality"):
             assert "WHAT HAS FAILED BEFORE" in prompt
-            return {"titles": ["हिंदू धर्म का पूरा इतिहास: वेदों से आधुनिक भारत तक"],
-                    "description": "हिंदू धर्म की पूरी कहानी, एक वीडियो में।\n\n" + "विस्तार से। " * 40,
-                    "tags": ["हिंदू धर्म", "hinduism history"]}
+            return {
+                "titles": ["हिंदू धर्म का पूरा इतिहास: वेदों से आधुनिक भारत तक"],
+                "description": "हिंदू धर्म की पूरी कहानी, एक वीडियो में।\n\n" + "विस्तार से। " * 40,
+                "tags": ["हिंदू धर्म", "hinduism history"],
+            }
 
-    meta = await build_metadata(FakeLLM(), "सनातन", [{"title": "अध्याय 1"}], ["00:00  अध्याय 1"], 1320.0)
+    meta = await build_metadata(
+        FakeLLM(), "सनातन", [{"title": "अध्याय 1"}], ["00:00  अध्याय 1"], 1320.0
+    )
     assert meta["seo"] == "llm"
     assert "हिंदू धर्म" in meta["title"]
     assert "00:00  अध्याय 1" in meta["description"]

@@ -16,16 +16,25 @@ def _now_ist() -> str:
 
 class TelegramReportBuilder:
     @staticmethod
-    def build_daily_summary(completed_videos: List[Dict[str, Any]], failed_count: int = 0,
-                            dry_run: bool = False, failures: List[str] = None, insights: str = "") -> str:
+    def build_daily_summary(
+        completed_videos: List[Dict[str, Any]],
+        failed_count: int = 0,
+        dry_run: bool = False,
+        failures: List[str] = None,
+        insights: str = "",
+    ) -> str:
         mode = "🧪 <b>DRY-RUN</b> (upload skipped)" if dry_run else "🚀 <b>LIVE</b>"
-        out = [f"🎬 <b>YT Shorts Report</b>", f"📅 {_now_ist()}", f"⚙️ {mode}", "━━━━━━━━━━━━"]
+        out = ["🎬 <b>YT Shorts Report</b>", f"📅 {_now_ist()}", f"⚙️ {mode}", "━━━━━━━━━━━━"]
         if not completed_videos and failed_count == 0:
             out.append("ℹ️ No video jobs executed.")
             return "\n".join(out)
         for i, v in enumerate(completed_videos, 1):
-            out.append(f"<b>{i}. [{esc(str(v.get('video_type', '')).upper())}]</b> {esc(v.get('title', ''))}")
-            out.append(f"⏱ {float(v.get('duration', 0) or 0):.1f}s | 📰 {v.get('items', 0)} items | 🖼 {v.get('images', 0)} photos")
+            out.append(
+                f"<b>{i}. [{esc(str(v.get('video_type', '')).upper())}]</b> {esc(v.get('title', ''))}"
+            )
+            out.append(
+                f"⏱ {float(v.get('duration', 0) or 0):.1f}s | 📰 {v.get('items', 0)} items | 🖼 {v.get('images', 0)} photos"
+            )
             out.append(f"🧠 {esc(v.get('llm', ''))} | 🎙 {esc(v.get('voice', ''))}")
             if v.get("youtube_url"):
                 out.append(f"🔗 {esc(v['youtube_url'])}")
@@ -44,5 +53,7 @@ class TelegramReportBuilder:
 
     @staticmethod
     def build_failure_alert(stage: str, video_id: str, error_msg: str) -> str:
-        return (f"🚨 <b>PIPELINE FAILURE</b>\nStage: <code>{esc(stage)}</code>\nVideo: <code>{esc(video_id)}</code>\n"
-                f"Error: <code>{esc(error_msg[:800])}</code>\n\nNothing was published for this video.")
+        return (
+            f"🚨 <b>PIPELINE FAILURE</b>\nStage: <code>{esc(stage)}</code>\nVideo: <code>{esc(video_id)}</code>\n"
+            f"Error: <code>{esc(error_msg[:800])}</code>\n\nNothing was published for this video."
+        )

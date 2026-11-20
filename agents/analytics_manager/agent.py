@@ -16,13 +16,17 @@ class AnalyticsManagerAgent(BaseAgent):
         super().__init__(config, state_manager)
         self.history = history
         self.analytics = YouTubeAnalyticsFetcher(
-            YouTubeOAuthManager(config.youtube.client_secret_json, config.youtube.token_json))
+            YouTubeOAuthManager(config.youtube.client_secret_json, config.youtube.token_json)
+        )
 
     async def execute(self, **kwargs: Any) -> AgentResult:
         if not self.history:
             return AgentResult(success=True, data={"metrics": []})
-        videos = [v for v in self.history.videos()
-                  if v.get("youtube_id") and not str(v["youtube_id"]).startswith(("mock_", "dry_run_"))][-30:]
+        videos = [
+            v
+            for v in self.history.videos()
+            if v.get("youtube_id") and not str(v["youtube_id"]).startswith(("mock_", "dry_run_"))
+        ][-30:]
         ids = [v["youtube_id"] for v in videos]
         stats = self.analytics.get_many(ids) if ids else {}
         for v in self.history.data.get("videos", []):

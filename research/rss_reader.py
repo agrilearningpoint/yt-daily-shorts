@@ -27,8 +27,8 @@ class RawArticle:
     source_name: str
     language: str = "hi"
     image_url: str = ""
-    region: str = ""            # "national" | "international" ("" = decide from the source)
-    publisher: str = ""         # real outlet when read through an aggregator (Google News)
+    region: str = ""  # "national" | "international" ("" = decide from the source)
+    publisher: str = ""  # real outlet when read through an aggregator (Google News)
 
 
 class RSSReader:
@@ -66,12 +66,14 @@ class RSSReader:
                             break
                 if not image_url and "<img" in summary:
                     import re as _re
+
                     mm = _re.search(r'<img[^>]+src=["\']([^"\']+)', summary)
                     image_url = mm.group(1) if mm else ""
-                
+
                 # Strip simple HTML from summary if needed
                 if "<" in summary and ">" in summary:
                     import re
+
                     summary = re.sub(r"<[^>]+>", " ", summary).strip()
 
                 pub_date = None
@@ -82,11 +84,14 @@ class RSSReader:
                             pub_date = date_parser.parse(date_str)
                         else:
                             from email.utils import parsedate_to_datetime
+
                             pub_date = parsedate_to_datetime(date_str)
                         if pub_date and pub_date.tzinfo is None:
                             pub_date = pub_date.replace(tzinfo=timezone.utc)
                     except Exception:
-                        pub_date = None  # unverified date: collector rejects it (never assume "now")
+                        pub_date = (
+                            None  # unverified date: collector rejects it (never assume "now")
+                        )
 
                 publisher = ""
                 if "news.google." in url:  # "Headline - Outlet" -> clean headline + real outlet
@@ -97,16 +102,18 @@ class RSSReader:
                         publisher = publisher or tail.strip()
                     summary = ""  # Google News summary is just the headline list
                 if title and link:
-                    articles.append(RawArticle(
-                        title=title,
-                        link=link,
-                        summary=summary[:1000],
-                        published_at=pub_date,
-                        source_name=source_name,
-                        language=language,
-                        image_url=image_url,
-                        publisher=publisher,
-                    ))
+                    articles.append(
+                        RawArticle(
+                            title=title,
+                            link=link,
+                            summary=summary[:1000],
+                            published_at=pub_date,
+                            source_name=source_name,
+                            language=language,
+                            image_url=image_url,
+                            publisher=publisher,
+                        )
+                    )
         except Exception as exc:
             logger.error("Failed fetching feed %s (%s): %s", source_name, url, exc)
         return articles

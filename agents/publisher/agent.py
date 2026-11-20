@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Any
 
 from agents.base_agent import AgentResult, BaseAgent
+from core.duration import SHORTS_HARD_LIMIT, SHORTS_MIN_DURATION
+from video.tts import probe_duration
 from youtube.oauth import YouTubeOAuthManager
-import os
-
 from youtube.uploader import YouTubeUploader, publish_key
 
 
@@ -16,15 +18,26 @@ class PublisherAgent(BaseAgent):
 
     def __init__(self, config, state_manager):
         super().__init__(config, state_manager)
-        self.oauth_manager = YouTubeOAuthManager(config.youtube.client_secret_json, config.youtube.token_json)
-        self.uploader = YouTubeUploader(self.oauth_manager, dry_run=config.general.dry_run,
-                                        strict=config.general.strict_mode)
+        self.oauth_manager = YouTubeOAuthManager(
+            config.youtube.client_secret_json, config.youtube.token_json
+        )
+        self.uploader = YouTubeUploader(
+            self.oauth_manager, dry_run=config.general.dry_run, strict=config.general.strict_mode
+        )
 
     async def execute(self, **kwargs: Any) -> AgentResult:
+        video_path = kwargs.get("video_path", "")
+        if video_path and Path(video_path).exists():
+            dur = probe_duration(video_path)
+            if dur > SHORTS_HARD_LIMIT or dur < SHORTS_MIN_DURATION:
+                msg = f"Refusing to publish: duration {dur:.2f}s is outside Shorts limits ({SHORTS_MIN_DURATION}s - {SHORTS_HARD_LIMIT}s)"
+                self.logger.error(msg)
+                return AgentResult(success=False, errors=[msg])
+
         seo = kwargs.get("seo_data", {}) or {}
         try:
             res = self.uploader.upload_video(
-                video_path=kwargs.get("video_path", ""),
+                video_path=video_path,
                 title=seo.get("title", "Daily Short #shorts"),
                 description=seo.get("description", ""),
                 tags=seo.get("tags", []),
@@ -35,12 +48,22 @@ class PublisherAgent(BaseAgent):
                 publishing_key=publish_key(kwargs.get("video_type", "")),
                 force=os.getenv("YT_FORCE_UPLOAD", "").lower() in ("1", "true", "yes"),
                 captions_path=kwargs.get("captions_path"),
-                playlist_title="आज की बड़ी खबरें | BHARAT KI SOCH" if kwargs.get("video_type") == "news" else "",
-                comment=("आज की कौन-सी खबर आपको सबसे बड़ी लगी? कमेंट में बताइए 👇"
-                         if kwargs.get("video_type") == "news" else ""),
+                playlist_title="आज की बड़ी खबरें | BHARAT KI SOCH"
+                if kwargs.get("video_type") == "news"
+                else "",
+                comment=(
+                    "आज की कौन-सी खबर आपको सबसे बड़ी लगी? कमेंट में बताइए 👇"
+                    if kwargs.get("video_type") == "news"
+                    else ""
+                ),
             )
         except Exception as exc:
             return AgentResult(success=False, errors=[str(exc)])
-        return AgentResult(success=bool(res and res.get("id")),
-                           data={"youtube_id": res.get("id", ""), "youtube_url": res.get("url", ""),
-                                 "upload_details": res})
+        return AgentResult(
+            success=bool(res and res.get("id")),
+            data={
+                "youtube_id": res.get("id", ""),
+                "youtube_url": res.get("url", ""),
+                "upload_details": res,
+            },
+        )

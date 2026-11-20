@@ -8,7 +8,7 @@ authoritative opening hook and visual/audio plan for the daily news bulletin.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 import pytz
 
 from agents.base_agent import AgentResult, BaseAgent
@@ -19,8 +19,18 @@ from core.state_manager import StateManager
 from research.daily_context import gather as gather_daily_context
 
 HINDI_MONTHS = [
-    "जनवरी", "फरवरी", "मार्च", "अप्रैल", "मई", "जून",
-    "जुलाई", "अगस्त", "सितंबर", "अक्टूबर", "नवंबर", "दिसंबर"
+    "जनवरी",
+    "फरवरी",
+    "मार्च",
+    "अप्रैल",
+    "मई",
+    "जून",
+    "जुलाई",
+    "अगस्त",
+    "सितंबर",
+    "अक्टूबर",
+    "नवंबर",
+    "दिसंबर",
 ]
 
 HINDI_WEEKDAYS = {
@@ -35,30 +45,150 @@ HINDI_WEEKDAYS = {
 
 # Verified Indian National and International Observances Registry (Month, Day)
 VERIFIED_OBSERVANCES: Dict[str, Dict[str, Any]] = {
-    "01-12": {"name": "राष्ट्रीय युवा दिवस (स्वामी विवेकानंद जयंती)", "scope": "national", "why": "स्वामी विवेकानंद के विचारों और युवाओं की प्रेरणा के लिए।", "source": "Ministry of Youth Affairs"},
-    "01-15": {"name": "भारतीय सेना दिवस (Army Day)", "scope": "national", "why": "1949 में फील्ड मार्शल के. एम. करियप्पा के सेना प्रमुख बनने के उपलक्ष्य में।", "source": "Indian Army"},
-    "01-26": {"name": "गणतंत्र दिवस (Republic Day)", "scope": "national", "why": "1950 में भारत का संविधान लागू हुआ।", "source": "Govt of India"},
-    "02-28": {"name": "राष्ट्रीय विज्ञान दिवस", "scope": "national", "why": "सर सी. वी. रमन द्वारा रमन प्रभाव की खोज का दिन।", "source": "Ministry of Science & Tech"},
-    "03-08": {"name": "अंतरराष्ट्रीय महिला दिवस", "scope": "international", "why": "महिलाओं के अधिकारों और उपलब्धियों का सम्मान।", "source": "United Nations"},
-    "04-14": {"name": "डॉ. बी. आर. आंबेडकर जयंती", "scope": "national", "why": "संविधान निर्माता बाबासाहेब आंबेडकर की जयंती।", "source": "Govt of India"},
-    "04-22": {"name": "विश्व पृथ्वी दिवस (Earth Day)", "scope": "international", "why": "पर्यावरण संरक्षण के प्रति वैश्विक जागरूकता।", "source": "UN / EarthDay.org"},
-    "05-11": {"name": "राष्ट्रीय प्रौद्योगिकी दिवस (Technology Day)", "scope": "national", "why": "1998 पोखरण-II परमाणु परीक्षण की सफलता।", "source": "DRDO / Govt of India"},
-    "06-21": {"name": "अंतरराष्ट्रीय योग दिवस", "scope": "international", "why": "स्वास्थ्य और योग के वैश्विक प्रचार हेतु।", "source": "United Nations"},
-    "07-26": {"name": "कारगिल विजय दिवस", "scope": "national", "why": "1999 के कारगिल युद्ध में भारतीय सेना की ऐतिहासिक विजय।", "source": "Indian Armed Forces"},
-    "08-15": {"name": "स्वतंत्रता दिवस (Independence Day)", "scope": "national", "why": "1947 में देश की स्वतंत्रता का ऐतिहासिक दिवस।", "source": "Govt of India"},
-    "08-23": {"name": "राष्ट्रीय अंतरिक्ष दिवस (National Space Day)", "scope": "national", "why": "चंद्रयान-3 के विक्रम लैंडर की चंद्रमा पर सफल लैंडिंग।", "source": "ISRO / Govt of India"},
-    "08-29": {"name": "राष्ट्रीय खेल दिवस (मेजर ध्यानचंद जयंती)", "scope": "national", "why": "हॉकी के जादूगर मेजर ध्यानचंद का जन्मदिवस।", "source": "Ministry of Youth Affairs"},
-    "09-05": {"name": "शिक्षक दिवस (डॉ. सर्वपल्ली राधाकृष्णन जयंती)", "scope": "national", "why": "शिक्षकों के प्रति कृतज्ञता और सम्मान।", "source": "Ministry of Education"},
-    "09-15": {"name": "अभियंता दिवस (Engineers Day)", "scope": "national", "why": "भारत रत्न मोक्षगुंडम विश्वेश्वरैया की जयंती।", "source": "Govt of India"},
-    "10-02": {"name": "गांधी जयंती एवं अंतरराष्ट्रीय अहिंसा दिवस", "scope": "national_international", "why": "राष्ट्रपिता महात्मा गांधी की जयंती।", "source": "Govt of India / UN"},
-    "10-31": {"name": "राष्ट्रीय एकता दिवस (सरदार पटेल जयंती)", "scope": "national", "why": "लौह पुरुष सरदार वल्लभभाई पटेल की जयंती।", "source": "Ministry of Home Affairs"},
-    "11-14": {"name": "बाल दिवस (पंडित नेहरू जयंती)", "scope": "national", "why": "प्रथम प्रधानमंत्री पं. जवाहरलाल नेहरू की जयंती।", "source": "Govt of India"},
-    "11-20": {"name": "विश्व बाल दिवस (World Children's Day)", "scope": "international", "why": "बाल अधिकारों और बच्चों के कल्याण के लिए संयुक्त राष्ट्र का दिवस।", "source": "United Nations (UNICEF)"},
-    "11-26": {"name": "संविधान दिवस (Constitution Day of India)", "scope": "national", "why": "1949 में संविधान सभा द्वारा भारत के संविधान को अंगीकार किया गया।", "source": "Govt of India"},
-    "12-04": {"name": "भारतीय नौसेना दिवस (Navy Day)", "scope": "national", "why": "1971 के युद्ध में ऑपरेशन ट्राइडेंट की ऐतिहासिक सफलता।", "source": "Indian Navy"},
-    "12-16": {"name": "विजय दिवस", "scope": "national", "why": "1971 के भारत-पाक युद्ध में ऐतिहासिक विजय।", "source": "Indian Armed Forces"},
-    "12-22": {"name": "राष्ट्रीय गणित दिवस (श्रीनिवास रामानुजन जयंती)", "scope": "national", "why": "महान गणितज्ञ रामानुजन की जयंती।", "source": "Govt of India"},
-    "12-25": {"name": "सुशासन दिवस (अटल बिहारी वाजपेयी जयंती)", "scope": "national", "why": "पूर्व प्रधानमंत्री अटल बिहारी वाजपेयी की जयंती।", "source": "Govt of India"},
+    "01-12": {
+        "name": "राष्ट्रीय युवा दिवस (स्वामी विवेकानंद जयंती)",
+        "scope": "national",
+        "why": "स्वामी विवेकानंद के विचारों और युवाओं की प्रेरणा के लिए।",
+        "source": "Ministry of Youth Affairs",
+    },
+    "01-15": {
+        "name": "भारतीय सेना दिवस (Army Day)",
+        "scope": "national",
+        "why": "1949 में फील्ड मार्शल के. एम. करियप्पा के सेना प्रमुख बनने के उपलक्ष्य में।",
+        "source": "Indian Army",
+    },
+    "01-26": {
+        "name": "गणतंत्र दिवस (Republic Day)",
+        "scope": "national",
+        "why": "1950 में भारत का संविधान लागू हुआ।",
+        "source": "Govt of India",
+    },
+    "02-28": {
+        "name": "राष्ट्रीय विज्ञान दिवस",
+        "scope": "national",
+        "why": "सर सी. वी. रमन द्वारा रमन प्रभाव की खोज का दिन।",
+        "source": "Ministry of Science & Tech",
+    },
+    "03-08": {
+        "name": "अंतरराष्ट्रीय महिला दिवस",
+        "scope": "international",
+        "why": "महिलाओं के अधिकारों और उपलब्धियों का सम्मान।",
+        "source": "United Nations",
+    },
+    "04-14": {
+        "name": "डॉ. बी. आर. आंबेडकर जयंती",
+        "scope": "national",
+        "why": "संविधान निर्माता बाबासाहेब आंबेडकर की जयंती।",
+        "source": "Govt of India",
+    },
+    "04-22": {
+        "name": "विश्व पृथ्वी दिवस (Earth Day)",
+        "scope": "international",
+        "why": "पर्यावरण संरक्षण के प्रति वैश्विक जागरूकता।",
+        "source": "UN / EarthDay.org",
+    },
+    "05-11": {
+        "name": "राष्ट्रीय प्रौद्योगिकी दिवस (Technology Day)",
+        "scope": "national",
+        "why": "1998 पोखरण-II परमाणु परीक्षण की सफलता।",
+        "source": "DRDO / Govt of India",
+    },
+    "06-21": {
+        "name": "अंतरराष्ट्रीय योग दिवस",
+        "scope": "international",
+        "why": "स्वास्थ्य और योग के वैश्विक प्रचार हेतु।",
+        "source": "United Nations",
+    },
+    "07-26": {
+        "name": "कारगिल विजय दिवस",
+        "scope": "national",
+        "why": "1999 के कारगिल युद्ध में भारतीय सेना की ऐतिहासिक विजय।",
+        "source": "Indian Armed Forces",
+    },
+    "08-15": {
+        "name": "स्वतंत्रता दिवस (Independence Day)",
+        "scope": "national",
+        "why": "1947 में देश की स्वतंत्रता का ऐतिहासिक दिवस।",
+        "source": "Govt of India",
+    },
+    "08-23": {
+        "name": "राष्ट्रीय अंतरिक्ष दिवस (National Space Day)",
+        "scope": "national",
+        "why": "चंद्रयान-3 के विक्रम लैंडर की चंद्रमा पर सफल लैंडिंग।",
+        "source": "ISRO / Govt of India",
+    },
+    "08-29": {
+        "name": "राष्ट्रीय खेल दिवस (मेजर ध्यानचंद जयंती)",
+        "scope": "national",
+        "why": "हॉकी के जादूगर मेजर ध्यानचंद का जन्मदिवस।",
+        "source": "Ministry of Youth Affairs",
+    },
+    "09-05": {
+        "name": "शिक्षक दिवस (डॉ. सर्वपल्ली राधाकृष्णन जयंती)",
+        "scope": "national",
+        "why": "शिक्षकों के प्रति कृतज्ञता और सम्मान।",
+        "source": "Ministry of Education",
+    },
+    "09-15": {
+        "name": "अभियंता दिवस (Engineers Day)",
+        "scope": "national",
+        "why": "भारत रत्न मोक्षगुंडम विश्वेश्वरैया की जयंती।",
+        "source": "Govt of India",
+    },
+    "10-02": {
+        "name": "गांधी जयंती एवं अंतरराष्ट्रीय अहिंसा दिवस",
+        "scope": "national_international",
+        "why": "राष्ट्रपिता महात्मा गांधी की जयंती।",
+        "source": "Govt of India / UN",
+    },
+    "10-31": {
+        "name": "राष्ट्रीय एकता दिवस (सरदार पटेल जयंती)",
+        "scope": "national",
+        "why": "लौह पुरुष सरदार वल्लभभाई पटेल की जयंती।",
+        "source": "Ministry of Home Affairs",
+    },
+    "11-14": {
+        "name": "बाल दिवस (पंडित नेहरू जयंती)",
+        "scope": "national",
+        "why": "प्रथम प्रधानमंत्री पं. जवाहरलाल नेहरू की जयंती।",
+        "source": "Govt of India",
+    },
+    "11-20": {
+        "name": "विश्व बाल दिवस (World Children's Day)",
+        "scope": "international",
+        "why": "बाल अधिकारों और बच्चों के कल्याण के लिए संयुक्त राष्ट्र का दिवस।",
+        "source": "United Nations (UNICEF)",
+    },
+    "11-26": {
+        "name": "संविधान दिवस (Constitution Day of India)",
+        "scope": "national",
+        "why": "1949 में संविधान सभा द्वारा भारत के संविधान को अंगीकार किया गया।",
+        "source": "Govt of India",
+    },
+    "12-04": {
+        "name": "भारतीय नौसेना दिवस (Navy Day)",
+        "scope": "national",
+        "why": "1971 के युद्ध में ऑपरेशन ट्राइडेंट की ऐतिहासिक सफलता।",
+        "source": "Indian Navy",
+    },
+    "12-16": {
+        "name": "विजय दिवस",
+        "scope": "national",
+        "why": "1971 के भारत-पाक युद्ध में ऐतिहासिक विजय।",
+        "source": "Indian Armed Forces",
+    },
+    "12-22": {
+        "name": "राष्ट्रीय गणित दिवस (श्रीनिवास रामानुजन जयंती)",
+        "scope": "national",
+        "why": "महान गणितज्ञ रामानुजन की जयंती।",
+        "source": "Govt of India",
+    },
+    "12-25": {
+        "name": "सुशासन दिवस (अटल बिहारी वाजपेयी जयंती)",
+        "scope": "national",
+        "why": "पूर्व प्रधानमंत्री अटल बिहारी वाजपेयी की जयंती।",
+        "source": "Govt of India",
+    },
 }
 
 
@@ -136,7 +266,9 @@ class DailyOpeningDirectorAgent(BaseAgent):
             verified_facts.append(f"पंचांग तिथि: {panchang['tithi']}")
 
         # 4. Generate 3+ Hindi opening hook candidates across distinct styles
-        hook_candidates = self._generate_opening_candidates(date_hi, weekday_hi, selected_special_day)
+        hook_candidates = self._generate_opening_candidates(
+            date_hi, weekday_hi, selected_special_day
+        )
 
         # Evaluate and pick best candidate
         selected_candidate = hook_candidates[0]
@@ -164,7 +296,9 @@ class DailyOpeningDirectorAgent(BaseAgent):
             {
                 "beat_index": 1,
                 "duration": 3.0,
-                "visual_type": "special_day_banner" if selected_special_day else "breaking_news_strap",
+                "visual_type": "special_day_banner"
+                if selected_special_day
+                else "breaking_news_strap",
                 "label_hi": selected_special_day if selected_special_day else "आज की बड़ी खबरें",
                 "sublabel_hi": "भारत की सोच विशेष बुलेटिन",
                 "motion_preset": "headline_slam" if selected_special_day else "radar_pulse_opening",
@@ -229,32 +363,42 @@ class DailyOpeningDirectorAgent(BaseAgent):
         candidates: List[Dict[str, Any]] = []
 
         if special_day:
-            candidates.append({
-                "style": "special_day_focused",
-                "text": f"नमस्कार, आज {date_hi} है, {weekday_hi} का दिन, और आज पूरा देश {special_day} मना रहा है। बुलेटिन की शुरुआत करते हैं आज की बड़ी खबरों से।",
-                "impact_score": 95.0,
-            })
-            candidates.append({
-                "style": "national_importance",
-                "text": f"आज {date_hi}, {weekday_hi}—एक ऐतिहासिक अवसर {special_day}। देखिए देश और दुनिया की हर बड़ी हलचल।",
-                "impact_score": 92.0,
-            })
+            candidates.append(
+                {
+                    "style": "special_day_focused",
+                    "text": f"नमस्कार, आज {date_hi} है, {weekday_hi} का दिन, और आज पूरा देश {special_day} मना रहा है। बुलेटिन की शुरुआत करते हैं आज की बड़ी खबरों से।",
+                    "impact_score": 95.0,
+                }
+            )
+            candidates.append(
+                {
+                    "style": "national_importance",
+                    "text": f"आज {date_hi}, {weekday_hi}—एक ऐतिहासिक अवसर {special_day}। देखिए देश और दुनिया की हर बड़ी हलचल।",
+                    "impact_score": 92.0,
+                }
+            )
         else:
-            candidates.append({
-                "style": "strong_anchor",
-                "text": f"नमस्कार! भारत की सोच पर आज {date_hi}, {weekday_hi} की सभी प्रमुख राष्ट्रीय और अंतरराष्ट्रीय खबरें।",
-                "impact_score": 90.0,
-            })
-            candidates.append({
-                "style": "warm_bulletin",
-                "text": f"आज {date_hi} है, {weekday_hi} का दिन। आइए जानते हैं आज सुबह की वे बड़ी खबरें जिनका सीधा असर आप पर पड़ने वाला है।",
-                "impact_score": 88.0,
-            })
+            candidates.append(
+                {
+                    "style": "strong_anchor",
+                    "text": f"नमस्कार! भारत की सोच पर आज {date_hi}, {weekday_hi} की सभी प्रमुख राष्ट्रीय और अंतरराष्ट्रीय खबरें।",
+                    "impact_score": 90.0,
+                }
+            )
+            candidates.append(
+                {
+                    "style": "warm_bulletin",
+                    "text": f"आज {date_hi} है, {weekday_hi} का दिन। आइए जानते हैं आज सुबह की वे बड़ी खबरें जिनका सीधा असर आप पर पड़ने वाला है।",
+                    "impact_score": 88.0,
+                }
+            )
 
-        candidates.append({
-            "style": "curiosity_led",
-            "text": f"आज {date_hi} को संसद, अर्थव्यवस्था और वैश्विक मंच पर क्या कुछ बड़ा घटा? 60 सेकंड में जानिए पूरा विश्लेषण।",
-            "impact_score": 89.0,
-        })
+        candidates.append(
+            {
+                "style": "curiosity_led",
+                "text": f"आज {date_hi} को संसद, अर्थव्यवस्था और वैश्विक मंच पर क्या कुछ बड़ा घटा? 60 सेकंड में जानिए पूरा विश्लेषण।",
+                "impact_score": 89.0,
+            }
+        )
 
         return candidates

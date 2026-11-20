@@ -28,7 +28,11 @@ import requests
 
 logger = logging.getLogger("video.tts")
 
-HINDI_VOICES = {"female": "hi-IN-SwaraNeural", "male": "hi-IN-MadhurNeural"}
+HINDI_VOICES = {
+    "female": "hi-IN-SwaraNeural",
+    "male": "hi-IN-MadhurNeural",
+    "female_fallback": "hi-IN-KavyaNeural",
+}
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 
@@ -53,8 +57,8 @@ class Segment:
 
 @dataclass
 class VoiceResult:
-    audio_path: str             # full voiceover
-    durations: List[float]      # one per beat, sums to total
+    audio_path: str  # full voiceover
+    durations: List[float]  # one per beat, sums to total
     provider: str
     beat_words: List[List[WordTiming]] = field(default_factory=list)
 
@@ -62,6 +66,7 @@ class VoiceResult:
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
 
 def probe_duration(path: str) -> float:
     ffprobe = shutil.which("ffprobe")
@@ -77,13 +82,26 @@ def probe_duration(path: str) -> float:
             pass
         return 0.0
     try:
-        out = subprocess.run([ffprobe, "-v", "error", "-show_entries", "format=duration",
-                              "-of", "default=nw=1:nk=1", path], capture_output=True, text=True, timeout=30)
+        out = subprocess.run(
+            [
+                ffprobe,
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=nw=1:nk=1",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         if out.stdout.strip():
             return float(out.stdout.strip())
     except Exception:
         pass
-    try:      # ffprobe missing or broken (imageio-ffmpeg ships ffmpeg only)
+    try:  # ffprobe missing or broken (imageio-ffmpeg ships ffmpeg only)
         ff = shutil.which("ffmpeg") or "ffmpeg"
         out = subprocess.run([ff, "-i", str(path)], capture_output=True, text=True, timeout=30)
         m = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.?\d*)", out.stderr or "")
@@ -108,12 +126,28 @@ def distribute_words(text: str, duration: float, offset: float = 0.0) -> List[Wo
     return out
 
 
-def detect_silences(path: str, noise_db: int = -32, min_d: float = 0.12) -> List[Tuple[float, float]]:
+def detect_silences(
+    path: str, noise_db: int = -32, min_d: float = 0.12
+) -> List[Tuple[float, float]]:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         return []
-    res = subprocess.run([ffmpeg, "-hide_banner", "-i", path, "-af", f"silencedetect=noise={noise_db}dB:d={min_d}",
-                          "-f", "null", "-"], capture_output=True, text=True, timeout=120)
+    res = subprocess.run(
+        [
+            ffmpeg,
+            "-hide_banner",
+            "-i",
+            path,
+            "-af",
+            f"silencedetect=noise={noise_db}dB:d={min_d}",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
     starts = [float(x) for x in re.findall(r"silence_start: ([0-9.]+)", res.stderr)]
     ends = [float(x) for x in re.findall(r"silence_end: ([0-9.]+)", res.stderr)]
     return list(zip(starts, ends))
@@ -128,7 +162,9 @@ def _spoken_weight(text: str) -> float:
     return max(float(chars) + 2.8 * pauses + 1.5 * digits, 1.0)
 
 
-def split_by_pauses(texts: List[str], total: float, silences: List[Tuple[float, float]]) -> List[float]:
+def split_by_pauses(
+    texts: List[str], total: float, silences: List[Tuple[float, float]]
+) -> List[float]:
     """Durations per text: proportional estimate snapped to the nearest real pause."""
     if not texts:
         return []
@@ -150,7 +186,11 @@ def split_by_pauses(texts: List[str], total: float, silences: List[Tuple[float, 
         avg = total / n
         window = max(0.45, avg * 0.45)
         cands = [m for m in mids if abs(m - expected) <= window and prev + min_step <= m <= max_b]
-        b = min(cands, key=lambda m: abs(m - expected)) if cands else min(max(expected, prev + min_step), max_b)
+        b = (
+            min(cands, key=lambda m: abs(m - expected))
+            if cands
+            else min(max(expected, prev + min_step), max_b)
+        )
         bounds.append(b)
         prev = b
     edges = [0.0] + bounds + [total]
@@ -202,9 +242,16 @@ def _write_pcm_wav(pcm: bytes, path: str, rate: int = 24000) -> None:
 # Gemini TTS
 # ---------------------------------------------------------------------------
 
+
 class GeminiTTS:
-    def __init__(self, api_key: str, models: List[str], voice: str = "auto", fallback_voice: str = "Charon",
-                 timeout: int = 180):
+    def __init__(
+        self,
+        api_key: str,
+        models: List[str],
+        voice: str = "auto",
+        fallback_voice: str = "Charon",
+        timeout: int = 180,
+    ):
         self.api_key = api_key
         self.keys: List[str] = [k.strip() for k in (api_key or "").split(",") if k.strip()]
         self._ki: int = 0
@@ -228,13 +275,26 @@ class GeminiTTS:
         if not voice or voice == "auto":
             voice = self.fallback_voice
             try:
-                for params in ({"language_code": "hi-IN", "context": "News", "type": "prebuilt", "gender": "male"},
-                               {"language_code": "hi-IN", "type": "prebuilt"}):
-                    r = requests.get(f"{GEMINI_BASE}/voices", headers=self._headers(), params=params, timeout=20)
+                for params in (
+                    {
+                        "language_code": "hi-IN",
+                        "context": "News",
+                        "type": "prebuilt",
+                        "gender": "male",
+                    },
+                    {"language_code": "hi-IN", "type": "prebuilt"},
+                ):
+                    r = requests.get(
+                        f"{GEMINI_BASE}/voices", headers=self._headers(), params=params, timeout=20
+                    )
                     if r.status_code == 200:
                         voices = r.json().get("voices") or []
                         if voices:
-                            voice = voices[0].get("id") or voices[0].get("name", "").split("/")[-1] or voice
+                            voice = (
+                                voices[0].get("id")
+                                or voices[0].get("name", "").split("/")[-1]
+                                or voice
+                            )
                             break
             except Exception as exc:
                 logger.info("Voice library lookup failed (%s); using %s", exc, voice)
@@ -245,13 +305,24 @@ class GeminiTTS:
     def _interactions(self, model: str, text: str, style: str, voice: str) -> bytes:
         body = {
             "model": model,
-            "input": [{"type": "user_input", "content": [{
-                "type": "text", "text": text,
-                "annotations": [{"type": "speech_metadata", "style": style}]}]}],
+            "input": [
+                {
+                    "type": "user_input",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": text,
+                            "annotations": [{"type": "speech_metadata", "style": style}],
+                        }
+                    ],
+                }
+            ],
             "response_format": {"type": "audio"},
             "generation_config": {"speech_config": [{"voice": voice}]},
         }
-        r = requests.post(f"{GEMINI_BASE}/interactions", headers=self._headers(), json=body, timeout=self.timeout)
+        r = requests.post(
+            f"{GEMINI_BASE}/interactions", headers=self._headers(), json=body, timeout=self.timeout
+        )
         if r.status_code != 200:
             raise TTSError(f"{model} HTTP {r.status_code}: {r.text[:200]}")
         data, mime = _find_audio_with_mime(r.json())
@@ -261,12 +332,24 @@ class GeminiTTS:
 
     def _generate_content(self, model: str, text: str, style: str, voice: str) -> Tuple[bytes, str]:
         body = {
-            "contents": [{"parts": [{"text": f"Read this Hindi text aloud in the style of a {style}:\n{text}"}]}],
-            "generationConfig": {"responseModalities": ["AUDIO"],
-                                 "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}},
+            "contents": [
+                {
+                    "parts": [
+                        {"text": f"Read this Hindi text aloud in the style of a {style}:\n{text}"}
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}},
+            },
         }
-        r = requests.post(f"{GEMINI_BASE}/models/{model}:generateContent", headers=self._headers(), json=body,
-                          timeout=self.timeout)
+        r = requests.post(
+            f"{GEMINI_BASE}/models/{model}:generateContent",
+            headers=self._headers(),
+            json=body,
+            timeout=self.timeout,
+        )
         if r.status_code != 200:
             raise TTSError(f"{model} HTTP {r.status_code}: {r.text[:200]}")
         data, mime = _find_audio_with_mime(r.json())
@@ -277,9 +360,12 @@ class GeminiTTS:
     @staticmethod
     def _save_audio(audio: bytes, mime: str, out_wav: str) -> None:
         m = (mime or "").lower()
-        encoded = (audio[:4] in (b"RIFF", b"OggS", b"fLaC") or audio[:3] == b"ID3"
-                   or audio[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2")
-                   or any(ext in m for ext in ("mp3", "mpeg", "ogg", "opus", "aac", "flac", "mp4", "wav")))
+        encoded = (
+            audio[:4] in (b"RIFF", b"OggS", b"fLaC")
+            or audio[:3] == b"ID3"
+            or audio[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2")
+            or any(ext in m for ext in ("mp3", "mpeg", "ogg", "opus", "aac", "flac", "mp4", "wav"))
+        )
         if audio[:4] == b"RIFF":
             Path(out_wav).write_bytes(audio)
         elif encoded:
@@ -287,8 +373,11 @@ class GeminiTTS:
             raw_enc.write_bytes(audio)
             ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
             try:
-                res = subprocess.run([ffmpeg, "-y", "-i", str(raw_enc), "-ac", "1", "-ar", "24000", out_wav],
-                                     capture_output=True, timeout=120)
+                res = subprocess.run(
+                    [ffmpeg, "-y", "-i", str(raw_enc), "-ac", "1", "-ar", "24000", out_wav],
+                    capture_output=True,
+                    timeout=120,
+                )
                 if res.returncode != 0:
                     _write_pcm_wav(audio, out_wav)
             finally:
@@ -305,7 +394,9 @@ class GeminiTTS:
                     if not model.startswith(("gemini-2.", "gemini-1.")):
                         audio, mime = self._interactions(model, text, style, v)
                     else:
-                        audio, mime = self._generate_content(model, re.sub(r"<[^>]+>", "...", text), style, v)
+                        audio, mime = self._generate_content(
+                            model, re.sub(r"<[^>]+>", "...", text), style, v
+                        )
                     self._save_audio(audio, mime, out_wav)
                     if probe_duration(out_wav) < 1.0:
                         raise TTSError(f"{model}: audio too short")
@@ -323,10 +414,18 @@ class GeminiTTS:
 # Engine
 # ---------------------------------------------------------------------------
 
+
 class TTSEngine:
-    def __init__(self, voice: str = "hi-IN-MadhurNeural", rate: str = "+5%", pitch: str = "+0Hz",
-                 fallback_voice: str = "hi-IN-SwaraNeural", strict: bool = False,
-                 provider_order: Optional[List[str]] = None, gemini: Optional[GeminiTTS] = None):
+    def __init__(
+        self,
+        voice: str = "hi-IN-MadhurNeural",
+        rate: str = "+5%",
+        pitch: str = "+0Hz",
+        fallback_voice: str = "hi-IN-SwaraNeural",
+        strict: bool = False,
+        provider_order: Optional[List[str]] = None,
+        gemini: Optional[GeminiTTS] = None,
+    ):
         self.voice = voice
         self.rate = rate
         self.pitch = pitch
@@ -338,11 +437,15 @@ class TTSEngine:
     # -- edge-tts ----------------------------------------------------------
     async def _synth(self, text: str, out_file: Path, voice: str) -> List[WordTiming]:
         import edge_tts
+
         try:
-            communicate = edge_tts.Communicate(text=text, voice=voice, rate=self.rate, pitch=self.pitch,
-                                               boundary="WordBoundary")
+            communicate = edge_tts.Communicate(
+                text=text, voice=voice, rate=self.rate, pitch=self.pitch, boundary="WordBoundary"
+            )
         except TypeError:
-            communicate = edge_tts.Communicate(text=text, voice=voice, rate=self.rate, pitch=self.pitch)
+            communicate = edge_tts.Communicate(
+                text=text, voice=voice, rate=self.rate, pitch=self.pitch
+            )
         words: List[WordTiming] = []
         with open(out_file, "wb") as fh:
             async for chunk in communicate.stream():
@@ -360,11 +463,28 @@ class TTSEngine:
         """Trim long encoder silence padding at start/end to a crisp 0.08s breath pause."""
         ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
         tmp = path.with_suffix(".tmp.mp3")
-        af = ("silenceremove=start_periods=1:start_duration=0.02:start_threshold=-40dB,"
-              "areverse,silenceremove=start_periods=1:start_duration=0.02:start_threshold=-40dB,areverse,"
-              "apad=pad_dur=0.08")
-        res = subprocess.run([ffmpeg, "-y", "-i", str(path), "-af", af, "-c:a", "libmp3lame", "-b:a", "192k", str(tmp)],
-                             capture_output=True, timeout=60)
+        af = (
+            "silenceremove=start_periods=1:start_duration=0.02:start_threshold=-40dB,"
+            "areverse,silenceremove=start_periods=1:start_duration=0.02:start_threshold=-40dB,areverse,"
+            "apad=pad_dur=0.08"
+        )
+        res = subprocess.run(
+            [
+                ffmpeg,
+                "-y",
+                "-i",
+                str(path),
+                "-af",
+                af,
+                "-c:a",
+                "libmp3lame",
+                "-b:a",
+                "192k",
+                str(tmp),
+            ],
+            capture_output=True,
+            timeout=60,
+        )
         if res.returncode == 0 and tmp.exists() and tmp.stat().st_size > 1000:
             tmp.replace(path)
         elif tmp.exists():
@@ -380,8 +500,12 @@ class TTSEngine:
                 words = await self._synth(clean, out_file, voice)
                 self._trim_segment_silence(out_file)
                 duration = probe_duration(str(out_file)) or (words[-1].end + 0.1 if words else 0.0)
-                return Segment(text=clean, audio_path=str(out_file), duration=duration,
-                               words=distribute_words(clean, duration))
+                return Segment(
+                    text=clean,
+                    audio_path=str(out_file),
+                    duration=duration,
+                    words=distribute_words(clean, duration),
+                )
             except Exception as exc:
                 last_exc = exc
                 logger.warning("edge-tts attempt %d (%s) failed: %s", attempt + 1, voice, exc)
@@ -389,12 +513,18 @@ class TTSEngine:
         if self.gemini:
             try:
                 raw_wav = str(out_file.with_suffix(".wav"))
-                await asyncio.to_thread(self.gemini.synthesize, clean, "clear Hindi TV news anchor", raw_wav)
+                await asyncio.to_thread(
+                    self.gemini.synthesize, clean, "clear Hindi TV news anchor", raw_wav
+                )
                 if Path(raw_wav).exists():
                     self._trim_segment_silence(Path(raw_wav))
                     duration = probe_duration(raw_wav)
-                    return Segment(text=clean, audio_path=raw_wav, duration=duration,
-                                   words=distribute_words(clean, duration))
+                    return Segment(
+                        text=clean,
+                        audio_path=raw_wav,
+                        duration=duration,
+                        words=distribute_words(clean, duration),
+                    )
             except Exception as g_exc:
                 logger.warning("Segment Gemini fallback failed: %s", g_exc)
         if self.strict:
@@ -402,8 +532,12 @@ class TTSEngine:
         duration = max(1.5, len(clean.split()) / 2.35)
         self._silence(str(out_file), duration)
         logger.warning("Using SILENT placeholder audio (dry-run only) for: %s", clean[:40])
-        return Segment(text=clean, audio_path=str(out_file), duration=duration,
-                       words=distribute_words(clean, duration))
+        return Segment(
+            text=clean,
+            audio_path=str(out_file),
+            duration=duration,
+            words=distribute_words(clean, duration),
+        )
 
     async def synthesize_segments(self, texts: List[str], out_dir: str) -> List[Segment]:
         segments = []
@@ -440,7 +574,9 @@ class TTSEngine:
                     beat_words: List[List[WordTiming]] = []
                     cursor = 0.0
                     for t, d in zip(texts, durs):
-                        beat_words.append(distribute_words(re.sub(r"<[^>]+>", " ", t), d, offset=cursor))
+                        beat_words.append(
+                            distribute_words(re.sub(r"<[^>]+>", " ", t), d, offset=cursor)
+                        )
                         cursor += d
                     return VoiceResult(final, durs, f"gemini:{model}", beat_words=beat_words)
                 except Exception as exc:
@@ -480,11 +616,16 @@ class TTSEngine:
     def _normalise(src: str, dst: str) -> None:
         ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
         # trim leading/trailing silence, keep natural pauses inside
-        af = ("silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,"
-              "areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.1,areverse,"
-              "aresample=44100,aformat=channel_layouts=stereo")
-        res = subprocess.run([ffmpeg, "-y", "-i", src, "-af", af, "-c:a", "aac", "-b:a", "192k", dst],
-                             capture_output=True, timeout=120)
+        af = (
+            "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,"
+            "areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.1,areverse,"
+            "aresample=44100,aformat=channel_layouts=stereo"
+        )
+        res = subprocess.run(
+            [ffmpeg, "-y", "-i", src, "-af", af, "-c:a", "aac", "-b:a", "192k", dst],
+            capture_output=True,
+            timeout=120,
+        )
         if res.returncode != 0:
             raise TTSError(res.stderr.decode(errors="ignore")[-300:])
 
@@ -497,10 +638,28 @@ class TTSEngine:
         for s in segments:
             inputs += ["-i", s.audio_path]
         n = len(segments)
-        filt = "".join(f"[{i}:a]aresample=44100,aformat=channel_layouts=stereo[a{i}];" for i in range(n))
+        filt = "".join(
+            f"[{i}:a]aresample=44100,aformat=channel_layouts=stereo[a{i}];" for i in range(n)
+        )
         filt += "".join(f"[a{i}]" for i in range(n)) + f"concat=n={n}:v=0:a=1[out]"
-        res = subprocess.run([ffmpeg, "-y", *inputs, "-filter_complex", filt, "-map", "[out]", "-c:a", "aac",
-                              "-b:a", "192k", output_path], capture_output=True, timeout=180)
+        res = subprocess.run(
+            [
+                ffmpeg,
+                "-y",
+                *inputs,
+                "-filter_complex",
+                filt,
+                "-map",
+                "[out]",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                output_path,
+            ],
+            capture_output=True,
+            timeout=180,
+        )
         if res.returncode != 0:
             raise TTSError(res.stderr.decode(errors="ignore")[-400:])
         return output_path
@@ -508,14 +667,37 @@ class TTSEngine:
     @staticmethod
     def _silence(output_path: str, duration: float) -> None:
         ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
-        subprocess.run([ffmpeg, "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", f"{duration:.2f}",
-                        "-acodec", "libmp3lame", output_path], capture_output=True, timeout=60)
+        subprocess.run(
+            [
+                ffmpeg,
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "anullsrc=r=44100:cl=stereo",
+                "-t",
+                f"{duration:.2f}",
+                "-acodec",
+                "libmp3lame",
+                output_path,
+            ],
+            capture_output=True,
+            timeout=60,
+        )
 
     async def generate_audio(self, text: str, output_path: str) -> str:
         return (await self.synthesize_segment(text, output_path)).audio_path
 
     @staticmethod
     def dump_timings(texts: List[str], durations: List[float], provider: str, path: str) -> None:
-        Path(path).write_text(json.dumps({"provider": provider, "beats": [
-            {"text": t, "duration": d} for t, d in zip(texts, durations)]}, ensure_ascii=False, indent=1),
-            encoding="utf-8")
+        Path(path).write_text(
+            json.dumps(
+                {
+                    "provider": provider,
+                    "beats": [{"text": t, "duration": d} for t, d in zip(texts, durations)],
+                },
+                ensure_ascii=False,
+                indent=1,
+            ),
+            encoding="utf-8",
+        )

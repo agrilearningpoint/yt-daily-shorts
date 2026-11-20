@@ -36,7 +36,9 @@ def _escape(text: str) -> str:
     return text.replace("\\", "").replace("{", "(").replace("}", ")")
 
 
-def group_words(words: Sequence[Dict[str, Any]], max_words: int = 3, max_chars: int = 20) -> List[List[Dict[str, Any]]]:
+def group_words(
+    words: Sequence[Dict[str, Any]], max_words: int = 3, max_chars: int = 20
+) -> List[List[Dict[str, Any]]]:
     groups: List[List[Dict[str, Any]]] = []
     cur: List[Dict[str, Any]] = []
     for w in words:
@@ -56,10 +58,17 @@ def group_words(words: Sequence[Dict[str, Any]], max_words: int = 3, max_chars: 
 class SubtitleGenerator:
     """Creates subtitle files. Words are dicts: {word, start, end} in seconds (absolute)."""
 
-    def generate_ass(self, words: Sequence[Dict[str, Any]], output_path: str,
-                     highlight_color: str = "#FFD60A", font_name: str = "Mukta ExtraBold",
-                     width: int = 1080, height: int = 1920, font_size: int = 104,
-                     margin_v: int = 560) -> str:
+    def generate_ass(
+        self,
+        words: Sequence[Dict[str, Any]],
+        output_path: str,
+        highlight_color: str = "#FFD60A",
+        font_name: str = "Mukta ExtraBold",
+        width: int = 1080,
+        height: int = 1920,
+        font_size: int = 104,
+        margin_v: int = 560,
+    ) -> str:
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         header = f"""[Script Info]
@@ -92,11 +101,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 for wj, x in enumerate(grp):
                     token = _escape(x["word"])
                     if wj == wi:
-                        parts.append(f"{{\\c{hl}\\fscx108\\fscy108}}{token}{{\\c&H00FFFFFF&\\fscx100\\fscy100}}")
+                        parts.append(
+                            f"{{\\c{hl}\\fscx108\\fscy108}}{token}{{\\c&H00FFFFFF&\\fscx100\\fscy100}}"
+                        )
                     else:
                         parts.append(token)
                 pop = "{\\fad(60,0)}" if wi == 0 else ""
-                lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Cap,,0,0,0,,{pop}{' '.join(parts)}")
+                lines.append(
+                    f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Cap,,0,0,0,,{pop}{' '.join(parts)}"
+                )
         out.write_text(header + "\n".join(lines) + "\n", encoding="utf-8")
         logger.info("Generated ASS captions (%d groups): %s", len(groups), out)
         return str(out)
@@ -106,8 +119,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         out.parent.mkdir(parents=True, exist_ok=True)
         blocks = []
         for i, grp in enumerate(group_words(list(words), max_words=6, max_chars=40), 1):
-            blocks.append(f"{i}\n{_format_timestamp(grp[0]['start'])} --> {_format_timestamp(grp[-1]['end'])}\n"
-                          + " ".join(w["word"] for w in grp) + "\n")
+            blocks.append(
+                f"{i}\n{_format_timestamp(grp[0]['start'])} --> {_format_timestamp(grp[-1]['end'])}\n"
+                + " ".join(w["word"] for w in grp)
+                + "\n"
+            )
         out.write_text("\n".join(blocks), encoding="utf-8")
         return str(out)
 

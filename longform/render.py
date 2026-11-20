@@ -11,6 +11,7 @@ Editing language (all deliberate, all cheap):
   * a chapter card at the start ("अध्याय 3 / 9"), plus a lower-third over the first 6 s
   * sentence subtitles, 2 lines max, safe-area bottom margin (no karaoke shouting)
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,16 +44,29 @@ def probe_duration(path: str) -> float:
     probe = shutil.which("ffprobe")
     if probe:
         try:
-            out = subprocess.run([probe, "-v", "error", "-show_entries", "format=duration",
-                                  "-of", "default=nw=1:nk=1", str(path)],
-                                 capture_output=True, text=True, timeout=30)
+            out = subprocess.run(
+                [
+                    probe,
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=nw=1:nk=1",
+                    str(path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
             if out.stdout.strip():
                 return float(out.stdout.strip())
         except Exception:
             pass
-    try:      # fallback: read "Duration: 00:00:12.34" off ffmpeg -i
+    try:  # fallback: read "Duration: 00:00:12.34" off ffmpeg -i
         out = subprocess.run([ff(), "-i", str(path)], capture_output=True, text=True, timeout=30)
         import re as _re
+
         m = _re.search(r"Duration:\s*(\d+):(\d+):(\d+\.?\d*)", out.stderr or "")
         if m:
             h, mi, sec = int(m.group(1)), int(m.group(2)), float(m.group(3))
@@ -80,8 +94,9 @@ def _wrap(d, text: str, font, max_w: int) -> List[str]:
     return lines
 
 
-def make_card(title: str, subtitle: str, out_path: Path,
-              accent: Tuple[int, int, int] = (212, 175, 55)) -> str:
+def make_card(
+    title: str, subtitle: str, out_path: Path, accent: Tuple[int, int, int] = (212, 175, 55)
+) -> str:
     """Clean dark chapter card with Devanagari type (also used for thumbnails)."""
     from PIL import Image, ImageDraw, ImageFont
 
@@ -107,6 +122,7 @@ def make_card(title: str, subtitle: str, out_path: Path,
 
 def make_outro(out_path: Path, channel: str, line1: str, line2: str) -> str:
     from PIL import Image, ImageDraw, ImageFont
+
     img = Image.new("RGB", (W, H), (12, 12, 16))
     d = ImageDraw.Draw(img)
     f1 = ImageFont.truetype(str(FONT_DIR / "Mukta-ExtraBold.ttf"), 84)
@@ -187,8 +203,10 @@ def build_srt(cues: Sequence[Dict], out_path: Path, offset: float = 0.0) -> str:
     for i, c in enumerate(cues, 1):
         if c["end"] <= c["start"]:
             continue
-        lines.append(f"{i}\n{_ass_time(c['start'] + offset)} --> {_ass_time(c['end'] + offset)}\n"
-                     f"{str(c['text']).strip()}\n")
+        lines.append(
+            f"{i}\n{_ass_time(c['start'] + offset)} --> {_ass_time(c['end'] + offset)}\n"
+            f"{str(c['text']).strip()}\n"
+        )
     out_path.write_text("\n".join(lines), encoding="utf-8")
     return str(out_path)
 
@@ -204,7 +222,9 @@ def sentence_cues(sentences: Sequence[str], words: Sequence[Dict], total: float)
     if not flat:
         return []
     total_split_words = sum(max(1, len(s.split())) for s in flat)
-    ratio_mismatch = (not words) or abs(len(words) - total_split_words) / max(total_split_words, 1) > 0.20
+    ratio_mismatch = (not words) or abs(len(words) - total_split_words) / max(
+        total_split_words, 1
+    ) > 0.20
     if ratio_mismatch:
         weights = [_spoken_weight(s) for s in flat]
         wsum = float(sum(weights)) or 1.0
@@ -238,7 +258,9 @@ def sentence_cues(sentences: Sequence[str], words: Sequence[Dict], total: float)
 # --------------------------------------------------------------------------- #
 # timeline planning
 # --------------------------------------------------------------------------- #
-def plan_slices(cues: List[Dict], n_images: int, start_at: float, end_at: float) -> List[Tuple[float, float]]:
+def plan_slices(
+    cues: List[Dict], n_images: int, start_at: float, end_at: float
+) -> List[Tuple[float, float]]:
     """Split [start_at, end_at] into n_images spans, each cut on a sentence boundary."""
     n_images = max(1, n_images)
     usable = [c for c in cues if c["end"] > start_at]
@@ -266,31 +288,68 @@ def plan_slices(cues: List[Dict], n_images: int, start_at: float, end_at: float)
 # --------------------------------------------------------------------------- #
 # video pieces
 # --------------------------------------------------------------------------- #
-def render_still(img: str, dur: float, out_path: str, seed: int = 0, fps: int = FPS,
-                 overlay: Optional[str] = None) -> str:
+def render_still(
+    img: str,
+    dur: float,
+    out_path: str,
+    seed: int = 0,
+    fps: int = FPS,
+    overlay: Optional[str] = None,
+) -> str:
     """Slow Ken Burns clip from one still, alternating push / pull / pan."""
     frames = max(2, int(round(dur * fps)))
     kind = seed % 4
     if kind == 0:
-        z = "min(zoom+0.00042,1.16)"; x = "iw/2-(iw/zoom/2)"; y = "ih/2-(ih/zoom/2)"
+        z = "min(zoom+0.00042,1.16)"
+        x = "iw/2-(iw/zoom/2)"
+        y = "ih/2-(ih/zoom/2)"
     elif kind == 1:
-        z = "if(eq(on,1),1.16,max(zoom-0.00042,1.0))"; x = "iw/2-(iw/zoom/2)"; y = "ih/2-(ih/zoom/2)"
+        z = "if(eq(on,1),1.16,max(zoom-0.00042,1.0))"
+        x = "iw/2-(iw/zoom/2)"
+        y = "ih/2-(ih/zoom/2)"
     elif kind == 2:
-        z = "min(zoom+0.00030,1.12)"; x = "(iw-iw/zoom)*on/{d}".format(d=frames); y = "ih/2-(ih/zoom/2)"
+        z = "min(zoom+0.00030,1.12)"
+        x = "(iw-iw/zoom)*on/{d}".format(d=frames)
+        y = "ih/2-(ih/zoom/2)"
     else:
-        z = "min(zoom+0.00030,1.12)"; x = "(iw-iw/zoom)*(1-on/{d})".format(d=frames); y = "ih/2-(ih/zoom/2)"
-    vf = (f"scale=2560:1440:force_original_aspect_ratio=increase,crop=2560:1440,"
-          f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={W}x{H}:fps={fps},"
-          f"format=yuv420p")
+        z = "min(zoom+0.00030,1.12)"
+        x = "(iw-iw/zoom)*(1-on/{d})".format(d=frames)
+        y = "ih/2-(ih/zoom/2)"
+    vf = (
+        f"scale=2560:1440:force_original_aspect_ratio=increase,crop=2560:1440,"
+        f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={W}x{H}:fps={fps},"
+        f"format=yuv420p"
+    )
     cmd = [ff(), "-y", "-loop", "1", "-i", img]
     if overlay:
-        cmd += ["-loop", "1", "-i", overlay,
-                "-filter_complex", f"[0:v]{vf}[bg];[bg][1:v]overlay=0:0:format=auto,format=yuv420p[v]",
-                "-map", "[v]"]
+        cmd += [
+            "-loop",
+            "1",
+            "-i",
+            overlay,
+            "-filter_complex",
+            f"[0:v]{vf}[bg];[bg][1:v]overlay=0:0:format=auto,format=yuv420p[v]",
+            "-map",
+            "[v]",
+        ]
     else:
         cmd += ["-vf", vf]
-    cmd += ["-t", f"{dur:.3f}", "-c:v", "libx264", "-preset", PRESET, "-crf", CRF,
-            "-g", "60", "-pix_fmt", "yuv420p", "-an", out_path]
+    cmd += [
+        "-t",
+        f"{dur:.3f}",
+        "-c:v",
+        "libx264",
+        "-preset",
+        PRESET,
+        "-crf",
+        CRF,
+        "-g",
+        "60",
+        "-pix_fmt",
+        "yuv420p",
+        "-an",
+        out_path,
+    ]
     run(cmd, f"still {Path(img).name}")
     return out_path
 
@@ -303,8 +362,24 @@ def concat(videos: List[str], out_path: str, work: Path, reencode: bool = False)
     lst.write_text("".join(f"file '{Path(v).resolve()}'\n" for v in videos), encoding="utf-8")
     cmd = [ff(), "-y", "-f", "concat", "-safe", "0", "-i", str(lst)]
     if reencode:
-        cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart"]
+        cmd += [
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-ar",
+            "48000",
+            "-movflags",
+            "+faststart",
+        ]
     else:
         cmd += ["-c", "copy"]
     cmd.append(out_path)
@@ -312,8 +387,15 @@ def concat(videos: List[str], out_path: str, work: Path, reencode: bool = False)
     return out_path
 
 
-def mux_chapter(video: str, audio: str, _ass_unused: Optional[str], out_path: str,
-                fade_in: float = 0.7, fade_out: float = 0.9, audio_delay_ms: int = 0) -> str:
+def mux_chapter(
+    video: str,
+    audio: str,
+    _ass_unused: Optional[str],
+    out_path: str,
+    fade_in: float = 0.7,
+    fade_out: float = 0.9,
+    audio_delay_ms: int = 0,
+) -> str:
     """Add narration + fades + loudness normalisation (subtitles are already burned).
 
     ``audio_delay_ms`` lets the chapter card play *over* the opening of the
@@ -324,18 +406,44 @@ def mux_chapter(video: str, audio: str, _ass_unused: Optional[str], out_path: st
     vf.append(f"fade=t=in:st=0:d={fade_in}")
     if dur > fade_out + 1:
         vf.append(f"fade=t=out:st={max(0.0, dur - fade_out):.2f}:d={fade_out}")
-    cmd = [ff(), "-y", "-i", video, "-i", audio,
-           "-vf", ",".join(vf),
-           "-af", (("adelay=%d|%d," % (audio_delay_ms, audio_delay_ms)) if audio_delay_ms else "")
-                  + "loudnorm=I=-16:TP=-1.5:LRA=11,apad=pad_dur=0.5",
-           "-c:v", "libx264", "-preset", PRESET, "-crf", CRF, "-pix_fmt", "yuv420p",
-           "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
-           "-shortest", "-movflags", "+faststart", out_path]
+    cmd = [
+        ff(),
+        "-y",
+        "-i",
+        video,
+        "-i",
+        audio,
+        "-vf",
+        ",".join(vf),
+        "-af",
+        (("adelay=%d|%d," % (audio_delay_ms, audio_delay_ms)) if audio_delay_ms else "")
+        + "loudnorm=I=-16:TP=-1.5:LRA=11,apad=pad_dur=0.5",
+        "-c:v",
+        "libx264",
+        "-preset",
+        PRESET,
+        "-crf",
+        CRF,
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-ar",
+        "48000",
+        "-shortest",
+        "-movflags",
+        "+faststart",
+        out_path,
+    ]
     run(cmd, f"mux {Path(out_path).name}")
     return out_path
 
-def compose_thumbnail(hero: str, title: str, out: Path, channel: str = "",
-                      subtitle: str = "") -> Path:
+
+def compose_thumbnail(
+    hero: str, title: str, out: Path, channel: str = "", subtitle: str = ""
+) -> Path:
     """One hero image + one title block. Shared by the pipeline and the re-touch tool."""
     from PIL import Image, ImageDraw, ImageFont
 
@@ -364,8 +472,12 @@ def compose_thumbnail(hero: str, title: str, out: Path, channel: str = "",
         d.text((96, y), line, font=f_big, fill=(248, 248, 252))
         y += 118
     if subtitle:
-        d.text((96, y + 6), subtitle, font=ImageFont.truetype(str(FONT_DIR / "Mukta-Medium.ttf"), 34),
-               fill=(226, 226, 232))
+        d.text(
+            (96, y + 6),
+            subtitle,
+            font=ImageFont.truetype(str(FONT_DIR / "Mukta-Medium.ttf"), 34),
+            fill=(226, 226, 232),
+        )
         y += 52
     if channel:
         d.text((100, y + 26), channel, font=f_small, fill=(212, 175, 55))

@@ -1,7 +1,6 @@
 """Unit tests for MasterEditingDirectorAgent."""
 
 import pytest
-from pathlib import Path
 from agents.master_editing_director.agent import MasterEditingDirectorAgent
 from core.agent_contracts import (
     AudioMixPlan,
@@ -82,8 +81,16 @@ async def test_master_editing_director_execute(master_agent, tmp_path):
     vfx_data = {
         "color_grade": "broadcast_crisp",
         "vfx_plan": [
-            {"scene_id": "scene_000_hook", "transition_effect": "punch", "motion_preset_id": "opener_breaking_red_flash"},
-            {"scene_id": "scene_001", "transition_effect": "flash", "motion_preset_id": "photo_depth_zoom"},
+            {
+                "scene_id": "scene_000_hook",
+                "transition_effect": "punch",
+                "motion_preset_id": "opener_breaking_red_flash",
+            },
+            {
+                "scene_id": "scene_001",
+                "transition_effect": "flash",
+                "motion_preset_id": "photo_depth_zoom",
+            },
         ],
     }
 

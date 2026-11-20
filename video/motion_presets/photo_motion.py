@@ -25,8 +25,12 @@ PHOTO_MOTION_PRESETS: List[MotionPresetSpec] = [
         duration_max=8.0,
         ffmpeg_filter_template="zoompan=z='min(1.0+0.0012*on,1.14)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s=1080x1920:fps=30",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=1.0, scale_y=1.0, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=3.5, scale_x=1.14, scale_y=1.14, easing=EasingType.LINEAR),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=1.0, scale_y=1.0, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=3.5, scale_x=1.14, scale_y=1.14, easing=EasingType.LINEAR
+            ),
         ],
         parameters={"start_scale": 1.0, "end_scale": 1.14, "anchor": "center"},
         tags=["ken_burns", "push_in", "dramatic", "photo"],
@@ -42,7 +46,9 @@ PHOTO_MOTION_PRESETS: List[MotionPresetSpec] = [
         duration_max=8.0,
         ffmpeg_filter_template="zoompan=z='max(1.15-0.0012*on,1.0)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s=1080x1920:fps=30",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=1.15, scale_y=1.15, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=1.15, scale_y=1.15, easing=EasingType.EASE_OUT
+            ),
             KeyframeAnimation(time_offset=3.5, scale_x=1.0, scale_y=1.0, easing=EasingType.LINEAR),
         ],
         parameters={"start_scale": 1.15, "end_scale": 1.0, "anchor": "center"},
@@ -59,8 +65,22 @@ PHOTO_MOTION_PRESETS: List[MotionPresetSpec] = [
         duration_max=9.0,
         ffmpeg_filter_template="zoompan=z='1.12':x='(iw-iw/zoom)*(on/{frames})':y='(ih-ih/zoom)*(1-on/{frames})':d={frames}:s=1080x1920:fps=30",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=1.12, scale_y=1.12, pos_x=-50.0, pos_y=50.0, easing=EasingType.EASE_IN_OUT),
-            KeyframeAnimation(time_offset=4.0, scale_x=1.12, scale_y=1.12, pos_x=50.0, pos_y=-50.0, easing=EasingType.LINEAR),
+            KeyframeAnimation(
+                time_offset=0.0,
+                scale_x=1.12,
+                scale_y=1.12,
+                pos_x=-50.0,
+                pos_y=50.0,
+                easing=EasingType.EASE_IN_OUT,
+            ),
+            KeyframeAnimation(
+                time_offset=4.0,
+                scale_x=1.12,
+                scale_y=1.12,
+                pos_x=50.0,
+                pos_y=-50.0,
+                easing=EasingType.LINEAR,
+            ),
         ],
         parameters={"fixed_scale": 1.12, "pan_direction": "bottom_left_to_top_right"},
         tags=["diagonal", "pan", "document", "crowd"],
@@ -76,8 +96,12 @@ PHOTO_MOTION_PRESETS: List[MotionPresetSpec] = [
         duration_max=7.5,
         ffmpeg_filter_template="zoompan=z='1.10':x='(iw-iw/zoom)*(on/{frames})':y='ih/2-(ih/zoom/2)':d={frames}:s=1080x1920:fps=30",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, pos_x=-80.0, scale_x=1.1, scale_y=1.1, easing=EasingType.LINEAR),
-            KeyframeAnimation(time_offset=3.5, pos_x=80.0, scale_x=1.1, scale_y=1.1, easing=EasingType.LINEAR),
+            KeyframeAnimation(
+                time_offset=0.0, pos_x=-80.0, scale_x=1.1, scale_y=1.1, easing=EasingType.LINEAR
+            ),
+            KeyframeAnimation(
+                time_offset=3.5, pos_x=80.0, scale_x=1.1, scale_y=1.1, easing=EasingType.LINEAR
+            ),
         ],
         parameters={"fixed_scale": 1.10, "glide_axis": "X"},
         tags=["parallax", "slider", "glide", "horizontal"],
@@ -93,8 +117,12 @@ PHOTO_MOTION_PRESETS: List[MotionPresetSpec] = [
         duration_max=7.5,
         ffmpeg_filter_template="zoompan=z='1.12':x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*(1-on/{frames})':d={frames}:s=1080x1920:fps=30",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, pos_y=120.0, scale_x=1.12, scale_y=1.12, easing=EasingType.LINEAR),
-            KeyframeAnimation(time_offset=3.5, pos_y=-120.0, scale_x=1.12, scale_y=1.12, easing=EasingType.LINEAR),
+            KeyframeAnimation(
+                time_offset=0.0, pos_y=120.0, scale_x=1.12, scale_y=1.12, easing=EasingType.LINEAR
+            ),
+            KeyframeAnimation(
+                time_offset=3.5, pos_y=-120.0, scale_x=1.12, scale_y=1.12, easing=EasingType.LINEAR
+            ),
         ],
         parameters={"fixed_scale": 1.12, "glide_axis": "Y"},
         tags=["vertical", "pedestal", "monument", "tilt"],
@@ -110,8 +138,12 @@ PHOTO_MOTION_PRESETS: List[MotionPresetSpec] = [
         duration_max=6.5,
         ffmpeg_filter_template="zoompan=z='min(1.05+0.0008*on,1.15)':x='iw/2-(iw/zoom/2)':y='ih*0.25-(ih/zoom*0.25)':d={frames}:s=1080x1920:fps=30",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, pos_y=-40.0, scale_x=1.05, scale_y=1.05, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=3.0, pos_y=-60.0, scale_x=1.15, scale_y=1.15, easing=EasingType.LINEAR),
+            KeyframeAnimation(
+                time_offset=0.0, pos_y=-40.0, scale_x=1.05, scale_y=1.05, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=3.0, pos_y=-60.0, scale_x=1.15, scale_y=1.15, easing=EasingType.LINEAR
+            ),
         ],
         parameters={"face_y_target": 0.28, "drift_scale": 1.15},
         tags=["face", "portrait", "portrait_crop", "interview"],
@@ -127,8 +159,12 @@ PHOTO_MOTION_PRESETS: List[MotionPresetSpec] = [
         duration_max=6.0,
         ffmpeg_filter_template="zoompan=z='min(1.02+0.0014*on,1.18)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s=1080x1920:fps=30",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=1.0, scale_y=1.0, easing=EasingType.EASE_IN_OUT),
-            KeyframeAnimation(time_offset=3.5, scale_x=1.18, scale_y=1.18, easing=EasingType.EASE_IN_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=1.0, scale_y=1.0, easing=EasingType.EASE_IN_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=3.5, scale_x=1.18, scale_y=1.18, easing=EasingType.EASE_IN_OUT
+            ),
         ],
         parameters={"depth_layers": 3, "foreground_boost": 1.3},
         tags=["depth", "3d", "parallax", "cinematic"],
@@ -144,9 +180,15 @@ PHOTO_MOTION_PRESETS: List[MotionPresetSpec] = [
         duration_max=7.0,
         ffmpeg_filter_template="zoompan=z='if(lte(on,36),1.28,max(1.28-(on-36)*0.008,1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s=1080x1920:fps=30",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=1.28, scale_y=1.28, easing=EasingType.LINEAR),
-            KeyframeAnimation(time_offset=1.2, scale_x=1.28, scale_y=1.28, easing=EasingType.EASE_IN_OUT),
-            KeyframeAnimation(time_offset=3.0, scale_x=1.0, scale_y=1.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=1.28, scale_y=1.28, easing=EasingType.LINEAR
+            ),
+            KeyframeAnimation(
+                time_offset=1.2, scale_x=1.28, scale_y=1.28, easing=EasingType.EASE_IN_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=3.0, scale_x=1.0, scale_y=1.0, easing=EasingType.EASE_OUT
+            ),
         ],
         parameters={"hold_time": 1.2, "initial_zoom": 1.28, "snap_speed": 0.8},
         tags=["detail", "macro", "snap_wide", "investigative"],

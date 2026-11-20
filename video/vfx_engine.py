@@ -13,7 +13,7 @@ import logging
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, Tuple
 
 logger = logging.getLogger("video.vfx")
 
@@ -51,8 +51,21 @@ class VFXEngine:
             if not path.exists():
                 try:
                     subprocess.run(
-                        [self._ffmpeg, "-y", "-f", "lavfi", "-i", flt, "-ar", "44100", "-ac", "2", str(path)],
-                        capture_output=True, timeout=30
+                        [
+                            self._ffmpeg,
+                            "-y",
+                            "-f",
+                            "lavfi",
+                            "-i",
+                            flt,
+                            "-ar",
+                            "44100",
+                            "-ac",
+                            "2",
+                            str(path),
+                        ],
+                        capture_output=True,
+                        timeout=30,
                     )
                 except Exception as e:
                     logger.debug("SFX synthesis skipped: %s", e)
@@ -76,7 +89,9 @@ class VFXEngine:
         }
         return effects.get(fx_type, effects["flash"])
 
-    def get_camera_motion(self, idx: int, total_frames: int, zmax: float = 1.15) -> Tuple[str, str, str]:
+    def get_camera_motion(
+        self, idx: int, total_frames: int, zmax: float = 1.15
+    ) -> Tuple[str, str, str]:
         """Compute smooth Ken Burns camera motion expressions."""
         inc = (zmax - 1.0) / max(total_frames, 1)
         mode = idx % 3

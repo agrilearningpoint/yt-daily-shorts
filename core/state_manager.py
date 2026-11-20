@@ -27,12 +27,13 @@ def _safe_json_dumps(obj: Any) -> str:
         if hasattr(o, "__dict__"):
             return o.__dict__
         return str(o)
-    return json.dumps(obj or {}, ensure_ascii=False, default=_default)
 
+    return json.dumps(obj or {}, ensure_ascii=False, default=_default)
 
 
 class PipelineState(str, Enum):
     """Stages a video moves through."""
+
     PENDING = "pending"
     RESEARCHING = "researching"
     SCRIPTING = "scripting"
@@ -47,6 +48,7 @@ class PipelineState(str, Enum):
 @dataclass
 class VideoState:
     """Runtime representation of a video's pipeline state."""
+
     video_id: str
     video_type: str  # "news" | "knowledge"
     state: PipelineState = PipelineState.PENDING
@@ -101,9 +103,18 @@ class StateManager:
     """
 
     def __init__(self, db_path: str = "data/yt_shorts.db") -> None:
-        self._db_path = Path(db_path)
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._db_str = str(db_path)
+        self._is_memory = self._db_str == ":memory:"
+        if not self._is_memory:
+            self._db_path = Path(db_path)
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            self._db_path = Path(":memory:")
         self._lock = threading.Lock()
+        self._mem_conn: Optional[sqlite3.Connection] = None
+        if self._is_memory:
+            self._mem_conn = sqlite3.connect(":memory:", check_same_thread=False)
+            self._mem_conn.row_factory = sqlite3.Row
         self._init_db()
 
     # ------------------------------------------------------------------
@@ -111,16 +122,22 @@ class StateManager:
     # ------------------------------------------------------------------
 
     def _conn(self) -> sqlite3.Connection:
+        if self._is_memory and self._mem_conn:
+            return self._mem_conn
         conn = sqlite3.connect(str(self._db_path), timeout=10)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL;")
         return conn
 
+    def _close(self, conn: sqlite3.Connection) -> None:
+        if not self._is_memory:
+            conn.close()
+
     def _init_db(self) -> None:
         with self._lock:
             conn = self._conn()
             conn.executescript(self._DDL)
-            conn.close()
+            self._close(conn)
 
     @staticmethod
     def _now() -> str:
@@ -155,15 +172,21 @@ class StateManager:
                     youtube_id, youtube_url)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    vs.video_id, vs.video_type, vs.state.value,
-                    vs.topic_category, vs.title,
-                    vs.created_at, vs.updated_at,
-                    _safe_json_dumps(vs.checkpoint_data), vs.error_message,
-                    vs.youtube_id, vs.youtube_url,
+                    vs.video_id,
+                    vs.video_type,
+                    vs.state.value,
+                    vs.topic_category,
+                    vs.title,
+                    vs.created_at,
+                    vs.updated_at,
+                    _safe_json_dumps(vs.checkpoint_data),
+                    vs.error_message,
+                    vs.youtube_id,
+                    vs.youtube_url,
                 ),
             )
             conn.commit()
-            conn.close()
+            self._close(conn)
         return vs
 
     def update_state(
@@ -209,7 +232,7 @@ class StateManager:
                 vals,
             )
             conn.commit()
-            conn.close()
+            self._close(conn)
 
     def get_video_state(self, video_id: str) -> Optional[VideoState]:
         """Fetch a single video state by ID."""
@@ -218,7 +241,7 @@ class StateManager:
             row = conn.execute(
                 "SELECT * FROM video_states WHERE video_id = ?", (video_id,)
             ).fetchone()
-            conn.close()
+            self._close(conn)
         if row is None:
             return None
         return self._row_to_state(row)
@@ -240,7 +263,7 @@ class StateManager:
                 "SELECT * FROM video_states WHERE created_at LIKE ?",
                 (f"{today}%",),
             ).fetchall()
-            conn.close()
+            self._close(conn)
         return [self._row_to_state(r) for r in rows]
 
     def _query_by_state(self, state: PipelineState) -> List[VideoState]:
@@ -249,7 +272,7 @@ class StateManager:
             rows = conn.execute(
                 "SELECT * FROM video_states WHERE state = ?", (state.value,)
             ).fetchall()
-            conn.close()
+            self._close(conn)
         return [self._row_to_state(r) for r in rows]
 
     @staticmethod
@@ -272,9 +295,7 @@ class StateManager:
     # Checkpoints
     # ------------------------------------------------------------------
 
-    def save_checkpoint(
-        self, video_id: str, stage: str, data: Dict[str, Any]
-    ) -> None:
+    def save_checkpoint(self, video_id: str, stage: str, data: Dict[str, Any]) -> None:
         """Save or update a checkpoint for a pipeline stage."""
         now = self._now()
         with self._lock:
@@ -288,11 +309,9 @@ class StateManager:
                 (video_id, stage, _safe_json_dumps(data), now),
             )
             conn.commit()
-            conn.close()
+            self._close(conn)
 
-    def load_checkpoint(
-        self, video_id: str, stage: str
-    ) -> Optional[Dict[str, Any]]:
+    def load_checkpoint(self, video_id: str, stage: str) -> Optional[Dict[str, Any]]:
         """Load checkpoint data for a given stage, or ``None``."""
         with self._lock:
             conn = self._conn()
@@ -300,14 +319,12 @@ class StateManager:
                 "SELECT data_json FROM checkpoints WHERE video_id = ? AND stage = ?",
                 (video_id, stage),
             ).fetchone()
-            conn.close()
+            self._close(conn)
         if row is None:
             return None
         return json.loads(row["data_json"])
 
-    def invalidate_checkpoints(
-        self, video_id: str, stages: List[str]
-    ) -> int:
+    def invalidate_checkpoints(self, video_id: str, stages: List[str]) -> int:
         """Delete saved checkpoints for specific stages to prevent stale cache reuse."""
         if not stages:
             return 0
@@ -320,15 +337,14 @@ class StateManager:
             )
             count = cur.rowcount
             conn.commit()
-            conn.close()
+            self._close(conn)
         return count
 
-    def invalidate_downstream(
-        self, video_id: str, from_stage: str
-    ) -> List[str]:
+    def invalidate_downstream(self, video_id: str, from_stage: str) -> List[str]:
         """Invalidate all stages that depend on ``from_stage``."""
         try:
             from core.production_context import STAGE_DEPENDENCY_GRAPH
+
             downstream = STAGE_DEPENDENCY_GRAPH.get(from_stage, [])
         except ImportError:
             downstream = []
@@ -358,13 +374,16 @@ class StateManager:
                    (agent_name, video_id, action, result_json, error, timestamp)
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 (
-                    agent_name, video_id, action,
+                    agent_name,
+                    video_id,
+                    action,
                     _safe_json_dumps(result),
-                    error, now,
+                    error,
+                    now,
                 ),
             )
             conn.commit()
-            conn.close()
+            self._close(conn)
 
     # ------------------------------------------------------------------
     # Cleanup
@@ -375,14 +394,12 @@ class StateManager:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         with self._lock:
             conn = self._conn()
-            cur = conn.execute(
-                "DELETE FROM video_states WHERE created_at < ?", (cutoff,)
-            )
+            cur = conn.execute("DELETE FROM video_states WHERE created_at < ?", (cutoff,))
             deleted = cur.rowcount
             conn.execute(
                 "DELETE FROM checkpoints WHERE video_id NOT IN "
                 "(SELECT video_id FROM video_states)"
             )
             conn.commit()
-            conn.close()
+            self._close(conn)
         return deleted

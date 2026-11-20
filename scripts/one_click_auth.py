@@ -12,6 +12,7 @@ What it does, in order:
 Optional, fully automatic secret update (needs a GitHub token with `secrets: write`):
     GH_TOKEN=ghp_xxx python scripts/one_click_auth.py --set-github-secret
 """
+
 from __future__ import annotations
 
 import argparse
@@ -38,10 +39,16 @@ def authorize(secret_path: Path, port: int):
 
     flow = InstalledAppFlow.from_client_secrets_file(str(secret_path), SCOPES)
     print("\nA browser window will open. Sign in with the Google account that OWNS the channel,")
-    print("then click Allow. (If Google says the app is unverified: Advanced -> Go to ... (unsafe).)\n")
-    return flow.run_local_server(port=port, prompt="consent", access_type="offline",
-                                 authorization_prompt_message="Open this link if the browser did not open:\n{url}\n",
-                                 success_message="Done — you can close this tab and return to the terminal.")
+    print(
+        "then click Allow. (If Google says the app is unverified: Advanced -> Go to ... (unsafe).)\n"
+    )
+    return flow.run_local_server(
+        port=port,
+        prompt="consent",
+        access_type="offline",
+        authorization_prompt_message="Open this link if the browser did not open:\n{url}\n",
+        success_message="Done — you can close this tab and return to the terminal.",
+    )
 
 
 def verify(creds) -> dict:
@@ -52,11 +59,16 @@ def verify(creds) -> dict:
     res = api.channels().list(part="snippet,statistics", mine=True).execute()
     items = res.get("items") or []
     if not items:
-        raise SystemExit("Token works but this account has no channel — sign in with the channel's own account.")
+        raise SystemExit(
+            "Token works but this account has no channel — sign in with the channel's own account."
+        )
     ch = items[0]
-    return {"channel": ch["snippet"]["title"], "id": ch["id"],
-            "subscribers": ch.get("statistics", {}).get("subscriberCount", "?"),
-            "videos": ch.get("statistics", {}).get("videoCount", "?")}
+    return {
+        "channel": ch["snippet"]["title"],
+        "id": ch["id"],
+        "subscribers": ch.get("statistics", {}).get("subscriberCount", "?"),
+        "videos": ch.get("statistics", {}).get("videoCount", "?"),
+    }
 
 
 def set_github_secret(name: str, value: str, token: str) -> None:
@@ -67,14 +79,22 @@ def set_github_secret(name: str, value: str, token: str) -> None:
     from nacl import encoding, public
 
     h = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
-    r = requests.get(f"https://api.github.com/repos/{REPO}/actions/secrets/public-key", headers=h, timeout=30)
+    r = requests.get(
+        f"https://api.github.com/repos/{REPO}/actions/secrets/public-key", headers=h, timeout=30
+    )
     if r.status_code != 200:
-        raise SystemExit(f"GitHub public key failed ({r.status_code}) — token needs `secrets: write`.")
+        raise SystemExit(
+            f"GitHub public key failed ({r.status_code}) — token needs `secrets: write`."
+        )
     key_id, key_b64 = r.json()["key_id"], r.json()["key"]
     sealed = public.SealedBox(public.PublicKey(key_b64.encode(), encoding.Base64Encoder()))
     encrypted = base64.b64encode(sealed.encrypt(value.encode())).decode()
-    r = requests.put(f"https://api.github.com/repos/{REPO}/actions/secrets/{name}",
-                     headers=h, json={"encrypted_value": encrypted, "key_id": key_id}, timeout=30)
+    r = requests.put(
+        f"https://api.github.com/repos/{REPO}/actions/secrets/{name}",
+        headers=h,
+        json={"encrypted_value": encrypted, "key_id": key_id},
+        timeout=30,
+    )
     if r.status_code not in (201, 204):
         raise SystemExit(f"GitHub secret update failed: {r.status_code} {r.text[:200]}")
     print(f"✓ {name} updated on GitHub ({REPO})")
@@ -82,10 +102,15 @@ def set_github_secret(name: str, value: str, token: str) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(prog="one_click_auth")
-    ap.add_argument("--secret", default="client_secret.json", help="OAuth client JSON (Desktop app)")
+    ap.add_argument(
+        "--secret", default="client_secret.json", help="OAuth client JSON (Desktop app)"
+    )
     ap.add_argument("--port", type=int, default=0, help="local port (0 = pick a free one)")
-    ap.add_argument("--set-github-secret", action="store_true",
-                    help="also update the YOUTUBE_TOKEN_JSON secret (needs GH_TOKEN env)")
+    ap.add_argument(
+        "--set-github-secret",
+        action="store_true",
+        help="also update the YOUTUBE_TOKEN_JSON secret (needs GH_TOKEN env)",
+    )
     a = ap.parse_args()
 
     secret = Path(a.secret)
@@ -99,8 +124,13 @@ def main() -> int:
 
     token_json = creds.to_json()
     if not json.loads(token_json).get("refresh_token"):
-        return print("\n✗ Google returned no refresh_token. Remove the app's access at "
-                     "myaccount.google.com/permissions and run again with prompt=consent.") or 1
+        return (
+            print(
+                "\n✗ Google returned no refresh_token. Remove the app's access at "
+                "myaccount.google.com/permissions and run again with prompt=consent."
+            )
+            or 1
+        )
 
     try:
         info = verify(creds)
@@ -111,8 +141,10 @@ def main() -> int:
 
     out = Path("token.json")
     out.write_text(token_json, encoding="utf-8")
-    print(f"\n✓ VERIFIED — channel: {info['channel']}  (id {info['id']}), "
-          f"subs {info['subscribers']}, videos {info['videos']}")
+    print(
+        f"\n✓ VERIFIED — channel: {info['channel']}  (id {info['id']}), "
+        f"subs {info['subscribers']}, videos {info['videos']}"
+    )
     print(f"✓ written to {out.resolve()}  (git-ignored — never commit it)")
 
     if a.set_github_secret:

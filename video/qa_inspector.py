@@ -11,11 +11,12 @@ import logging
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from core.agent_contracts import QualityVerificationVerdict
+from core.duration import SHORTS_HARD_LIMIT, SHORTS_MIN_DURATION
 
 logger = logging.getLogger("video.qa_inspector")
 
@@ -43,8 +44,8 @@ class VideoQAInspector:
         target_width: int = 1080,
         target_height: int = 1920,
         target_fps: int = 30,
-        max_duration: float = 60.0,
-        min_duration: float = 15.0,
+        max_duration: float = SHORTS_HARD_LIMIT,
+        min_duration: float = SHORTS_MIN_DURATION,
         max_drift_tolerance: float = 0.10,
     ) -> None:
         self.target_width = target_width
@@ -69,8 +70,10 @@ class VideoQAInspector:
 
         cmd = [
             self._ffprobe,
-            "-v", "quiet",
-            "-print_format", "json",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
             "-show_format",
             "-show_streams",
             str(file_path),
@@ -109,7 +112,9 @@ class VideoQAInspector:
 
         return info
 
-    def detect_black_frames(self, file_path: str, max_duration_sec: float = 1.0) -> List[Tuple[float, float]]:
+    def detect_black_frames(
+        self, file_path: str, max_duration_sec: float = 1.0
+    ) -> List[Tuple[float, float]]:
         """Detect any black frame stretches longer than max_duration_sec."""
         if not self._ffmpeg:
             return []
@@ -117,9 +122,12 @@ class VideoQAInspector:
         cmd = [
             self._ffmpeg,
             "-hide_banner",
-            "-i", str(file_path),
-            "-vf", f"blackdetect=d={max_duration_sec}:pix_th=0.10",
-            "-f", "null",
+            "-i",
+            str(file_path),
+            "-vf",
+            f"blackdetect=d={max_duration_sec}:pix_th=0.10",
+            "-f",
+            "null",
             "-",
         ]
         black_stretches: List[Tuple[float, float]] = []
@@ -207,7 +215,12 @@ class VideoQAInspector:
             pillars["duration"] = 20.0
 
         # 4. Synchronization Pillar (Audio vs Video duration drift)
-        if streams.has_video and streams.has_audio and streams.video_duration > 0 and streams.audio_duration > 0:
+        if (
+            streams.has_video
+            and streams.has_audio
+            and streams.video_duration > 0
+            and streams.audio_duration > 0
+        ):
             av_drift = abs(streams.video_duration - streams.audio_duration)
             if av_drift > self.max_drift_tolerance:
                 warnings.append(
@@ -224,7 +237,7 @@ class VideoQAInspector:
         # Calculate overall score
         total_score = sum(max(0.0, s) for s in pillars.values()) / len(pillars)
 
-        approved = (len(failures) == 0 and total_score >= 60.0)
+        approved = len(failures) == 0 and total_score >= 60.0
 
         report = QualityVerificationVerdict(
             approved=approved,
@@ -253,21 +266,32 @@ class VideoQAInspector:
         if streams.duration <= max_duration:
             return file_path
 
-        logger.info("Auto-repairing video duration from %.2fs to %.2fs", streams.duration, max_duration)
+        logger.info(
+            "Auto-repairing video duration from %.2fs to %.2fs", streams.duration, max_duration
+        )
         repaired_path = str(p.parent / f"repaired_{p.name}")
 
         cmd = [
             self._ffmpeg,
             "-y",
-            "-ss", "0",
-            "-t", str(max_duration),
-            "-i", str(file_path),
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "18",
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-movflags", "+faststart",
+            "-ss",
+            "0",
+            "-t",
+            str(max_duration),
+            "-i",
+            str(file_path),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "18",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
             repaired_path,
         ]
         try:

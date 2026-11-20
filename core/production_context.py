@@ -28,39 +28,69 @@ logger = logging.getLogger("core.production_context")
 
 STAGE_DEPENDENCY_GRAPH: Dict[str, List[str]] = {
     "research": [
-        "prompt_engineering", "script_generation", "fact_verification",
-        "quality_check", "creative_direction", "vfx_direction",
-        "motion_graphics", "video_production", "seo_optimization",
-        "thumbnail_design", "publishing"
+        "prompt_engineering",
+        "script_generation",
+        "fact_verification",
+        "quality_check",
+        "creative_direction",
+        "vfx_direction",
+        "motion_graphics",
+        "video_production",
+        "seo_optimization",
+        "thumbnail_design",
+        "publishing",
     ],
     "prompt_engineering": [
-        "script_generation", "fact_verification", "quality_check",
-        "creative_direction", "vfx_direction", "motion_graphics",
-        "video_production", "seo_optimization", "thumbnail_design", "publishing"
+        "script_generation",
+        "fact_verification",
+        "quality_check",
+        "creative_direction",
+        "vfx_direction",
+        "motion_graphics",
+        "video_production",
+        "seo_optimization",
+        "thumbnail_design",
+        "publishing",
     ],
     "script_generation": [
-        "fact_verification", "quality_check", "creative_direction",
-        "vfx_direction", "motion_graphics", "video_production",
-        "seo_optimization", "thumbnail_design", "publishing"
+        "fact_verification",
+        "quality_check",
+        "creative_direction",
+        "vfx_direction",
+        "motion_graphics",
+        "video_production",
+        "seo_optimization",
+        "thumbnail_design",
+        "publishing",
     ],
     "fact_verification": [
-        "quality_check", "creative_direction", "vfx_direction",
-        "motion_graphics", "video_production", "seo_optimization",
-        "thumbnail_design", "publishing"
+        "quality_check",
+        "creative_direction",
+        "vfx_direction",
+        "motion_graphics",
+        "video_production",
+        "seo_optimization",
+        "thumbnail_design",
+        "publishing",
     ],
     "quality_check": [
-        "creative_direction", "vfx_direction", "motion_graphics",
-        "video_production", "seo_optimization", "thumbnail_design", "publishing"
+        "creative_direction",
+        "vfx_direction",
+        "motion_graphics",
+        "video_production",
+        "seo_optimization",
+        "thumbnail_design",
+        "publishing",
     ],
     "creative_direction": [
-        "vfx_direction", "motion_graphics", "video_production",
-        "thumbnail_design"
+        "vfx_direction",
+        "motion_graphics",
+        "video_production",
+        "thumbnail_design",
     ],
     "vfx_direction": ["video_production"],
     "motion_graphics": ["video_production"],
-    "video_production": [
-        "seo_optimization", "thumbnail_design", "publishing"
-    ],
+    "video_production": ["seo_optimization", "thumbnail_design", "publishing"],
     "seo_optimization": ["publishing"],
     "thumbnail_design": ["publishing"],
     "publishing": [],
@@ -135,6 +165,11 @@ class ProductionContext:
                 logger.debug("State manager cache invalidation error: %s", e)
 
         if invalidated:
-            logger.info("Context [%s]: Invalidated %d downstream stages from '%s': %s",
-                        self.video_id, len(invalidated), stage_name, invalidated)
+            logger.info(
+                "Context [%s]: Invalidated %d downstream stages from '%s': %s",
+                self.video_id,
+                len(invalidated),
+                stage_name,
+                invalidated,
+            )
         return invalidated

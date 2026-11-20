@@ -7,7 +7,7 @@ Produces strongly validated VFXPlanItem records that feed directly into the Mast
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from agents.base_agent import AgentResult, BaseAgent
 from core.agent_contracts import VFXPlanItem
@@ -186,7 +186,9 @@ class VFXAgent(BaseAgent):
                     "motion": "push_in" if scene_idx % 2 == 0 else "pan",
                     "sfx": "whoosh_fast",
                     "speed": "medium",
-                    "motion_preset_id": "photo_slow_push_in" if scene_idx % 2 == 0 else "photo_diagonal_pan",
+                    "motion_preset_id": "photo_slow_push_in"
+                    if scene_idx % 2 == 0
+                    else "photo_diagonal_pan",
                 }
 
         return matched
@@ -239,7 +241,11 @@ class VFXAgent(BaseAgent):
                 )
             )
 
-        self.logger.info("Generated context-aware VFX plan for %d items with grade '%s'", len(vfx_plan), color_grade)
+        self.logger.info(
+            "Generated context-aware VFX plan for %d items with grade '%s'",
+            len(vfx_plan),
+            color_grade,
+        )
 
         return AgentResult(
             success=True,

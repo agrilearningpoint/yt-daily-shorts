@@ -23,8 +23,8 @@ Return ONLY valid JSON:
 {
  "hook": "...",
  "national": [
-   1. "national": 17 DIFFERENT Indian stories (national politics, government, states, economy)
-   2. "international": 5 DIFFERENT world stories (world leaders, wars/diplomacy)
+   1. "national": 6 DIFFERENT Indian stories (national politics, government, states, economy)
+   2. "international": 2 DIFFERENT world stories (world leaders, wars/diplomacy)
  ],
  "national": [{"on_screen_text": "...", "src": 1, "parts": [...]}],
  "international": [{"on_screen_text": "...", "src": 7, "parts": [...]}]
@@ -65,10 +65,11 @@ def test_mock_script_passes_news_validation(agent):
     assert hard == [], hard
     lo, hi = bounds(agent.config.video, "news", None)
     from core.duration import estimate_seconds
+
     est = estimate_seconds(agent._as_dict(script, "news"))
     assert lo <= est <= hi, f"{est:.0f}s outside {lo:.0f}-{hi:.0f}s"
     assert all(s.parts for s in script.scenes)
-    assert all(s.category for s in script.scenes)   # Hindi section name filled in
+    assert all(s.category for s in script.scenes)  # Hindi section name filled in
     # each story should read like a news line (9..22 words)
     assert all(9 <= len(s.narration.split()) <= 22 for s in script.scenes)
 

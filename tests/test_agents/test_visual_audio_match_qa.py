@@ -1,9 +1,12 @@
 """Unit tests for VisualAudioMatchQAAgent."""
 
 import pytest
-from pathlib import Path
 from agents.visual_audio_match_qa.agent import VisualAudioMatchQAAgent
-from core.agent_contracts import MasterEditingTimeline, TimelineSegmentContract, VisualAudioMatchResult
+from core.agent_contracts import (
+    MasterEditingTimeline,
+    TimelineSegmentContract,
+    VisualAudioMatchResult,
+)
 from core.configuration import load_config
 from core.state_manager import StateManager
 
@@ -28,7 +31,7 @@ def test_validate_input(qa_agent):
 async def test_qa_pre_render_valid(qa_agent, tmp_path):
     # Create dummy images
     img1 = tmp_path / "img1.jpg"
-    img1.write_bytes(b"\xFF\xD8\xFF" + b"\x00" * 200)
+    img1.write_bytes(b"\xff\xd8\xff" + b"\x00" * 200)
 
     seg = TimelineSegmentContract(
         scene_id="scene_001",

@@ -11,11 +11,9 @@ from __future__ import annotations
 
 import io
 import logging
-import re
 import urllib.parse
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import requests
 from PIL import Image
@@ -39,7 +37,6 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "केदारनाथ": "Kedarnath Temple",
     "बद्रीनाथ": "Badrinath Temple",
     "अक्षय नवमी": "Amla Navami",
-
     # Finance & Economy
     "सेंसेक्स": "BSE SENSEX",
     "निफ्टी": "NIFTY 50",
@@ -57,7 +54,6 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "जीडीपी": "Economy of India",
     "रुपया": "Indian rupee",
     "डॉलर": "United States dollar",
-
     # Judiciary & Law
     "सुप्रीम कोर्ट": "Supreme Court of India",
     "सर्वोच्च न्यायालय": "Supreme Court of India",
@@ -73,7 +69,6 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "वकील": "Lawyer",
     "कंटेम्प्ट": "Contempt of court",
     "अवमानना": "Contempt of court",
-
     # Indian Political Leaders
     "पीएम मोदी": "Narendra Modi",
     "नरेंद्र मोदी": "Narendra Modi",
@@ -103,7 +98,6 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "एमके स्टालिन": "M. K. Stalin",
     "चंद्रबाबू नायडू": "N. Chandrababu Naidu",
     "हेमंत सोरेन": "Hemant Soren",
-
     # Political Parties
     "भाजपा": "Bharatiya Janata Party",
     "बीजेपी": "Bharatiya Janata Party",
@@ -115,7 +109,6 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "बसपा": "Bahujan Samaj Party",
     "राजद": "Rashtriya Janata Dal",
     "जदयू": "Janata Dal (United)",
-
     # Institutions, Space & Defence
     "इसरो": "ISRO",
     "डीआरडीओ": "Defence Research and Development Organisation",
@@ -137,21 +130,18 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "भारतीय रेलवे": "Indian Railways",
     "रेलवे": "Indian Railways",
     "ट्रेन": "Indian Railways",
-
     # Exams & Education
     "नीट": "National Eligibility cum Entrance Test (Undergraduate)",
     "यूपीएससी": "Union Public Service Commission",
     "सीबीएसई": "Central Board of Secondary Education",
     "शिक्षा नीति": "National Education Policy 2020",
     "सरकारी नौकरी": "Civil Services of India",
-
     # Cinema & Culture
     "सलमान खान": "Salman Khan",
     "शाहरुख खान": "Shah Rukh Khan",
     "अमिताभ बच्चन": "Amitabh Bachchan",
     "बॉलीवुड": "Hindi cinema",
     "सिनेमा": "Cinema of India",
-
     # World Leaders & Countries
     "ट्रंप": "Donald Trump",
     "डोनाल्ड ट्रंप": "Donald Trump",
@@ -173,7 +163,6 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "संयुक्त राष्ट्र": "United Nations",
     "यूएन": "United Nations",
     "डब्ल्यूएचओ": "World Health Organization",
-
     # Technology & Companies
     "एनवीडिया": "Nvidia",
     "गूगल": "Google",
@@ -184,7 +173,6 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "रिलायंस": "Reliance Industries",
     "अडानी": "Adani Group",
     "अडाणी": "Adani Group",
-
     # States & Cities
     "दिल्ली": "Delhi",
     "नई दिल्ली": "New Delhi",
@@ -201,7 +189,6 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "राजस्थान": "Rajasthan",
     "गुजरात": "Gujarat",
     "महाराष्ट्र": "Maharashtra",
-
     # Weather & Nature
     "मौसम": "Weather",
     "कोहरा": "Fog",
@@ -229,17 +216,24 @@ TOPIC_THEMES: Dict[str, Dict[str, str]] = {
 
 def detect_topic_theme(text: str) -> str:
     low = text.lower()
-    if any(k in low for k in ("सेंसेक्स", "निफ्टी", "शेयर", "बाजार", "रुपया", "सोना", "चांदी", "rbi", "बैंक", "emi")):
+    if any(
+        k in low
+        for k in ("सेंसेक्स", "निफ्टी", "शेयर", "बाजार", "रुपया", "सोना", "चांदी", "rbi", "बैंक", "emi")
+    ):
         return "finance"
     if any(k in low for k in ("मंदिर", "बांकेबिहारी", "पूजा", "तीर्थ", "दर्शन", "धाम", "मठ", "गंगा")):
         return "temple"
     if any(k in low for k in ("रेलवे", "ट्रेन", "वंदे भारत", "स्टेशन", "लोको पायलट")):
         return "railways"
-    if any(k in low for k in ("इसरो", "isro", "रॉकेट", "उपग्रह", "अंतरिक्ष", "सैटेलाइट", "चंद्रयान", "गगनयान")):
+    if any(
+        k in low for k in ("इसरो", "isro", "रॉकेट", "उपग्रह", "अंतरिक्ष", "सैटेलाइट", "चंद्रयान", "गगनयान")
+    ):
         return "space"
     if any(k in low for k in ("सेना", "मिसाइल", "रक्षा", "सेना", "एयरफोर्स", "नेवी", "बॉर्डर", "जवान")):
         return "defence"
-    if any(k in low for k in ("सुप्रीम कोर्ट", "संसद", "सरकार", "मंत्रालय", "पीएम", "मंत्री", "विपक्ष", "चुनाव")):
+    if any(
+        k in low for k in ("सुप्रीम कोर्ट", "संसद", "सरकार", "मंत्रालय", "पीएम", "मंत्री", "विपक्ष", "चुनाव")
+    ):
         return "politics"
     if any(k in low for k in ("मौसम", "कोहरा", "ठंड", "बारिश", "तापमान", "धुंध", "प्रदूषण")):
         return "weather"
@@ -264,9 +258,25 @@ class SemanticVisualMatcher:
     @staticmethod
     def _is_graphic_or_flag(url: str) -> bool:
         u = (url or "").lower()
-        return (u.endswith(".svg") or ".svg." in u or
-                any(k in u for k in ("flag_of", "emblem_of", "seal_of", "symbol_",
-                                     "coat_of_arms", "logo", "insignia", "map_of", "locator", "diagram")))
+        return (
+            u.endswith(".svg")
+            or ".svg." in u
+            or any(
+                k in u
+                for k in (
+                    "flag_of",
+                    "emblem_of",
+                    "seal_of",
+                    "symbol_",
+                    "coat_of_arms",
+                    "logo",
+                    "insignia",
+                    "map_of",
+                    "locator",
+                    "diagram",
+                )
+            )
+        )
 
     def fetch_wikipedia_lead_image(self, entity_title: str, dest_path: Path) -> Optional[str]:
         """Fetch the official primary photo of a Wikipedia entity (English or Hindi Wikipedia)."""
@@ -283,23 +293,34 @@ class SemanticVisualMatcher:
             r = requests.get(url_en, headers=_UA, timeout=self.timeout)
             if r.status_code == 200:
                 data = r.json()
-                img_url = (data.get("originalimage") or {}).get("source") or (data.get("thumbnail") or {}).get("source")
+                img_url = (data.get("originalimage") or {}).get("source") or (
+                    data.get("thumbnail") or {}
+                ).get("source")
                 if img_url:
                     # If the lead image is a vector flag, emblem, or seal, try a real photo first
                     if self._is_graphic_or_flag(img_url):
                         real_photo = (
-                            self.search_wikimedia_commons(f"{entity_title} building", dest_path) or
-                            self.search_wikimedia_commons(f"{entity_title} headquarters", dest_path) or
-                            self.search_wikimedia_commons(f"{entity_title} photo", dest_path) or
-                            self.search_wikimedia_commons(entity_title, dest_path)
+                            self.search_wikimedia_commons(f"{entity_title} building", dest_path)
+                            or self.search_wikimedia_commons(
+                                f"{entity_title} headquarters", dest_path
+                            )
+                            or self.search_wikimedia_commons(f"{entity_title} photo", dest_path)
+                            or self.search_wikimedia_commons(entity_title, dest_path)
                         )
                         if real_photo and Path(real_photo).exists():
-                            logger.info("Semantic Matcher: Replaced vector graphic with real Commons photo for '%s'", entity_title)
+                            logger.info(
+                                "Semantic Matcher: Replaced vector graphic with real Commons photo for '%s'",
+                                entity_title,
+                            )
                             self._cache[key] = str(dest_path)
                             return str(dest_path)
 
                     if self._download_image(img_url, dest_path):
-                        logger.info("Semantic Matcher: Found EN Wikipedia image for '%s' -> %s", entity_title, img_url)
+                        logger.info(
+                            "Semantic Matcher: Found EN Wikipedia image for '%s' -> %s",
+                            entity_title,
+                            img_url,
+                        )
                         self._cache[key] = str(dest_path)
                         return str(dest_path)
         except Exception as e:
@@ -312,19 +333,24 @@ class SemanticVisualMatcher:
             r = requests.get(url_hi, headers=_UA, timeout=self.timeout)
             if r.status_code == 200:
                 data = r.json()
-                img_url = (data.get("originalimage") or {}).get("source") or (data.get("thumbnail") or {}).get("source")
+                img_url = (data.get("originalimage") or {}).get("source") or (
+                    data.get("thumbnail") or {}
+                ).get("source")
                 if img_url:
                     if self._is_graphic_or_flag(img_url):
-                        real_photo = (
-                            self.search_wikimedia_commons(f"{entity_title} photo", dest_path) or
-                            self.search_wikimedia_commons(entity_title, dest_path)
-                        )
+                        real_photo = self.search_wikimedia_commons(
+                            f"{entity_title} photo", dest_path
+                        ) or self.search_wikimedia_commons(entity_title, dest_path)
                         if real_photo and Path(real_photo).exists():
                             self._cache[key] = str(dest_path)
                             return str(dest_path)
 
                     if self._download_image(img_url, dest_path):
-                        logger.info("Semantic Matcher: Found HI Wikipedia image for '%s' -> %s", entity_title, img_url)
+                        logger.info(
+                            "Semantic Matcher: Found HI Wikipedia image for '%s' -> %s",
+                            entity_title,
+                            img_url,
+                        )
                         self._cache[key] = str(dest_path)
                         return str(dest_path)
         except Exception as e:
@@ -346,7 +372,7 @@ class SemanticVisualMatcher:
             "gsrlimit": 8,
             "prop": "imageinfo",
             "iiprop": "url|size|mime",
-            "format": "json"
+            "format": "json",
         }
         try:
             r = requests.get(url, params=params, headers=_UA, timeout=self.timeout)
@@ -359,11 +385,17 @@ class SemanticVisualMatcher:
                         mime = infos[0].get("mime", "")
                         width = infos[0].get("width", 0)
                         height = infos[0].get("height", 0)
-                        if (img_url and mime in ("image/jpeg", "image/png", "image/webp")
-                                and not self._is_graphic_or_flag(img_url)):
+                        if (
+                            img_url
+                            and mime in ("image/jpeg", "image/png", "image/webp")
+                            and not self._is_graphic_or_flag(img_url)
+                        ):
                             if width >= 400 and height >= 400:
                                 if self._download_image(img_url, dest_path):
-                                    logger.info("Semantic Matcher: Found Wikimedia Commons image for '%s'", query)
+                                    logger.info(
+                                        "Semantic Matcher: Found Wikimedia Commons image for '%s'",
+                                        query,
+                                    )
                                     return str(dest_path)
         except Exception as e:
             logger.debug("Wikimedia search error for '%s': %s", query, e)
@@ -395,7 +427,7 @@ class SemanticVisualMatcher:
         entity_hint: str,
         search_hint: str,
         dest_path: Path,
-        media_collector=None
+        media_collector=None,
     ) -> Tuple[Optional[str], str]:
         """Resolve a 100% accurate visual for the narration.
 
@@ -427,7 +459,7 @@ class SemanticVisualMatcher:
                 "search": query,
                 "visual": query,
                 "say": spoken_text,
-                "news_query": query
+                "news_query": query,
             }
             try:
                 asset = media_collector.find_visual(spec, str(dest_path), mode="news")

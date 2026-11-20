@@ -25,8 +25,10 @@ class QualityManagerAgent(BaseAgent):
         targets = script.get("news_targets") if is_news else None
         lo, hi = bounds(v, "news" if is_news else "knowledge", targets)
         if is_news:
-            t = targets or {"min_national": v.news_national_count - 6,
-                            "min_international": min(5, v.news_international_count)}
+            t = targets or {
+                "min_national": v.news_national_count - 6,
+                "min_international": min(5, v.news_international_count),
+            }
             min_scenes = max(MIN_NEWS_STORIES, t["min_national"] + t["min_international"] - 3)
         else:
             min_scenes = 2
@@ -47,16 +49,33 @@ class QualityManagerAgent(BaseAgent):
             {"name": "hook_length", "passed": 3 <= len(hook.split()) <= 22},
             {"name": "duration_bounds", "passed": lo <= est <= hi},
             {"name": "scene_count", "passed": min_scenes <= len(scenes) <= max_scenes},
-            {"name": "hindi_script", "passed": len(re.findall(r"[\u0900-\u097F]", text)) > len(text) * 0.4},
-            {"name": "no_placeholders", "passed": not any(b.lower() in text.lower() for b in _BANNED)},
+            {
+                "name": "hindi_script",
+                "passed": len(re.findall(r"[\u0900-\u097F]", text)) > len(text) * 0.4,
+            },
+            {
+                "name": "no_placeholders",
+                "passed": not any(b.lower() in text.lower() for b in _BANNED),
+            },
             {"name": "has_sources", "passed": bool(script.get("sources"))},
-            {"name": "fact_check", "passed": verification.get("verdict") in ("pass", "fixed", "skipped")},
+            {
+                "name": "fact_check",
+                "passed": verification.get("verdict") in ("pass", "fixed", "skipped"),
+            },
         ]
         failed = [c["name"] for c in checks if not c["passed"]]
         approved = not failed
         return AgentResult(
             success=approved,
-            data={"approved": approved, "estimated_duration": round(est, 1), "checks": checks,
-                  "overall_score": round(1 - len(failed) / len(checks), 2)},
-            errors=[f"quality gate failed: {failed} (estimated {est:.0f}s, allowed {lo:.0f}-{hi:.0f}s)"] if failed else [],
+            data={
+                "approved": approved,
+                "estimated_duration": round(est, 1),
+                "checks": checks,
+                "overall_score": round(1 - len(failed) / len(checks), 2),
+            },
+            errors=[
+                f"quality gate failed: {failed} (estimated {est:.0f}s, allowed {lo:.0f}-{hi:.0f}s)"
+            ]
+            if failed
+            else [],
         )

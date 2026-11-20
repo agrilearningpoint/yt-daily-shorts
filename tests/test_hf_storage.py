@@ -22,22 +22,24 @@ class FakeApi:
         self.uploads.append((Path(path_or_fileobj).name, path_in_repo, repo_type))
         return f"commit/{path_in_repo}"
 
-    def upload_folder(self, folder_path, path_in_repo, repo_id, repo_type,
-                      ignore_patterns=None, commit_message=""):
+    def upload_folder(
+        self, folder_path, path_in_repo, repo_id, repo_type, ignore_patterns=None, commit_message=""
+    ):
         self.folders.append((Path(folder_path).name, path_in_repo, tuple(ignore_patterns or ())))
         return f"tree/{path_in_repo}"
 
 
 def test_disabled_without_repo_or_token():
     assert HFArtifactStore().enabled is False
-    assert HFArtifactStore(repo_id="x/y").enabled is False        # token missing
-    assert HFArtifactStore(token="hf_x").enabled is False         # repo missing
+    assert HFArtifactStore(repo_id="x/y").enabled is False  # token missing
+    assert HFArtifactStore(token="hf_x").enabled is False  # repo missing
     assert HFArtifactStore(repo_id="x/y", token="hf_x").enabled is True
 
 
 def test_disabled_store_never_touches_network(tmp_path):
     store = HFArtifactStore()
-    f = tmp_path / "a.mp4"; f.write_bytes(b"x")
+    f = tmp_path / "a.mp4"
+    f.write_bytes(b"x")
     assert store.upload_file(f, "videos/a.mp4") is None
     assert store.upload_video("vid1", {"final_short.mp4": str(f)}) == {}
     assert store.backup_state([str(f)]) == {}
@@ -49,9 +51,12 @@ def test_upload_video_plans_paths(monkeypatch, tmp_path):
     fake = FakeApi()
     monkeypatch.setattr(store, "_client", lambda: fake)
 
-    vid = tmp_path / "final_short.mp4"; vid.write_bytes(b"v" * 10)
-    srt = tmp_path / "captions.srt"; srt.write_text("1")
-    thumb = tmp_path / "thumb.jpg"; thumb.write_bytes(b"jpg")
+    vid = tmp_path / "final_short.mp4"
+    vid.write_bytes(b"v" * 10)
+    srt = tmp_path / "captions.srt"
+    srt.write_text("1")
+    thumb = tmp_path / "thumb.jpg"
+    thumb.write_bytes(b"jpg")
 
     urls = store.upload_video(
         "abc123",
@@ -64,7 +69,9 @@ def test_upload_video_plans_paths(monkeypatch, tmp_path):
     assert "videos/2026-11-10/abc123/final_short.mp4" in paths
     assert "videos/2026-11-10/abc123/manifest.json" in paths
     assert all(t == "dataset" for _n, _p, t in fake.uploads)
-    assert urls["final_short.mp4"].startswith("https://huggingface.co/datasets/Rajaagri/yt-daily-shorts-artifacts/resolve/main/")
+    assert urls["final_short.mp4"].startswith(
+        "https://huggingface.co/datasets/Rajaagri/yt-daily-shorts-artifacts/resolve/main/"
+    )
 
 
 def test_upload_dir_skips_intermediate_frames(monkeypatch, tmp_path):
@@ -82,8 +89,10 @@ def test_state_backup_uploads_existing_files(monkeypatch, tmp_path):
     store = HFArtifactStore(repo_id="r/x", token="hf_x")
     fake = FakeApi()
     monkeypatch.setattr(store, "_client", lambda: fake)
-    db = tmp_path / "yt_shorts.db"; db.write_bytes(b"db")
-    hist = tmp_path / "history.json"; hist.write_text(json.dumps({"runs": []}))
+    db = tmp_path / "yt_shorts.db"
+    db.write_bytes(b"db")
+    hist = tmp_path / "history.json"
+    hist.write_text(json.dumps({"runs": []}))
     urls = store.backup_state([str(db), str(hist), str(tmp_path / "missing.db")])
     assert set(urls) == {"yt_shorts.db", "history.json"}
     assert all(p.startswith("state/") for _n, p, _t in fake.uploads)
@@ -105,6 +114,7 @@ def test_store_from_config_reads_media_settings():
 
 def test_image_generator_defaults_are_hf_recommended():
     from video.image_generator import DEFAULT_IMAGE_MODELS
+
     assert DEFAULT_IMAGE_MODELS[0] == "black-forest-labs/FLUX.1-Krea-dev"
     assert "Qwen/Qwen-Image" in DEFAULT_IMAGE_MODELS
 
@@ -118,7 +128,7 @@ def test_image_backend_order_is_credits_space_pollinations():
     gen = AIImageGenerator("hf_dummy")
     order = [m.__name__ for m in (gen._via_credits, gen._via_space, gen._via_pollinations)]
     assert order == ["_via_credits", "_via_space", "_via_pollinations"]
-    assert gen.spaces[0].endswith("FLUX.1-schnell")      # fastest / cheapest quota
+    assert gen.spaces[0].endswith("FLUX.1-schnell")  # fastest / cheapest quota
 
 
 def test_image_402_marks_credits_dead_but_keeps_free_backends(monkeypatch):

@@ -42,4 +42,9 @@ async def test_news_visual_sourcing_scenes(visual_agent):
     assert isinstance(asset_0, NewsVisualAsset)
     assert asset_0.asset_id == "vis_scene_000"
     assert len(asset_0.local_path) > 0
-    assert asset_0.actual_event_or_stock in ("actual_event", "institutional_broll", "stock", "illustrative_graphic")
+    assert asset_0.actual_event_or_stock in (
+        "actual_event",
+        "institutional_broll",
+        "stock",
+        "illustrative_graphic",
+    )

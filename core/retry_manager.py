@@ -29,6 +29,7 @@ logger = logging.getLogger("core.retry")
 # Retry decorator
 # ---------------------------------------------------------------------------
 
+
 def retry(
     max_retries: int = 3,
     backoff_factor: float = 2.0,
@@ -57,18 +58,24 @@ def retry(
                     last_exc = exc
                     if attempt == max_retries:
                         break
-                    delay = backoff_factor ** attempt
+                    delay = backoff_factor**attempt
                     if jitter:
                         delay += random.uniform(0, delay * 0.5)
                     logger.warning(
                         "%s attempt %d/%d failed: %s — retrying in %.1fs",
-                        func.__name__, attempt + 1, max_retries, exc, delay,
+                        func.__name__,
+                        attempt + 1,
+                        max_retries,
+                        exc,
+                        delay,
                     )
                     await asyncio.sleep(delay)
 
             logger.error(
                 "%s failed after %d attempts: %s",
-                func.__name__, max_retries + 1, last_exc,
+                func.__name__,
+                max_retries + 1,
+                last_exc,
             )
             if on_failure:
                 on_failure(last_exc)
@@ -82,6 +89,7 @@ def retry(
 # ---------------------------------------------------------------------------
 # Circuit Breaker
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class CircuitBreaker:
@@ -129,6 +137,7 @@ class CircuitBreaker:
 # ---------------------------------------------------------------------------
 # Rate limiter
 # ---------------------------------------------------------------------------
+
 
 class RateLimiter:
     """Token-bucket rate limiter.

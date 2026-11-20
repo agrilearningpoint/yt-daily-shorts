@@ -12,7 +12,23 @@ def _tokenize(text: str) -> Set[str]:
     cleaned = re.sub(r"[^\w\s]", " ", text.lower())
     words = [w for w in cleaned.split() if len(w) > 2]
     # Simple common stop words
-    stopwords = {"and", "the", "for", "with", "this", "that", "aur", "hai", "koi", "nahi", "liye", "gaya", "mein", "se", "ko"}
+    stopwords = {
+        "and",
+        "the",
+        "for",
+        "with",
+        "this",
+        "that",
+        "aur",
+        "hai",
+        "koi",
+        "nahi",
+        "liye",
+        "gaya",
+        "mein",
+        "se",
+        "ko",
+    }
     return {w for w in words if w not in stopwords}
 
 

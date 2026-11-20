@@ -13,6 +13,7 @@ Priority is deliberately different from the Shorts pipeline:
 Every image is remembered in `media.json` per chapter, so a re-render reuses the
 same visuals instead of re-fetching (Commons is polite but not free to hammer).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -27,21 +28,28 @@ import requests
 logger = logging.getLogger("longform.media")
 
 UA = {"User-Agent": "yt-daily-shorts-longform/1.0 (documentary research; contact: repo owner)"}
-MIN_W, MIN_H = 1000, 560          # anything smaller looks soft at 1080p
+MIN_W, MIN_H = 1000, 560  # anything smaller looks soft at 1080p
 AI_CAP_PER_CHAPTER = 3
 
 
 class VisualSourcer:
-    def __init__(self, out_root: Path, pexels_key: str = "", pixabay_key: str = "",
-                 hf_token: str = "", agnes_key: str = "", timeout: int = 45) -> None:
+    def __init__(
+        self,
+        out_root: Path,
+        pexels_key: str = "",
+        pixabay_key: str = "",
+        hf_token: str = "",
+        agnes_key: str = "",
+        timeout: int = 45,
+    ) -> None:
         self.out_root = out_root
         self.pexels_key = pexels_key
         self.pixabay_key = pixabay_key
         self.hf_token = hf_token
         self.agnes_key = agnes_key
         self.timeout = timeout
-        self._seen: set = set()          # sha1 of bytes, across the whole film
-        self._kept: set = set()          # paths already accepted (never delete these)
+        self._seen: set = set()  # sha1 of bytes, across the whole film
+        self._kept: set = set()  # paths already accepted (never delete these)
         self._ai_used = 0
 
     # ------------------------------------------------------------------ public
@@ -89,8 +97,12 @@ class VisualSourcer:
         if not got:
             raise RuntimeError(f"chapter {idx + 1}: no visuals found for {queries[:2]}")
         if len(got) < since_needed(want):
-            logger.warning("ch%02d only %d visuals (wanted %d) — will hold each longer",
-                           idx + 1, len(got), want)
+            logger.warning(
+                "ch%02d only %d visuals (wanted %d) — will hold each longer",
+                idx + 1,
+                len(got),
+                want,
+            )
         manifest.write_text(json.dumps(got, ensure_ascii=False, indent=2), encoding="utf-8")
         logger.info("ch%02d: %d visuals", idx + 1, len(got))
         return got
@@ -98,11 +110,22 @@ class VisualSourcer:
     # ----------------------------------------------------------------- commons
     def _commons_many(self, query: str, k: int, dest_dir: Path) -> List[str]:
         try:
-            r = requests.get("https://commons.wikimedia.org/w/api.php", headers=UA, timeout=self.timeout,
-                             params={"action": "query", "format": "json", "generator": "search",
-                                     "gsrnamespace": 6, "gsrsearch": f"{query} filetype:bitmap",
-                                     "gsrlimit": 12, "prop": "imageinfo",
-                                     "iiprop": "url|size|mime|extmetadata", "iiurlwidth": 1920})
+            r = requests.get(
+                "https://commons.wikimedia.org/w/api.php",
+                headers=UA,
+                timeout=self.timeout,
+                params={
+                    "action": "query",
+                    "format": "json",
+                    "generator": "search",
+                    "gsrnamespace": 6,
+                    "gsrsearch": f"{query} filetype:bitmap",
+                    "gsrlimit": 12,
+                    "prop": "imageinfo",
+                    "iiprop": "url|size|mime|extmetadata",
+                    "iiurlwidth": 1920,
+                },
+            )
             pages = r.json().get("query", {}).get("pages", {}) or {}
         except Exception as exc:
             logger.debug("commons '%s' failed: %s", query, exc)
@@ -122,14 +145,18 @@ class VisualSourcer:
             # returns a photo of someone rock climbing. Require the file title or
             # its description to share meaningful vocabulary with the query.
             meta = info.get("extmetadata") or {}
-            blob = " ".join([
-                str(page.get("title", "")),
-                str(meta.get("ImageDescription", {}).get("value", "")),
-                str(meta.get("Categories", {}).get("value", "")),
-                str(meta.get("ObjectName", {}).get("value", "")),
-            ])
+            blob = " ".join(
+                [
+                    str(page.get("title", "")),
+                    str(meta.get("ImageDescription", {}).get("value", "")),
+                    str(meta.get("Categories", {}).get("value", "")),
+                    str(meta.get("ObjectName", {}).get("value", "")),
+                ]
+            )
             if terms and not (terms & set(_tokens(blob))):
-                logger.debug("rejected off-topic: %s (query '%s')", page.get("title", "")[:50], query)
+                logger.debug(
+                    "rejected off-topic: %s (query '%s')", page.get("title", "")[:50], query
+                )
                 continue
             url = info.get("thumburl") or info.get("url")
             if not url:
@@ -149,10 +176,17 @@ class VisualSourcer:
         out: List[str] = []
         if self.pexels_key:
             try:
-                r = requests.get("https://api.pexels.com/v1/search", timeout=self.timeout,
-                                 headers={"Authorization": self.pexels_key},
-                                 params={"query": query, "per_page": k * 2, "orientation": "landscape",
-                                         "size": "large"})
+                r = requests.get(
+                    "https://api.pexels.com/v1/search",
+                    timeout=self.timeout,
+                    headers={"Authorization": self.pexels_key},
+                    params={
+                        "query": query,
+                        "per_page": k * 2,
+                        "orientation": "landscape",
+                        "size": "large",
+                    },
+                )
                 for ph in (r.json().get("photos") or [])[:k]:
                     src = ph.get("src", {}).get("large2x") or ph.get("src", {}).get("large")
                     if not src:
@@ -164,10 +198,19 @@ class VisualSourcer:
                 logger.debug("pexels '%s' failed: %s", query, exc)
         if len(out) < k and self.pixabay_key:
             try:
-                r = requests.get("https://pixabay.com/api/", timeout=self.timeout,
-                                 params={"key": self.pixabay_key, "q": query, "image_type": "photo",
-                                         "orientation": "horizontal", "per_page": max(3, k),
-                                         "min_width": MIN_W, "safesearch": "true"})
+                r = requests.get(
+                    "https://pixabay.com/api/",
+                    timeout=self.timeout,
+                    params={
+                        "key": self.pixabay_key,
+                        "q": query,
+                        "image_type": "photo",
+                        "orientation": "horizontal",
+                        "per_page": max(3, k),
+                        "min_width": MIN_W,
+                        "safesearch": "true",
+                    },
+                )
                 for hit in (r.json().get("hits") or [])[:k]:
                     src = hit.get("largeImageURL") or hit.get("webformatURL")
                     if not src:
@@ -184,16 +227,27 @@ class VisualSourcer:
         path = dest_dir / f"ai_{hashlib.sha1(query.encode()).hexdigest()[:10]}.jpg"
         if path.exists():
             return str(path)
-        prompt = (f"{query}. Cinematic documentary illustration, historically accurate, natural light, "
-                  "wide 16:9 composition, muted colours, no text, no watermark, no logos, no real faces")
+        prompt = (
+            f"{query}. Cinematic documentary illustration, historically accurate, natural light, "
+            "wide 16:9 composition, muted colours, no text, no watermark, no logos, no real faces"
+        )
         # Agnes first (free, generous), then the free HF Space route
         if self.agnes_key:
             try:
-                r = requests.post("https://apihub.agnes-ai.com/v1/images/generations",
-                                  headers={"Authorization": f"Bearer {self.agnes_key}",
-                                           "Content-Type": "application/json"},
-                                  json={"model": "agnes-image-2.5-flash", "prompt": prompt,
-                                        "size": "1024x576", "n": 1}, timeout=180)
+                r = requests.post(
+                    "https://apihub.agnes-ai.com/v1/images/generations",
+                    headers={
+                        "Authorization": f"Bearer {self.agnes_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "agnes-image-2.5-flash",
+                        "prompt": prompt,
+                        "size": "1024x576",
+                        "n": 1,
+                    },
+                    timeout=180,
+                )
                 if r.status_code == 200:
                     data = r.json().get("data") or []
                     url = (data[0] or {}).get("url") if data else ""
@@ -206,6 +260,7 @@ class VisualSourcer:
                 logger.debug("agnes image failed: %s", exc)
         try:
             from video.image_generator import AIImageGenerator
+
             gen = AIImageGenerator(self.hf_token)
             out = gen.generate(prompt, str(path), width=1344, height=768)
             if out:
@@ -247,6 +302,7 @@ class VisualSourcer:
         try:
             from PIL import Image
             from video.media_collector import MediaCollector  # reuse the existing junk detector
+
             with Image.open(path) as im:
                 w, h = im.size
                 blank = MediaCollector._looks_blank(im)
@@ -259,12 +315,34 @@ class VisualSourcer:
         return True
 
 
-_STOP = {"the", "a", "an", "of", "and", "in", "on", "at", "to", "for", "with", "photo", "image",
-         "file", "jpg", "jpeg", "png", "commons", "wikimedia", "museum", "collection"}
+_STOP = {
+    "the",
+    "a",
+    "an",
+    "of",
+    "and",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "with",
+    "photo",
+    "image",
+    "file",
+    "jpg",
+    "jpeg",
+    "png",
+    "commons",
+    "wikimedia",
+    "museum",
+    "collection",
+}
 
 
 def _tokens(text: str) -> List[str]:
     import re
+
     return [t for t in re.findall(r"[a-z]{3,}", str(text).lower()) if t not in _STOP]
 
 

@@ -36,18 +36,18 @@ with section "today" so they are kept in that exact order. Then write the normal
 (the one the hook talks about), never one of the three opening scenes.
 === END OPENING BLOCK ===
 
-{% endif %}TASK: build ONE high-density SUPERFAST 20+ NEWS BULLETIN with exactly TWO sections:
-  You MUST include AT LEAST 20 distinct stories total (never combine or drop below 20).
+{% endif %}TASK: build ONE high-density SUPERFAST NEWS BULLETIN with exactly TWO sections:
+  You MUST include {{ count }} distinct stories total (never combine or drop below {{ count }}).
   Prefer stories confirmed by other outlets ("+N outlets"); use single-source stories only if from an official/major source.
   Use ONLY facts written in the candidate line: never add numbers, names or dates from memory.
-  1. "national": {{ national }} DIFFERENT Indian stories (at least 15-17 stories: national politics, government, states, economy,
+  1. "national": {{ national }} DIFFERENT Indian stories (politics, government, states, economy,
      markets, sports, science/space, defence, weather, education, railways, courts…), biggest first.
-  2. "international": {{ international }} DIFFERENT world stories (at least 5 stories: world leaders, wars/diplomacy, global economy,
+  2. "international": {{ international }} DIFFERENT world stories (world leaders, wars/diplomacy, global economy,
      disasters, tech giants, world sports), biggest first.
 Pick the stories that most outlets are running today (trending). No two stories about the same event.
 Skip gore, crime/murder/rape, family disputes, gossip, astrology, rumours, health tips and opinion pieces.
 
-STORY RULES (very important for 20+ rapid-fire news in 50-60 seconds):
+STORY RULES (very important for rapid-fire news in 50-59 seconds):
 - NEVER say a topic label like "खेल में", "स्वास्थ्य:", "राजनीति में", "रक्षा मोर्चे पर". Just say the news.
 - Each story = 5–8 Hindi words in ONE crisp, punchy sentence:
   State WHO/WHAT happened and the key outcome directly in rapid-fire TV headline style.
@@ -81,7 +81,7 @@ ALSO WRITE:
 - "title": Hindi YouTube title under 70 characters naming the 2–3 biggest stories.
 
 TOTAL spoken words (hook + opening block + all parts) must be {{ min_words }}–{{ max_words }}
-(about {{ seconds }} seconds). Keep stories crisp and punchy so all 20+ stories fit comfortably under 60 seconds!
+(about {{ seconds }} seconds). Keep stories crisp and punchy so all {{ count }} stories fit comfortably under 59.5 seconds!
 
 Return ONE JSON object:
 {"title": "...", "hook": "...",

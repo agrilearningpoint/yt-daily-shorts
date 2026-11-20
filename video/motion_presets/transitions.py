@@ -113,7 +113,9 @@ TRANSITION_PRESETS: List[MotionPresetSpec] = [
         duration_max=0.8,
         ffmpeg_filter_template="gblur=sigma=32:steps=1:enable='between(t,0,0.22)'",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, pos_x=200.0, opacity=0.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, pos_x=200.0, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
             KeyframeAnimation(time_offset=0.35, pos_x=0.0, opacity=1.0, easing=EasingType.EASE_OUT),
         ],
         parameters={"blur_sigma": 32, "swipe_direction": "right_to_left"},

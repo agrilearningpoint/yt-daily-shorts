@@ -1,4 +1,5 @@
 """Self-learning loop: reads YouTube Analytics retention & updates editor_memory.json."""
+
 from __future__ import annotations
 
 import json
@@ -42,7 +43,9 @@ def update_editor_memory(
     if not analytics_rows:
         return mem
 
-    avg_pct = sum(float(r.get("averageViewPercentage", 0)) for r in analytics_rows) / len(analytics_rows)
+    avg_pct = sum(float(r.get("averageViewPercentage", 0)) for r in analytics_rows) / len(
+        analytics_rows
+    )
     rules = mem.setdefault("auto_learned_rules", {})
     rules["last_avg_retention_pct"] = round(avg_pct, 2)
 

@@ -3,7 +3,7 @@
 import pytest
 
 from agents.shorts_opportunity_ranker.agent import FACTOR_WEIGHTS, ShortsOpportunityRankerAgent
-from core.agent_contracts import ExtractedStory, StoryRanking
+from core.agent_contracts import ExtractedStory
 from core.configuration import load_config
 from core.state_manager import StateManager
 

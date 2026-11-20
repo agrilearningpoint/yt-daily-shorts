@@ -63,7 +63,9 @@ async def test_full_repurposing_chain_phase1(tmp_path):
 
     # 4. Agent 3: SceneUnderstandingAgent
     scene_agent = SceneUnderstandingAgent(cfg, sm)
-    scene_fixture = json.loads(Path("tests/fixtures/repurposing/sample_scenes.json").read_text(encoding="utf-8"))
+    scene_fixture = json.loads(
+        Path("tests/fixtures/repurposing/sample_scenes.json").read_text(encoding="utf-8")
+    )
     scene_res = await scene_agent.execute(manifest=manifest, scenes=scene_fixture, duration=60.0)
     assert scene_res.success is True
     scenes = scene_res.data["scenes"]

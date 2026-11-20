@@ -15,23 +15,49 @@ from typing import Any, Dict, List
 import pytz
 
 from agents.base_agent import AgentResult, BaseAgent
+from core.duration import SHORTS_SAFE_MAX
 from video.vision_check import make_vision_check
 from video.media_collector import MediaCollector, MediaAsset
 from video.renderer import SceneClip, VideoRenderer
-from video.scene_composer import (SceneComposer, compose_chip, compose_frame, compose_ticker,
-                                  compose_title_card)
+from video.scene_composer import (
+    SceneComposer,
+    compose_chip,
+    compose_frame,
+    compose_ticker,
+    compose_title_card,
+)
 from video.editor_director import EditorDirector
 from video.tts import GeminiTTS, TTSEngine, probe_duration
-from video.semantic_matcher import (SemanticVisualMatcher, extract_entity_from_hindi,
-                                    detect_topic_theme)
+from video.semantic_matcher import (
+    SemanticVisualMatcher,
+    extract_entity_from_hindi,
+    detect_topic_theme,
+)
 from video.motion_graphics import MotionGraphicsEngine
 from video.vfx_engine import VFXEngine
 from video.synchronization_engine import SynchronizationEngine
 
-HINDI_MONTHS = ["जनवरी", "फरवरी", "मार्च", "अप्रैल", "मई", "जून", "जुलाई", "अगस्त", "सितंबर", "अक्टूबर", "नवंबर", "दिसंबर"]
+HINDI_MONTHS = [
+    "जनवरी",
+    "फरवरी",
+    "मार्च",
+    "अप्रैल",
+    "मई",
+    "जून",
+    "जुलाई",
+    "अगस्त",
+    "सितंबर",
+    "अक्टूबर",
+    "नवंबर",
+    "दिसंबर",
+]
 CATEGORY_BADGES = {
-    "monday": "राजनीति और नेता", "tuesday": "विज्ञान और तकनीक", "wednesday": "स्वास्थ्य और विज्ञान",
-    "thursday": "महान व्यक्तित्व", "friday": "इतिहास और धरोहर", "saturday": "रोचक तथ्य",
+    "monday": "राजनीति और नेता",
+    "tuesday": "विज्ञान और तकनीक",
+    "wednesday": "स्वास्थ्य और विज्ञान",
+    "thursday": "महान व्यक्तित्व",
+    "friday": "इतिहास और धरोहर",
+    "saturday": "रोचक तथ्य",
     "sunday": "अर्थव्यवस्था और समाज",
 }
 
@@ -40,10 +66,15 @@ def _stamp(path: str, text: str) -> None:
     """Small 'symbolic image' label on AI pictures (honest news practice)."""
     try:
         from PIL import Image, ImageDraw, ImageFont
+
         im = Image.open(path).convert("RGB")
         d = ImageDraw.Draw(im)
         font_path = Path(__file__).resolve().parents[2] / "assets" / "fonts" / "Mukta-Bold.ttf"
-        font = ImageFont.truetype(str(font_path), 34) if font_path.exists() else ImageFont.load_default()
+        font = (
+            ImageFont.truetype(str(font_path), 34)
+            if font_path.exists()
+            else ImageFont.load_default()
+        )
         w = d.textlength(text, font=font)
         x, y = im.width - w - 70, 560
         d.rounded_rectangle([x - 18, y - 8, x + w + 18, y + 50], radius=14, fill=(0, 0, 0))
@@ -61,24 +92,45 @@ class VideoProducerAgent(BaseAgent):
         t = config.tts
         gemini = None
         if config.llm.gemini_api_key and "gemini" in t.provider_order:
-            gemini = GeminiTTS(config.llm.gemini_api_key, t.gemini_models, t.gemini_voice, t.gemini_fallback_voice)
-        self.tts = TTSEngine(voice=t.voice, rate=t.rate, pitch=t.pitch, fallback_voice=t.fallback_voice,
-                             strict=config.general.strict_mode, provider_order=t.provider_order, gemini=gemini)
-        self.media = MediaCollector(pexels_key=config.media.pexels_api_key, pixabay_key=config.media.pixabay_api_key,
-                                    cache_dir=config.media.cache_dir, use_wikimedia=config.media.use_wikimedia,
-                                    use_openverse=config.media.use_openverse,
-                                    agnes_key=config.media.agnes_api_key, agnes_model=config.media.agnes_model,
-                                    use_publisher_images=config.media.use_publisher_images,
-                                    use_news_photos=getattr(config.media, "use_news_photos", True),
-                                    cf_token=getattr(config.media, "cf_api_token", ""),
-                                    cf_account=getattr(config.media, "cf_account_id", ""),
-                                    hf_token=getattr(config.media, "hf_token", ""),
-                                    vision=(make_vision_check(config.llm.gemini_api_key)
-                                            if getattr(config.media, "vision_check", True) else None))
+            gemini = GeminiTTS(
+                config.llm.gemini_api_key, t.gemini_models, t.gemini_voice, t.gemini_fallback_voice
+            )
+        self.tts = TTSEngine(
+            voice=t.voice,
+            rate=t.rate,
+            pitch=t.pitch,
+            fallback_voice=t.fallback_voice,
+            strict=config.general.strict_mode,
+            provider_order=t.provider_order,
+            gemini=gemini,
+        )
+        self.media = MediaCollector(
+            pexels_key=config.media.pexels_api_key,
+            pixabay_key=config.media.pixabay_api_key,
+            cache_dir=config.media.cache_dir,
+            use_wikimedia=config.media.use_wikimedia,
+            use_openverse=config.media.use_openverse,
+            agnes_key=config.media.agnes_api_key,
+            agnes_model=config.media.agnes_model,
+            use_publisher_images=config.media.use_publisher_images,
+            use_news_photos=getattr(config.media, "use_news_photos", True),
+            cf_token=getattr(config.media, "cf_api_token", ""),
+            cf_account=getattr(config.media, "cf_account_id", ""),
+            hf_token=getattr(config.media, "hf_token", ""),
+            vision=(
+                make_vision_check(config.llm.gemini_api_key)
+                if getattr(config.media, "vision_check", True)
+                else None
+            ),
+        )
         self.renderer = VideoRenderer(config.video.width, config.video.height, config.video.fps)
         self.renderer.depth_motion = bool(getattr(config.video, "depth_motion", True))
-        self.motion_engine = MotionGraphicsEngine(channel_name=getattr(config.general, "channel_name", "BHARAT KI SOCH"))
-        self.vfx_engine = VFXEngine(color_grade=getattr(config.video, "color_grade", "broadcast_crisp"))
+        self.motion_engine = MotionGraphicsEngine(
+            channel_name=getattr(config.general, "channel_name", "BHARAT KI SOCH")
+        )
+        self.vfx_engine = VFXEngine(
+            color_grade=getattr(config.video, "color_grade", "broadcast_crisp")
+        )
         self.semantic_matcher = SemanticVisualMatcher()
 
     def _date_label(self) -> str:
@@ -90,7 +142,7 @@ class VideoProducerAgent(BaseAgent):
         theme: Dict[str, Any] = kwargs.get("creative_brief", {}) or {}
         research: Dict[str, Any] = kwargs.get("research_data", {}) or {}
         vfx_data: Dict[str, Any] = kwargs.get("vfx_data", {}) or {}
-        motion_data: Dict[str, Any] = kwargs.get("motion_data", {}) or {}
+        kwargs.get("motion_data", {}) or {}
         hook_data: Dict[str, Any] = kwargs.get("hook_data", {}) or {}
         video_id = kwargs.get("video_id", "daily_short")
         video_type = script.get("video_type", "news")
@@ -105,12 +157,11 @@ class VideoProducerAgent(BaseAgent):
             hook = approved_hook.get("text", "").strip() or script.get("hook", "").strip()
             hook_lead_entity = approved_hook.get("paired_visual_entity", "")
             hook_lead_path = approved_hook.get("paired_visual_path", "")
-            hook_headline = approved_hook.get("headline_overlay", "")
+            approved_hook.get("headline_overlay", "")
         else:
             hook = script.get("hook", "").strip()
             hook_lead_entity = ""
             hook_lead_path = ""
-            hook_headline = ""
 
         # Map VFX plan items by scene_id / index
         vfx_plan_items = vfx_data.get("vfx_plan", [])
@@ -121,17 +172,24 @@ class VideoProducerAgent(BaseAgent):
 
         scenes: List[Dict[str, Any]] = script.get("scenes", [])
         hook = script.get("hook", "").strip()
-        spoken = getattr(self.config.general, "channel_name_spoken", "") or self.config.general.channel_name
+        spoken = (
+            getattr(self.config.general, "channel_name_spoken", "")
+            or self.config.general.channel_name
+        )
         # Fixed closing line: ask for like + subscribe and say the channel's name.
-        outro = (f"खबरें पसंद आईं तो वीडियो को लाइक कीजिए, और रोज़ की खबरों के लिए {spoken} को सब्सक्राइब कीजिए!"
-                 if is_news else
-                 f"जानकारी अच्छी लगी तो लाइक कीजिए, और ऐसी रोचक बातों के लिए {spoken} को सब्सक्राइब कीजिए!")
+        outro = (
+            f"खबरें पसंद आईं तो वीडियो को लाइक कीजिए, और रोज़ की खबरों के लिए {spoken} को सब्सक्राइब कीजिए!"
+            if is_news
+            else f"जानकारी अच्छी लगी तो लाइक कीजिए, और ऐसी रोचक बातों के लिए {spoken} को सब्सक्राइब कीजिए!"
+        )
         script["outro"] = outro
 
         # ---- beats (one voice segment each) + small visual parts inside every beat ----------------
         items = research.get("items", [])
         lead_image = items[0].get("image_url", "") if (not is_news and items) else ""
-        topic_kw = (items[0].get("seed") or items[0].get("title", "")) if (not is_news and items) else ""
+        topic_kw = (
+            (items[0].get("seed") or items[0].get("title", "")) if (not is_news and items) else ""
+        )
         by_url = {i.get("source_url"): i for i in items}
         beats: List[Dict[str, Any]] = []
         fig: Dict[str, Any] = {"avg_match": -1, "picture_parts": 0, "no_picture_parts": 0}
@@ -140,34 +198,50 @@ class VideoProducerAgent(BaseAgent):
             first_scene = scenes[0] if scenes else {}
             hook_entity = hook_lead_entity or extract_entity_from_hindi(hook) or ""
             if not hook_entity and first_scene:
-                hook_entity = (first_scene.get("image_query", "") or
-                               extract_entity_from_hindi(first_scene.get("narration", "")) or "")
-            hook_search = (hook_entity or
-                           first_scene.get("visual_keywords", "") or
-                           (topic_kw if not is_news else "Parliament of India building New Delhi"))
+                hook_entity = (
+                    first_scene.get("image_query", "")
+                    or extract_entity_from_hindi(first_scene.get("narration", ""))
+                    or ""
+                )
+            hook_search = (
+                hook_entity
+                or first_scene.get("visual_keywords", "")
+                or (topic_kw if not is_news else "Parliament of India building New Delhi")
+            )
             hook_pub = ""
             if is_news and first_scene:
                 first_url = (first_scene.get("sources") or [""])[0]
                 hook_pub = by_url.get(first_url, {}).get("image_url", "")
             hook_preferred = hook_lead_path or (lead_image if not is_news else hook_pub)
-            beats.append({
-                "kind": "hook",
-                "text": hook,
-                "chip": first_scene.get("on_screen_text", "") or ("आज की बड़ी खबर" if is_news else "विशेष जानकारी"),
-                "category": "बड़ी खबर",
-                "parts": [{
-                    "say": hook,
-                    "visual": hook,
-                    "entity": hook_entity,
-                    "search": hook_search,
-                    "source": "",
-                    "preferred": hook_preferred,
-                }],
-            })
+            beats.append(
+                {
+                    "kind": "hook",
+                    "text": hook,
+                    "chip": first_scene.get("on_screen_text", "")
+                    or ("आज की बड़ी खबर" if is_news else "विशेष जानकारी"),
+                    "category": "बड़ी खबर",
+                    "parts": [
+                        {
+                            "say": hook,
+                            "visual": hook,
+                            "entity": hook_entity,
+                            "search": hook_search,
+                            "source": "",
+                            "preferred": hook_preferred,
+                        }
+                    ],
+                }
+            )
         for i, s in enumerate(scenes):
-            parts = [dict(p) for p in (s.get("parts") or [])] or [{
-                "say": s["narration"], "visual": s.get("visual_keywords", ""), "entity": s.get("image_query", ""),
-                "search": s.get("visual_keywords", ""), "source": ""}]
+            parts = [dict(p) for p in (s.get("parts") or [])] or [
+                {
+                    "say": s["narration"],
+                    "visual": s.get("visual_keywords", ""),
+                    "entity": s.get("image_query", ""),
+                    "search": s.get("visual_keywords", ""),
+                    "source": "",
+                }
+            ]
             if is_news and s.get("section") != "today":
                 # date / rashifal / trading beats carry their own visual description (no article page)
                 url = (s.get("sources") or [""])[0]
@@ -185,8 +259,16 @@ class VideoProducerAgent(BaseAgent):
                 for p in parts:
                     if p.get("search") and topic_kw.lower().split()[0] not in p["search"].lower():
                         p["search"] = f"{topic_kw} {p['search']}"
-            beats.append({"kind": "item", "text": s["narration"], "chip": s.get("on_screen_text", ""),
-                          "category": s.get("category", ""), "parts": parts, "n": i + 1})
+            beats.append(
+                {
+                    "kind": "item",
+                    "text": s["narration"],
+                    "chip": s.get("on_screen_text", ""),
+                    "category": s.get("category", ""),
+                    "parts": parts,
+                    "n": i + 1,
+                }
+            )
         if is_news and any(s.get("section") for s in scenes):
             # Three sections, announced by the anchor like a TV bulletin: आज (date/parv → rashifal →
             # trading) → देश → दुनिया. The "today" block needs no announcement, it IS the opening.
@@ -203,11 +285,18 @@ class VideoProducerAgent(BaseAgent):
                         withsec.append(b)
                         continue
                     intl = sec == "international"
-                    withsec.append({"kind": "section", "text": "अब दुनिया की बड़ी खबरें।" if intl
-                                    else "अब देश की बड़ी खबरें।",
-                                    "big": "अंतरराष्ट्रीय" if intl else "राष्ट्रीय",
-                                    "small": "दुनिया की खबरें" if intl else "देश की खबरें",
-                                    "chip": "", "category": "", "parts": [], "section": sec})
+                    withsec.append(
+                        {
+                            "kind": "section",
+                            "text": "अब दुनिया की बड़ी खबरें।" if intl else "अब देश की बड़ी खबरें।",
+                            "big": "अंतरराष्ट्रीय" if intl else "राष्ट्रीय",
+                            "small": "दुनिया की खबरें" if intl else "देश की खबरें",
+                            "chip": "",
+                            "category": "",
+                            "parts": [],
+                            "section": sec,
+                        }
+                    )
                 if b["kind"] == "item":
                     b["section"] = sec
                 withsec.append(b)
@@ -230,6 +319,13 @@ class VideoProducerAgent(BaseAgent):
         # _clean_dash
         # ---- 1. voice (human-like, one pass) ----------------------------------
         style = self.config.tts.news_style if is_news else self.config.tts.knowledge_style
+        if is_news:
+            self.tts.voice = getattr(self.config.tts, "news_voice", "hi-IN-SwaraNeural")
+            self.tts.fallback_voice = getattr(
+                self.config.tts, "fallback_voice", "hi-IN-KavyaNeural"
+            )
+            if self.tts.fallback_voice == "hi-IN-MadhurNeural":
+                self.tts.fallback_voice = "hi-IN-KavyaNeural"
         # Voice is made per small PART (the line each picture belongs to), so every picture changes
         # exactly when its own line starts: no more "voice about X over a photo of Y".
         seg_texts: List[str] = []
@@ -244,7 +340,9 @@ class VideoProducerAgent(BaseAgent):
                 seg_texts.append(b["text"])
                 seg_owner.append((i, 0))
         voice = await self.tts.voice_beats(seg_texts, str(out_dir), style=style)
-        self.tts.dump_timings(seg_texts, voice.durations, voice.provider, str(out_dir / "timings.json"))
+        self.tts.dump_timings(
+            seg_texts, voice.durations, voice.provider, str(out_dir / "timings.json")
+        )
         part_dur: Dict[tuple, float] = {}
         beat_dur = [0.0] * len(beats)
         for (i, k), d in zip(seg_owner, voice.durations):
@@ -252,16 +350,20 @@ class VideoProducerAgent(BaseAgent):
             beat_dur[i] += d
         total_audio = sum(voice.durations)
         tempo = 1.0
-        max_d = vcfg.news_max_duration if is_news else vcfg.max_duration
+        max_d = min(
+            float(vcfg.news_max_duration if is_news else vcfg.max_duration), SHORTS_SAFE_MAX
+        )
         if total_audio > max_d:
-            tempo = min(total_audio / max_d, 1.06)   # never chipmunk the anchor
+            tempo = min(total_audio / max_d, 1.06)  # never chipmunk the anchor
             self.logger.warning("Voice %.1fs > %ss — tempo %.3f", total_audio, max_d, tempo)
 
         # ---- 2. semantic visual sourcing (Wikipedia / Wikimedia / MediaCollector) ----
         specs = []
         for i, b in enumerate(beats):
             for k, p in enumerate(b["parts"]):
-                specs.append({**p, "dest": str(out_dir / f"src_{i:03d}_{k}.jpg"), "_beat": i, "_part": k})
+                specs.append(
+                    {**p, "dest": str(out_dir / f"src_{i:03d}_{k}.jpg"), "_beat": i, "_part": k}
+                )
 
         assets: Dict[tuple, Any] = {}
         unresolved_specs = []
@@ -311,7 +413,9 @@ class VideoProducerAgent(BaseAgent):
 
         # 3. For any remaining specs, query MediaCollector
         if unresolved_specs:
-            found = self.media.find_visuals(unresolved_specs, mode="news" if is_news else "knowledge")
+            found = self.media.find_visuals(
+                unresolved_specs, mode="news" if is_news else "knowledge"
+            )
             for sp, a in zip(unresolved_specs, found):
                 if a and getattr(a, "path", None) and Path(a.path).exists():
                     assets[(sp["_beat"], sp["_part"])] = a
@@ -335,7 +439,11 @@ class VideoProducerAgent(BaseAgent):
                 dest = Path(sp["dest"])
                 sec = sp.get("section") or "national"
                 theme = detect_topic_theme(sp.get("say", "")) or sec
-                search_term = CATEGORY_SEARCH_MAP.get(theme) or CATEGORY_SEARCH_MAP.get(sec) or "Parliament of India building"
+                search_term = (
+                    CATEGORY_SEARCH_MAP.get(theme)
+                    or CATEGORY_SEARCH_MAP.get(sec)
+                    or "Parliament of India building"
+                )
                 real_photo = self.semantic_matcher.search_wikimedia_commons(search_term, dest)
                 if real_photo and Path(real_photo).exists():
                     assets[key] = MediaAsset(
@@ -353,7 +461,9 @@ class VideoProducerAgent(BaseAgent):
             for k in range(n):
                 if not assets.get((i, k)):
                     # Only borrow from other parts of the EXACT SAME beat
-                    same_story = [assets.get((i, j)) for j in range(n) if j != k and assets.get((i, j))]
+                    same_story = [
+                        assets.get((i, j)) for j in range(n) if j != k and assets.get((i, j))
+                    ]
                     if same_story:
                         assets[(i, k)] = same_story[0]
                     else:
@@ -361,12 +471,22 @@ class VideoProducerAgent(BaseAgent):
                         missing += 1
         scored = [a.match for a in assets.values() if a and getattr(a, "match", -1) >= 0]
         avg_match = sum(scored) / len(scored) if scored else -1
-        fig = {"avg_match": round(avg_match, 3), "picture_parts": len(scored), "no_picture_parts": missing}
-        self.logger.info("visual↔voice match: %d pictures, avg %.2f, %d parts without a picture",
-                         len(scored), avg_match, missing)
+        fig = {
+            "avg_match": round(avg_match, 3),
+            "picture_parts": len(scored),
+            "no_picture_parts": missing,
+        }
+        self.logger.info(
+            "visual↔voice match: %d pictures, avg %.2f, %d parts without a picture",
+            len(scored),
+            avg_match,
+            missing,
+        )
         if avg_match >= 0 and avg_match < 0.34:
-            self.logger.warning("pictures are weakly matched to the narration (%.2f) — check the visual prompts",
-                                avg_match)
+            self.logger.warning(
+                "pictures are weakly matched to the narration (%.2f) — check the visual prompts",
+                avg_match,
+            )
 
         # Build and verify frame-accurate timeline with SynchronizationEngine
         sync_engine = SynchronizationEngine(fps=self.renderer.fps)
@@ -379,8 +499,12 @@ class VideoProducerAgent(BaseAgent):
             tail=0.5,
         )
         sync_report = sync_engine.verify_sync(timeline)
-        self.logger.info("Timeline synchronization verified: valid=%s, drift=%.4fs, segments=%d",
-                         sync_report.is_valid, sync_report.drift_seconds, sync_report.segment_count)
+        self.logger.info(
+            "Timeline synchronization verified: valid=%s, drift=%.4fs, segments=%d",
+            sync_report.is_valid,
+            sync_report.drift_seconds,
+            sync_report.segment_count,
+        )
 
         # ---- 3. motion-graphics layers --------------------------------------
         # Editor Director: today's look (different every day, learns from yesterday's review)
@@ -390,7 +514,9 @@ class VideoProducerAgent(BaseAgent):
         composer = SceneComposer(theme, channel_name=self.config.general.channel_name)
         master_timeline = kwargs.get("master_timeline")
         if master_timeline and getattr(master_timeline, "color_grade_filter", None):
-            recipe["grade"] = getattr(master_timeline, "color_grade_filter", "") or recipe.get("grade", "broadcast_crisp")
+            recipe["grade"] = getattr(master_timeline, "color_grade_filter", "") or recipe.get(
+                "grade", "broadcast_crisp"
+            )
         elif vfx_data and vfx_data.get("color_grade"):
             recipe["grade"] = vfx_data["color_grade"]
         elif "grade" not in recipe or not recipe.get("grade"):
@@ -404,7 +530,11 @@ class VideoProducerAgent(BaseAgent):
                 self.renderer.ticker = compose_ticker(composer, str(out_dir / "ticker.png"), heads)
                 ticker_y = self.renderer.ticker_y
         fx_cycle = ["punch", "whip", "flash", "glitch", "light"]
-        default_badge = "आज की बड़ी खबरें" if is_news else CATEGORY_BADGES.get(research.get("day_name", ""), "रोचक जानकारी")
+        default_badge = (
+            "आज की बड़ी खबरें"
+            if is_news
+            else CATEGORY_BADGES.get(research.get("day_name", ""), "रोचक जानकारी")
+        )
         date_label = self._date_label()
         n_items = sum(1 for b in beats if b["kind"] == "item")
         total_clips = len(seg_owner)
@@ -422,13 +552,19 @@ class VideoProducerAgent(BaseAgent):
                 asset = assets.get((i, k))
                 if asset:
                     if asset.source != "ai":
-                        credits.append(asset.credit + (f" — {asset.page_url}" if asset.page_url else ""))
+                        credits.append(
+                            asset.credit + (f" — {asset.page_url}" if asset.page_url else "")
+                        )
                     first_image = first_image or asset.path
                 bg = str(out_dir / f"bg_{i:03d}_{k}.jpg")
                 chip = None
                 if b["kind"] == "hook":
-                    composer.compose_background(asset.path if asset else None, bg, seed=ci,
-                                                card_text="" if asset else hook[:50])
+                    composer.compose_background(
+                        asset.path if asset else None,
+                        bg,
+                        seed=ci,
+                        card_text="" if asset else hook[:50],
+                    )
                     if is_news:
                         frame = self.motion_engine.compose_broadcast_overlay(
                             out_path=str(out_dir / f"ov_{i:03d}_{k}.png"),
@@ -440,23 +576,77 @@ class VideoProducerAgent(BaseAgent):
                             is_hook=True,
                         )
                     else:
-                        big = script.get("title", "")[:60] or (scenes[0].get("on_screen_text", "") if scenes else "")
-                        compose_title_card(composer, bg, big or hook[:40], date_label, asset.path if asset else None, seed=ci)
-                        frame = compose_frame(composer, str(out_dir / f"ov_{i:03d}_{k}.png"), "विशेष", ci, total_clips,
-                                              "", date_label)
+                        big = script.get("title", "")[:60] or (
+                            scenes[0].get("on_screen_text", "") if scenes else ""
+                        )
+                        compose_title_card(
+                            composer,
+                            bg,
+                            big or hook[:40],
+                            date_label,
+                            asset.path if asset else None,
+                            seed=ci,
+                        )
+                        frame = compose_frame(
+                            composer,
+                            str(out_dir / f"ov_{i:03d}_{k}.png"),
+                            "विशेष",
+                            ci,
+                            total_clips,
+                            "",
+                            date_label,
+                        )
                 elif b["kind"] == "section":
-                    nxt = next((assets.get((j, 0)) for j in range(i + 1, len(beats)) if assets.get((j, 0))), None)
-                    compose_title_card(composer, bg, b["big"], b["small"], nxt.path if nxt else first_image, seed=ci)
-                    frame = compose_frame(composer, str(out_dir / f"ov_{i:03d}_{k}.png"), b["big"], ci, total_clips,
-                                          "", date_label)
+                    nxt = next(
+                        (
+                            assets.get((j, 0))
+                            for j in range(i + 1, len(beats))
+                            if assets.get((j, 0))
+                        ),
+                        None,
+                    )
+                    compose_title_card(
+                        composer,
+                        bg,
+                        b["big"],
+                        b["small"],
+                        nxt.path if nxt else first_image,
+                        seed=ci,
+                    )
+                    frame = compose_frame(
+                        composer,
+                        str(out_dir / f"ov_{i:03d}_{k}.png"),
+                        b["big"],
+                        ci,
+                        total_clips,
+                        "",
+                        date_label,
+                    )
                 elif b["kind"] == "outro":
-                    compose_title_card(composer, bg, "लाइक + सब्सक्राइब", self.config.general.channel_name,
-                                       first_image, seed=ci)
-                    frame = compose_frame(composer, str(out_dir / f"ov_{i:03d}_{k}.png"), "सब्सक्राइब", ci, total_clips,
-                                          "", date_label)
+                    compose_title_card(
+                        composer,
+                        bg,
+                        "लाइक + सब्सक्राइब",
+                        self.config.general.channel_name,
+                        first_image,
+                        seed=ci,
+                    )
+                    frame = compose_frame(
+                        composer,
+                        str(out_dir / f"ov_{i:03d}_{k}.png"),
+                        "सब्सक्राइब",
+                        ci,
+                        total_clips,
+                        "",
+                        date_label,
+                    )
                 else:
-                    composer.compose_background(asset.path if asset else None, bg, seed=ci,
-                                                card_text="" if asset else b["chip"])
+                    composer.compose_background(
+                        asset.path if asset else None,
+                        bg,
+                        seed=ci,
+                        card_text="" if asset else b["chip"],
+                    )
                     if asset and asset.source == "ai":
                         _stamp(bg, "सांकेतिक चित्र (AI)")
                     if is_news:
@@ -474,16 +664,33 @@ class VideoProducerAgent(BaseAgent):
                         )
                     else:
                         if vcfg.show_headline_chips and b["chip"] and asset and k == 0:
-                            chip = compose_chip(composer, str(out_dir / f"chip_{i:03d}.png"), b["chip"])
+                            chip = compose_chip(
+                                composer, str(out_dir / f"chip_{i:03d}.png"), b["chip"]
+                            )
                         if is_news and b["kind"] == "item" and b.get("sec_n"):
                             counter = f"{b['sec_n']:02d}/{b['sec_of']}"
                         else:
-                            counter = f"{b['n']:02d}/{n_items}" if (is_news and b["kind"] == "item") else ""
-                        badge = (b.get("category") or default_badge) if b["kind"] not in ("outro", "section") else ""
-                        frame = compose_frame(composer, str(out_dir / f"ov_{i:03d}_{k}.png"), badge, ci, total_clips,
-                                              counter, date_label if not is_news else "",
-                                              ticker_y=ticker_y if b["kind"] == "item" else 0,
-                                              stat=_stat(p.get("say", "")) if b["kind"] == "item" and k > 0 else "")
+                            counter = (
+                                f"{b['n']:02d}/{n_items}"
+                                if (is_news and b["kind"] == "item")
+                                else ""
+                            )
+                        badge = (
+                            (b.get("category") or default_badge)
+                            if b["kind"] not in ("outro", "section")
+                            else ""
+                        )
+                        frame = compose_frame(
+                            composer,
+                            str(out_dir / f"ov_{i:03d}_{k}.png"),
+                            badge,
+                            ci,
+                            total_clips,
+                            counter,
+                            date_label if not is_news else "",
+                            ticker_y=ticker_y if b["kind"] == "item" else 0,
+                            stat=_stat(p.get("say", "")) if b["kind"] == "item" and k > 0 else "",
+                        )
                 if b["kind"] in ("section", "outro"):
                     fx = "dip"
                 elif b["kind"] == "hook":
@@ -493,31 +700,81 @@ class VideoProducerAgent(BaseAgent):
                     scene_key = f"scene_{b.get('n', ci):03d}"
                     sc_vfx = vfx_map.get(scene_key, {})
                     fx = sc_vfx.get("transition_effect") or fx_cycle[b.get("n", ci) % len(fx_cycle)]
-                else:         # next line of the same story: straight cut, like TV news
+                else:  # next line of the same story: straight cut, like TV news
                     fx = "cut"
-                clips.append(SceneClip(bg, frame, pdur, chip=chip, story_start=(k == 0), fx=fx,
-                                       ticker=bool(ticker_y) and b["kind"] == "item",
-                                       video=(asset.video if asset and b["kind"] == "item"
-                                              and getattr(asset, "video", "") else ""),
-                                       depth=bool(asset and b["kind"] == "item" and asset.source != "ai")))
-                clip_meta.append({"beat": i, "part": k, "kind": b["kind"], "bg": bg, "chip": b["chip"],
-                                  "spec": dict(p, _part=k), "asset": asset})
+                clips.append(
+                    SceneClip(
+                        bg,
+                        frame,
+                        pdur,
+                        chip=chip,
+                        story_start=(k == 0),
+                        fx=fx,
+                        ticker=bool(ticker_y) and b["kind"] == "item",
+                        video=(
+                            asset.video
+                            if asset and b["kind"] == "item" and getattr(asset, "video", "")
+                            else ""
+                        ),
+                        depth=bool(asset and b["kind"] == "item" and asset.source != "ai"),
+                    )
+                )
+                clip_meta.append(
+                    {
+                        "beat": i,
+                        "part": k,
+                        "kind": b["kind"],
+                        "bg": bg,
+                        "chip": b["chip"],
+                        "spec": dict(p, _part=k),
+                        "asset": asset,
+                    }
+                )
                 ci += 1
 
         # ---- 4. render ---------------------------------------------------------
         final_path = str(out_dir / "final_short.mp4")
         captions = srt_path = None
+        audio_to_render = voice.audio_path
+
+        # If master_timeline is provided by MasterEditingDirector, adopt its authoritative clips & audio
+        if master_timeline and getattr(master_timeline, "segments", None):
+            try:
+                from agents.master_editing_director.agent import MasterEditingDirectorAgent
+
+                med = MasterEditingDirectorAgent(self.config, self.state_manager)
+                tl_clips, _ = med.build_renderer_clips(master_timeline, out_dir)
+                if tl_clips:
+                    clips = tl_clips
+                    if (
+                        master_timeline.master_audio_path
+                        and Path(master_timeline.master_audio_path).exists()
+                    ):
+                        audio_to_render = master_timeline.master_audio_path
+            except Exception as exc:
+                self.logger.warning(
+                    "Adopting master_timeline clips failed (%s), keeping standard clips", exc
+                )
+
         beat_words = getattr(voice, "beat_words", None) or []
         if getattr(vcfg, "burn_captions", True):
             try:
-                captions, srt_path = self._captions(clips, clip_meta, tempo, out_dir,
-                                                    beat_words=beat_words, seg_owner=seg_owner)
+                captions, srt_path = self._captions(
+                    clips, clip_meta, tempo, out_dir, beat_words=beat_words, seg_owner=seg_owner
+                )
             except Exception as exc:
                 self.logger.warning("captions skipped: %s", exc)
         self._captions_ass = captions
-        self.renderer.render(clips, voice.audio_path, final_path, music=vcfg.background_music,
-                             music_volume=vcfg.music_volume, tempo=tempo, sfx=vcfg.sound_effects,
-                             captions=captions)
+        self.renderer.render(
+            clips,
+            audio_to_render,
+            final_path,
+            music=vcfg.background_music,
+            music_volume=vcfg.music_volume,
+            tempo=tempo,
+            sfx=vcfg.sound_effects,
+            captions=captions,
+        )
 
         try:
             review = editor.review(final_path, recipe, str(out_dir), learn=False)
@@ -525,8 +782,19 @@ class VideoProducerAgent(BaseAgent):
             review = {"score": None, "notes": [str(exc)[:100]], "bad_tiles": []}
         # ---- 5. scene-level re-edit: replace the pictures the editor flagged, render once more ----
         try:
-            final_path, review = self._reedit(editor, recipe, review, clips, clip_meta, composer, voice, vcfg,
-                                              tempo, final_path, out_dir)
+            final_path, review = self._reedit(
+                editor,
+                recipe,
+                review,
+                clips,
+                clip_meta,
+                composer,
+                voice,
+                vcfg,
+                tempo,
+                final_path,
+                out_dir,
+            )
         except Exception as exc:
             self.logger.warning("re-edit skipped: %s", exc)
         try:
@@ -536,7 +804,11 @@ class VideoProducerAgent(BaseAgent):
         duration = probe_duration(final_path)
         qa = _render_qa(final_path)
         self.logger.info("Render QA: %s", qa)
-        ok = Path(final_path).exists() and Path(final_path).stat().st_size > 200_000 and duration >= 10
+        ok = (
+            Path(final_path).exists()
+            and Path(final_path).stat().st_size > 200_000
+            and duration >= 10
+        )
         storage_urls: Dict[str, str] = {}
         try:  # free HF dataset storage (long videos outgrow GitHub artifacts)
             from core.hf_storage import store_from_config
@@ -552,9 +824,11 @@ class VideoProducerAgent(BaseAgent):
                 storage_urls = store.upload_video(
                     video_id=kwargs.get("video_id", out_dir_path.name),
                     files={k: v for k, v in candidates.items() if v and Path(v).exists()},
-                    meta={"title": (script.get("title") or "")[:200],
-                          "duration_sec": round(duration, 1),
-                          "voice_provider": voice.provider},
+                    meta={
+                        "title": (script.get("title") or "")[:200],
+                        "duration_sec": round(duration, 1),
+                        "voice_provider": voice.provider,
+                    },
                 )
                 if storage_urls:
                     self.logger.info("HF storage: %d artefact(s) mirrored", len(storage_urls))
@@ -563,19 +837,44 @@ class VideoProducerAgent(BaseAgent):
 
         return AgentResult(
             success=ok,
-            data={"video_path": final_path, "audio_path": voice.audio_path, "captions_srt": srt_path, "duration": round(duration, 1),
-                  "first_image": first_image, "media_credits": list(dict.fromkeys(credits)),
-                  "voice_provider": voice.provider, "editor_recipe": {k: v for k, v in recipe.items() if k != "notes"},
-                  "editor_review": review, "render_qa": qa, "sync_qa": vars(sync_report), "beats": len(beats), "visual_parts": len(clips),
-                  "images_found": sum(1 for a in assets.values() if a),
-                  "ai_images": sum(1 for a in assets.values() if a and a.source == "ai"),
-                  "visual_match": fig, "storage_urls": storage_urls},
+            data={
+                "video_path": final_path,
+                "audio_path": voice.audio_path,
+                "captions_srt": srt_path,
+                "duration": round(duration, 1),
+                "first_image": first_image,
+                "media_credits": list(dict.fromkeys(credits)),
+                "voice_provider": voice.provider,
+                "editor_recipe": {k: v for k, v in recipe.items() if k != "notes"},
+                "editor_review": review,
+                "render_qa": qa,
+                "sync_qa": vars(sync_report),
+                "beats": len(beats),
+                "visual_parts": len(clips),
+                "images_found": sum(1 for a in assets.values() if a),
+                "ai_images": sum(1 for a in assets.values() if a and a.source == "ai"),
+                "visual_match": fig,
+                "storage_urls": storage_urls,
+            },
             errors=[] if ok else ["rendered video missing or too small"],
         )
 
-    def _reedit(self, editor, recipe, review, clips, clip_meta, composer, voice, vcfg, tempo, final_path, out_dir):
+    def _reedit(
+        self,
+        editor,
+        recipe,
+        review,
+        clips,
+        clip_meta,
+        composer,
+        voice,
+        vcfg,
+        tempo,
+        final_path,
+        out_dir,
+    ):
         score, bad = review.get("score"), review.get("bad_tiles") or []
-        if not score or score >= 8.5 or not bad:   # reviewer bar: 8.5/10
+        if not score or score >= 8.5 or not bad:  # reviewer bar: 8.5/10
             return final_path, review
         starts, t = [], 0.0
         for c in clips:
@@ -598,11 +897,16 @@ class VideoProducerAgent(BaseAgent):
             dest = Path(out_dir) / f"fix_{idx:03d}.jpg"
             old_src = getattr(m["asset"], "path", "")
             alt = None
-            for fn in (lambda: spec.get("news_query") and self.media._news_photo(spec["news_query"], dest,
-                                                                                int(spec.get("_part", 0)) + 3,
-                                                                                cycle=False),
-                       lambda: spec.get("entity") and self.media._wikipedia_exact(spec["entity"], dest),
-                       lambda: self.media._cloudflare(spec.get("visual") or spec.get("search", ""), dest, "news")):
+            for fn in (
+                lambda: spec.get("news_query")
+                and self.media._news_photo(
+                    spec["news_query"], dest, int(spec.get("_part", 0)) + 3, cycle=False
+                ),
+                lambda: spec.get("entity") and self.media._wikipedia_exact(spec["entity"], dest),
+                lambda: self.media._cloudflare(
+                    spec.get("visual") or spec.get("search", ""), dest, "news"
+                ),
+            ):
                 try:
                     alt = fn()
                 except Exception:
@@ -620,9 +924,16 @@ class VideoProducerAgent(BaseAgent):
             return final_path, review
         self.logger.info("Re-edit: replaced %d flagged pictures, rendering again", replaced)
         second = str(Path(out_dir) / "final_short_v2.mp4")
-        self.renderer.render(clips, voice.audio_path, second, music=vcfg.background_music,
-                             music_volume=vcfg.music_volume, tempo=tempo, sfx=vcfg.sound_effects,
-                             captions=getattr(self, "_captions_ass", None))
+        self.renderer.render(
+            clips,
+            voice.audio_path,
+            second,
+            music=vcfg.background_music,
+            music_volume=vcfg.music_volume,
+            tempo=tempo,
+            sfx=vcfg.sound_effects,
+            captions=getattr(self, "_captions_ass", None),
+        )
         if not Path(second).exists():
             return final_path, review
         review2 = editor.review(second, recipe, str(out_dir), learn=False)
@@ -636,8 +947,11 @@ class VideoProducerAgent(BaseAgent):
         """Word-synced Hindi captions aligned to real TTS WordBoundary timings when available."""
         from video.subtitle_generator import SubtitleGenerator
         from video.renderer import quantize_durations
+
         scale = 1.0 / (tempo or 1.0)
-        q_durs = quantize_durations([c.duration * scale for c in clips], fps=self.renderer.fps, tail=0.0)
+        q_durs = quantize_durations(
+            [c.duration * scale for c in clips], fps=self.renderer.fps, tail=0.0
+        )
         owner_words = {}
         if beat_words and seg_owner and len(beat_words) == len(seg_owner):
             for own, bw in zip(seg_owner, beat_words):
@@ -653,7 +967,9 @@ class VideoProducerAgent(BaseAgent):
                     wscale = min(qd * 0.95 / orig_span, scale * 1.15) if orig_span > qd else scale
                     for w in real_bw:
                         st = round(t + max(0.0, (w.start - base0) * wscale), 3)
-                        en = round(min(t + qd - 0.02, max(st + 0.04, t + (w.end - base0) * wscale)), 3)
+                        en = round(
+                            min(t + qd - 0.02, max(st + 0.04, t + (w.end - base0) * wscale)), 3
+                        )
                         words.append({"word": w.word, "start": st, "end": en})
                 else:
                     say = (m["spec"].get("say") or "").strip()
@@ -665,19 +981,28 @@ class VideoProducerAgent(BaseAgent):
                         cur = t + lead
                         for w, wt in zip(toks, weights):
                             d = span * wt / tot
-                            words.append({"word": w, "start": round(cur, 3), "end": round(cur + d, 3)})
+                            words.append(
+                                {"word": w, "start": round(cur, 3), "end": round(cur + d, 3)}
+                            )
                             cur += d
             t += qd
         if not words:
             return None, None
         gen = SubtitleGenerator()
-        ass = gen.generate_ass(words, str(Path(out_dir) / "captions.ass"), highlight_color="#FFD60A",
-                               font_size=112, margin_v=730)
+        ass = gen.generate_ass(
+            words,
+            str(Path(out_dir) / "captions.ass"),
+            highlight_color="#FFD60A",
+            font_size=112,
+            margin_v=730,
+        )
         srt = gen.generate_srt_from_words(words, str(Path(out_dir) / "captions.srt"))
         return ass, srt
 
 
-_NUM = re.compile(r"(₹\s?[\d,.]+\s?(?:करोड़|लाख|हज़ार|हजार)?|[\d,.]+\s?(?:%|प्रतिशत|करोड़|लाख|हज़ार|हजार|किलो|किमी|मीटर|डॉलर|रुपये|साल|लोगों|लोग))")
+_NUM = re.compile(
+    r"(₹\s?[\d,.]+\s?(?:करोड़|लाख|हज़ार|हजार)?|[\d,.]+\s?(?:%|प्रतिशत|करोड़|लाख|हज़ार|हजार|किलो|किमी|मीटर|डॉलर|रुपये|साल|लोगों|लोग))"
+)
 
 
 def _stat(text: str) -> str:
@@ -692,14 +1017,34 @@ def _stat(text: str) -> str:
 def _render_qa(path: str) -> dict:
     """Post-render self-check (like a QC desk): black frames and dead air in the final MP4."""
     import subprocess
+
     out = {"black_s": 0.0, "silence_s": 0.0}
     try:
-        r = subprocess.run(["ffmpeg", "-hide_banner", "-i", path, "-vf", "blackdetect=d=0.4:pix_th=0.08",
-                            "-af", "silencedetect=n=-45dB:d=1.2", "-f", "null", "-"],
-                           capture_output=True, text=True, timeout=300)
+        r = subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-i",
+                path,
+                "-vf",
+                "blackdetect=d=0.4:pix_th=0.08",
+                "-af",
+                "silencedetect=n=-45dB:d=1.2",
+                "-f",
+                "null",
+                "-",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
         log = r.stderr
-        out["black_s"] = round(sum(float(x) for x in re.findall(r"black_duration:([\d.]+)", log)), 2)
-        out["silence_s"] = round(sum(float(x) for x in re.findall(r"silence_duration: ([\d.]+)", log)), 2)
+        out["black_s"] = round(
+            sum(float(x) for x in re.findall(r"black_duration:([\d.]+)", log)), 2
+        )
+        out["silence_s"] = round(
+            sum(float(x) for x in re.findall(r"silence_duration: ([\d.]+)", log)), 2
+        )
     except Exception as exc:
         out["error"] = str(exc)[:80]
     return out

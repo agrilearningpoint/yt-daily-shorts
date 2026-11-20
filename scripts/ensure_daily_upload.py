@@ -6,6 +6,7 @@ Run with shell credentials provider github-pat. Prints one status line:
   DISPATCHED          started a new live run
   FAILED_DISPATCH ... could not start a run
 """
+
 import datetime as dt
 import json
 import os
@@ -50,7 +51,9 @@ def main():
     today = dt.datetime.now(IST).date()
     runs = get(f"{API}/actions/workflows/daily_shorts.yml/runs?per_page=15")["workflow_runs"]
     for r in runs:
-        created = dt.datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")).astimezone(IST).date()
+        created = (
+            dt.datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")).astimezone(IST).date()
+        )
         if created != today or (r.get("display_title") or "").startswith("dry-run"):
             continue
         if r["status"] != "completed":
@@ -65,9 +68,15 @@ def main():
             if re.search(r"already uploaded|duplicate", log, re.I):
                 print("DONE (duplicate guard: today's video already on channel)")
                 return
-    body = json.dumps({"ref": "main", "inputs": {"video_type": "news", "dry_run": "false"}}).encode()
-    req = urllib.request.Request(f"{API}/actions/workflows/daily_shorts.yml/dispatches", data=body, method="POST",
-                                 headers=_gh_headers({"Content-Type": "application/json"}))
+    body = json.dumps(
+        {"ref": "main", "inputs": {"video_type": "news", "dry_run": "false"}}
+    ).encode()
+    req = urllib.request.Request(
+        f"{API}/actions/workflows/daily_shorts.yml/dispatches",
+        data=body,
+        method="POST",
+        headers=_gh_headers({"Content-Type": "application/json"}),
+    )
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             print("DISPATCHED" if r.status == 204 else f"FAILED_DISPATCH {r.status}")

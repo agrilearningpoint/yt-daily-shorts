@@ -11,6 +11,7 @@ classes defined in ``core.self_improve``, and writes:
 Run it after every production run (the orchestrator already calls it) or by hand:
 ``python -m agents.error_analyst``.
 """
+
 from __future__ import annotations
 
 import json
@@ -41,16 +42,25 @@ class ErrorAnalystAgent(BaseAgent):
                 st_raw = getattr(v, "state", "")
                 st_val = getattr(st_raw, "value", st_raw)
                 if str(st_val).lower() == "failed" and getattr(v, "error_message", ""):
-                    rows.append({"video_id": getattr(v, "video_id", ""),
-                                 "error": str(v.error_message)[:400],
-                                 "type": getattr(v, "video_type", "")})
+                    rows.append(
+                        {
+                            "video_id": getattr(v, "video_id", ""),
+                            "error": str(v.error_message)[:400],
+                            "type": getattr(v, "video_type", ""),
+                        }
+                    )
         except Exception as exc:
             logger.debug("state query unavailable: %s", exc)
         # long-form runs never touch the state DB, so the metrics log is the other half
         for r in load_metrics(120):
             if not r.get("ok") and r.get("error"):
-                rows.append({"video_id": r.get("kind", "?"), "error": str(r["error"])[:400],
-                             "type": r.get("kind", "")})
+                rows.append(
+                    {
+                        "video_id": r.get("kind", "?"),
+                        "error": str(r["error"])[:400],
+                        "type": r.get("kind", ""),
+                    }
+                )
         return rows
 
     # ----------------------------------------------------------------- execute
@@ -66,31 +76,39 @@ class ErrorAnalystAgent(BaseAgent):
         for name, count in classes.most_common():
             fix = ERROR_CLASSES.get(name, {}).get("fix", "")
             example = next((f["error"] for f in failed if classify_error(f["error"]) == name), "")
-            lessons.append({"class": name, "count": str(count), "fix": fix,
-                            "example": example[:200]})
+            lessons.append(
+                {"class": name, "count": str(count), "fix": fix, "example": example[:200]}
+            )
             logger.info("failure class %-16s x%-3d %s", name, count, fix[:60])
 
         DATA.mkdir(exist_ok=True)
-        (DATA / "lessons.json").write_text(json.dumps(lessons, ensure_ascii=False, indent=2),
-                                           encoding="utf-8")
+        (DATA / "lessons.json").write_text(
+            json.dumps(lessons, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         text = report()
         (DATA / "improvements.md").write_text(text + "\n", encoding="utf-8")
 
         fragment = ""
         if lessons:
             top = lessons[:3]
-            fragment = ("AVOID REPEATING THESE PIPELINE FAILURES: "
-                        + "; ".join(f"{l['class']} ({l['count']}x)" for l in top) + ".")
-        return AgentResult(success=True, data={
-            "failed_runs": len(failed),
-            "classes": dict(classes),
-            "lessons": lessons[:8],
-            "prompt_fragment": fragment,
-            "report_path": str(DATA / "improvements.md"),
-        })
+            fragment = (
+                "AVOID REPEATING THESE PIPELINE FAILURES: "
+                + "; ".join(f"{item['class']} ({item['count']}x)" for item in top)
+                + "."
+            )
+        return AgentResult(
+            success=True,
+            data={
+                "failed_runs": len(failed),
+                "classes": dict(classes),
+                "lessons": lessons[:8],
+                "prompt_fragment": fragment,
+                "report_path": str(DATA / "improvements.md"),
+            },
+        )
 
 
-def main() -> int:      # convenience CLI
+def main() -> int:  # convenience CLI
     import asyncio
     from core.configuration import load_config
     from core.state_manager import StateManager

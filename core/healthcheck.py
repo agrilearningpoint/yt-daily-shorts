@@ -7,6 +7,7 @@ of success and speaks up.
 
 Exit code 0 = healthy, 1 = degraded (so a workflow step can fail loudly).
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,7 +18,7 @@ from typing import List, Optional, Tuple
 
 logger = logging.getLogger("core.healthcheck")
 
-MAX_AGE_HOURS = 30.0       # a daily channel must have produced something in this window
+MAX_AGE_HOURS = 30.0  # a daily channel must have produced something in this window
 
 
 def _last_success(state_db: Path) -> Optional[datetime]:
@@ -25,6 +26,7 @@ def _last_success(state_db: Path) -> Optional[datetime]:
         return None
     try:
         import sqlite3
+
         con = sqlite3.connect(f"file:{state_db.resolve()}?mode=ro", uri=True)
         cur = con.cursor()
         cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -49,7 +51,9 @@ def _last_success(state_db: Path) -> Optional[datetime]:
                 for col in ("completed_at", "updated_at", "created_at", "timestamp"):
                     if col in cols:
                         try:
-                            cur.execute(f"SELECT {col} FROM {t} WHERE {col} IS NOT NULL ORDER BY {col} DESC LIMIT 1")
+                            cur.execute(
+                                f"SELECT {col} FROM {t} WHERE {col} IS NOT NULL ORDER BY {col} DESC LIMIT 1"
+                            )
                             row = cur.fetchone()
                             if row and row[0]:
                                 stamps.append(str(row[0]))
@@ -101,13 +105,15 @@ def check(state_db: str = "data/yt_shorts.db") -> Tuple[bool, List[str]]:
         age = (now_utc - ref).total_seconds() / 3600.0
         if age > MAX_AGE_HOURS:
             healthy = False
-            findings.append(f"🚨 pichla successful run {age:.0f} घंटे पहले tha (limit {MAX_AGE_HOURS:.0f}h)")
+            findings.append(
+                f"🚨 pichla successful run {age:.0f} घंटे पहले tha (limit {MAX_AGE_HOURS:.0f}h)"
+            )
 
     m_age = _metrics_age_hours()
     if m_age is not None and m_age > MAX_AGE_HOURS:
         findings.append(f"⚠️ metrics.jsonl {m_age:.0f}h se update nahi hua")
 
-    try:                          # disk safety for a runner that also caches models
+    try:  # disk safety for a runner that also caches models
         usage = __import__("shutil").disk_usage(".")
         free_gb = usage.free / 1e9
         if free_gb < 3:
@@ -119,6 +125,7 @@ def check(state_db: str = "data/yt_shorts.db") -> Tuple[bool, List[str]]:
     # LLM quota snapshot: how much of the free pool is left today
     try:
         from core.self_improve import load_metrics
+
         rows = load_metrics(20)
         quota_hits = sum(1 for r in rows if "llm_quota" in (r.get("classes") or []))
         if quota_hits:
@@ -135,15 +142,18 @@ def notify(findings: List[str]) -> None:
     try:
         from core.configuration import load_config
         from telegram.bot import TelegramNotifier
+
         cfg = load_config()
         TelegramNotifier(cfg.telegram.bot_token, cfg.telegram.chat_id).send_message(
-            "🩺 <b>Healthcheck</b>\n" + "\n".join(findings))
+            "🩺 <b>Healthcheck</b>\n" + "\n".join(findings)
+        )
     except Exception as exc:
         logger.warning("healthcheck notify skipped: %s", exc)
 
 
 if __name__ == "__main__":
     import sys
+
     ok, f = check()
     print("\n".join(f))
     if "--notify" in sys.argv:

@@ -8,7 +8,7 @@ mandatory attribution disclaimers.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from agents.base_agent import AgentResult, BaseAgent
 from core.agent_contracts import (
@@ -31,7 +31,12 @@ class RightsAttributionAgent(BaseAgent):
 
     def validate_input(self, **kwargs: Any) -> bool:
         """Ensure manifest or rights_record is provided."""
-        return bool(kwargs.get("manifest") or kwargs.get("rights_record") or kwargs.get("source_uri"))
+        return bool(
+            kwargs.get("manifest")
+            or kwargs.get("source_manifest")
+            or kwargs.get("rights_record")
+            or kwargs.get("source_uri")
+        )
 
     async def execute(self, **kwargs: Any) -> AgentResult:
         """Execute copyright and fair use risk evaluation."""
@@ -52,12 +57,25 @@ class RightsAttributionAgent(BaseAgent):
                 rights_record = MediaRightsRecord(**raw_rec)
         # 2. Evaluate from manifest and clips
         else:
-            manifest: Optional[SourceVideoManifest] = kwargs.get("manifest")
-            clips: List[SelectedClip] = kwargs.get("selected_clips", [])
+            raw_manifest = kwargs.get("manifest") or kwargs.get("source_manifest")
+            if isinstance(raw_manifest, dict):
+                try:
+                    manifest = SourceVideoManifest(**raw_manifest)
+                except Exception:
+                    manifest = None
+            else:
+                manifest = raw_manifest
+
+            moments_data = kwargs.get("selected_moments") or {}
+            clips: List[SelectedClip] = kwargs.get("selected_clips") or (
+                moments_data.get("selected_clips", []) if isinstance(moments_data, dict) else []
+            )
             script: Optional[AdaptedShortScript] = kwargs.get("adapted_script")
             rights_record = self._evaluate_rights(manifest, clips, script)
 
-        review_required = rights_record.risk_level in ("medium", "high") or rights_record.replacement_recommended
+        review_required = (
+            rights_record.risk_level in ("medium", "high") or rights_record.replacement_recommended
+        )
 
         result_data = {
             "rights_record": rights_record,
@@ -94,7 +112,9 @@ class RightsAttributionAgent(BaseAgent):
         explicit licensing review.
         """
         source_uri = manifest.source_uri if manifest else "unknown"
-        author = (manifest.author if manifest else "") or (manifest.title if manifest else "Unknown Broadcaster")
+        author = (manifest.author if manifest else "") or (
+            manifest.title if manifest else "Unknown Broadcaster"
+        )
         declared_license = (manifest.license if manifest else "unknown") or "unknown"
         warnings: List[str] = []
 
@@ -125,7 +145,9 @@ class RightsAttributionAgent(BaseAgent):
                 risk_level = "medium"
                 fair_use_score = 0.70
                 replacement_recommended = False
-                warnings.append("Clip duration 4-8s; requires prominent transformative commentary and visible source attribution.")
+                warnings.append(
+                    "Clip duration 4-8s; requires prominent transformative commentary and visible source attribution."
+                )
             else:
                 risk_level = "medium"  # Never 'low' for proprietary third-party commercial news
                 fair_use_score = 0.75

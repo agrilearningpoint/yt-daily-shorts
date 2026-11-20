@@ -7,7 +7,6 @@ with strict priority for authentic event media and comprehensive license provena
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -22,13 +21,13 @@ from video.semantic_matcher import extract_entity_from_hindi
 def calculate_keyword_match(text: str, labels: str) -> float:
     """Calculate lexical keyword overlap score between narration and asset labels."""
     import re
+
     t_words = set(re.findall(r"\w+", text.lower()))
     l_words = set(re.findall(r"\w+", labels.lower()))
     if not t_words or not l_words:
         return 0.50
     intersect = t_words.intersection(l_words)
     return min(1.0, max(0.20, len(intersect) / max(1, min(len(t_words), len(l_words)))))
-
 
 
 class NewsVisualSourcingAgent(BaseAgent):
@@ -66,8 +65,12 @@ class NewsVisualSourcingAgent(BaseAgent):
         script = kwargs.get("script", {})
         scenes = kwargs.get("scenes") or script.get("scenes", [])
         stories = kwargs.get("stories", [])
-        research = kwargs.get("research_data", {})
-        research_items = research.get("items", [])
+        research = kwargs.get("research_data", {}) or {}
+        research_items = kwargs.get("research_items") or (
+            research.get("items", []) if isinstance(research, dict) else []
+        )
+        out_dir = Path(kwargs.get("out_dir", f"output/{video_id}/visuals"))
+        out_dir.mkdir(parents=True, exist_ok=True)
 
         assets_by_scene: Dict[str, NewsVisualAsset] = {}
         all_candidates: List[NewsVisualAsset] = []
@@ -77,18 +80,31 @@ class NewsVisualSourcingAgent(BaseAgent):
             scene_id = f"scene_{idx:03d}"
             say_text = sc.get("narration") or sc.get("narration_hi") or sc.get("text", "")
             query = sc.get("visual_keywords") or sc.get("visual_query") or sc.get("image_query", "")
-            entity = sc.get("entity") or extract_entity_from_hindi(say_text) or extract_entity_from_hindi(query)
+            entity = (
+                sc.get("entity")
+                or extract_entity_from_hindi(say_text)
+                or extract_entity_from_hindi(query)
+            )
 
             # Try to match research item for authentic publisher photo
-            matching_item = next((it for it in research_items if entity and entity.lower() in str(it.get("title", "")).lower()), None)
+            matching_item = next(
+                (
+                    it
+                    for it in research_items
+                    if entity and entity.lower() in str(it.get("title", "")).lower()
+                ),
+                None,
+            )
             if not matching_item and idx < len(research_items):
                 matching_item = research_items[idx]
 
+            dest_file = out_dir / f"{scene_id}.jpg"
             asset = self._source_scene_visual(
                 scene_id=scene_id,
                 query=query,
                 entity=entity,
                 say_text=say_text,
+                dest_path=dest_file,
                 research_item=matching_item,
                 prefer_video=bool(idx % 4 == 1),  # B-roll preference for dynamic edits
             )
@@ -104,11 +120,13 @@ class NewsVisualSourcingAgent(BaseAgent):
             s_entities = getattr(st, "entities", [])
             ent = s_entities[0] if s_entities else extract_entity_from_hindi(s_title)
 
+            dest_file = out_dir / f"{s_id}.jpg"
             asset = self._source_scene_visual(
                 scene_id=s_id,
                 query=s_title,
                 entity=ent,
                 say_text=s_title,
+                dest_path=dest_file,
                 research_item=None,
             )
             if asset:
@@ -118,7 +136,9 @@ class NewsVisualSourcingAgent(BaseAgent):
             "visual_assets": assets_by_scene,
             "candidate_pool": all_candidates,
             "total_sourced": len(assets_by_scene),
-            "authentic_events_count": sum(1 for a in assets_by_scene.values() if a.actual_event_or_stock == "actual_event"),
+            "authentic_events_count": sum(
+                1 for a in assets_by_scene.values() if a.actual_event_or_stock == "actual_event"
+            ),
         }
 
         agent_res = AgentResult(
@@ -135,6 +155,7 @@ class NewsVisualSourcingAgent(BaseAgent):
         query: str,
         entity: str,
         say_text: str,
+        dest_path: Path,
         research_item: Optional[Dict[str, Any]] = None,
         prefer_video: bool = False,
     ) -> Optional[NewsVisualAsset]:
@@ -148,35 +169,51 @@ class NewsVisualSourcingAgent(BaseAgent):
         if research_item and (research_item.get("image_url") or research_item.get("source_url")):
             try:
                 img_url = research_item.get("image_url") or research_item.get("source_url")
-                media_asset = self.collector.article_image(img_url)
+                media_asset = self.collector.article_image(img_url, dest_path)
                 if media_asset:
                     actual_or_stock = "actual_event"
                     source_provider = media_asset.source or "publisher_news"
             except Exception as exc:
-                self.logger.warning("Publisher image lookup failed (%s). Continuing hierarchy.", exc)
+                self.logger.warning(
+                    "Publisher image lookup failed (%s). Continuing hierarchy.", exc
+                )
 
         # Priority 2: Stock or Sourced photography / visuals via Collector
         if not media_asset:
             try:
+                pref_url = research_item.get("image_url", "") if research_item else ""
+                art_url = research_item.get("source_url", "") if research_item else ""
                 media_asset = self.collector.find_image(
-                    effective_query,
-                    orientation="portrait",
-                    entity=entity,
-                    allow_ai=False,
+                    keywords=effective_query,
+                    dest_path=str(dest_path),
+                    preferred_url=pref_url,
+                    entity=entity or "",
+                    article_url=art_url,
                 )
                 if media_asset:
                     actual_or_stock = "stock"
                     source_provider = media_asset.source or "stock_photo"
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug("find_image lookup error: %s", exc)
+
+        # Priority 2b: B-roll Video if preferred and image not found
+        if prefer_video and not media_asset:
+            try:
+                spec = {"say": say_text, "search": effective_query, "entity": entity, "video": True}
+                media_asset = self.collector.find_visual(
+                    spec, dest_path=str(dest_path), mode="news"
+                )
+                if media_asset:
+                    source_provider = media_asset.source or "video_stock"
+            except Exception as exc:
+                self.logger.debug("find_visual video failed: %s", exc)
 
         # If nothing found, synthesize local placeholder image so pipeline never halts
         if not media_asset:
-            local_fallback = Path(self.collector.cache_dir) / f"fallback_{abs(hash(effective_query)) % 10000}.jpg"
-            if not local_fallback.exists():
-                self._create_solid_fallback(local_fallback, entity or effective_query[:30])
+            if not dest_path.exists():
+                self._create_solid_fallback(dest_path, entity or effective_query[:30])
             media_asset = MediaAsset(
-                path=str(local_fallback),
+                path=str(dest_path),
                 source="designed_graphic",
                 credit="BHARAT KI SOCH Graphics",
                 labels=effective_query,
@@ -188,6 +225,26 @@ class NewsVisualSourcingAgent(BaseAgent):
         match_score = calculate_keyword_match(say_text, media_asset.labels or effective_query)
         is_ai = media_asset.source == "ai"
 
+        # Determine real license provenance
+        if media_asset.source == "publisher":
+            license_name = "News Publisher Editorial Media (Reporting of Current Events)"
+            license_url = research_item.get("source_url", "") if research_item else ""
+        elif "wikimedia" in source_provider or media_asset.source == "wikipedia":
+            license_name = "Creative Commons Attribution-ShareAlike (CC BY-SA)"
+            license_url = "https://creativecommons.org/licenses/by-sa/4.0/"
+        elif "pexels" in source_provider:
+            license_name = "Pexels Free Commercial License"
+            license_url = "https://www.pexels.com/license/"
+        elif "pixabay" in source_provider:
+            license_name = "Pixabay Content License"
+            license_url = "https://pixabay.com/service/license-summary/"
+        elif media_asset.source == "ai":
+            license_name = "AI Generated Visual"
+            license_url = ""
+        else:
+            license_name = "Original Broadcast Graphic"
+            license_url = ""
+
         return NewsVisualAsset(
             asset_id=f"vis_{scene_id}",
             story_id=scene_id,
@@ -197,8 +254,8 @@ class NewsVisualSourcingAgent(BaseAgent):
             original_source_url=getattr(media_asset, "page_url", ""),
             source_page_url=getattr(media_asset, "page_url", ""),
             creator=media_asset.credit,
-            license_name="CC / Editorial License" if actual_or_stock == "actual_event" else "Stock License",
-            license_url="https://creativecommons.org" if "wikimedia" in source_provider else "",
+            license_name=license_name,
+            license_url=license_url,
             attribution_required=bool(media_asset.credit),
             attribution_text=media_asset.credit,
             event_match_score=round(match_score, 2),
@@ -213,6 +270,7 @@ class NewsVisualSourcingAgent(BaseAgent):
     def _create_solid_fallback(self, path: Path, label: str) -> None:
         """Create high-contrast broadcast news graphic card."""
         from PIL import Image, ImageDraw
+
         img = Image.new("RGB", (1080, 1920), color=(18, 22, 34))
         draw = ImageDraw.Draw(img)
         draw.rectangle([(40, 40), (1040, 1880)], outline=(220, 50, 40), width=6)

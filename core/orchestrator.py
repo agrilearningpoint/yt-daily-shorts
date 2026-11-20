@@ -40,7 +40,6 @@ from agents.visual_audio_match_qa import VisualAudioMatchQAAgent
 from core.configuration import AppConfig
 from core.history import HistoryStore
 from core.llm_client import build_llm
-from core.production_context import ProductionContext
 from core.state_manager import PipelineState, StateManager, VideoState
 from telegram.bot import TelegramNotifier, esc
 from telegram.reports import TelegramReportBuilder
@@ -57,17 +56,21 @@ class StageError(RuntimeError):
 
 @dataclass
 class VideoTask:
-    video_type: str          # "news" | "knowledge"
+    video_type: str  # "news" | "knowledge"
     topic_category: str
-    scheduled_time: str      # HH:MM IST
+    scheduled_time: str  # HH:MM IST
     priority: int = 1
     day_name: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class DailyOrchestrator:
-    def __init__(self, config: AppConfig, state_manager: Optional[StateManager] = None,
-                 history: Optional[HistoryStore] = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        state_manager: Optional[StateManager] = None,
+        history: Optional[HistoryStore] = None,
+    ) -> None:
         self.config = config
         self.state = state_manager or StateManager(config.database.sqlite_path)
         self.history = history or HistoryStore(config.database.history_path)
@@ -75,7 +78,9 @@ class DailyOrchestrator:
         self.llm = build_llm(config.llm, allow_mock=not config.general.strict_mode)
 
         self.daily_opening_agent = DailyOpeningDirectorAgent(config, self.state)
-        self.research_agent = ResearchManagerAgent(config, self.state, history=self.history, llm=self.llm)
+        self.research_agent = ResearchManagerAgent(
+            config, self.state, history=self.history, llm=self.llm
+        )
         self.prompt_agent = PromptEngineerAgent(config, self.state)
         self.script_agent = ScriptManagerAgent(config, self.state, llm=self.llm)
         self.verifier_agent = FactVerifierAgent(config, self.state, llm=self.llm)
@@ -120,15 +125,24 @@ class DailyOrchestrator:
 
     def _preflight(self) -> None:
         if self.config.general.strict_mode and not self.llm.candidates:
-            raise StageError("preflight", "No LLM API key available — refusing to publish placeholder content.")
+            raise StageError(
+                "preflight", "No LLM API key available — refusing to publish placeholder content."
+            )
 
-    async def _stage(self, video_id: str, stage: str, coro_factory, require_success: bool = True) -> Dict[str, Any]:
+    async def _stage(
+        self, video_id: str, stage: str, coro_factory, require_success: bool = True
+    ) -> Dict[str, Any]:
         cached = self.state.load_checkpoint(video_id, stage)
         if cached:
             return cached
         result = await coro_factory()
-        self.state.log_agent(stage, "execute", video_id, result.data if isinstance(result.data, dict) else {},
-                             "; ".join(result.errors))
+        self.state.log_agent(
+            stage,
+            "execute",
+            video_id,
+            result.data if isinstance(result.data, dict) else {},
+            "; ".join(result.errors),
+        )
         if require_success and not result.success:
             raise StageError(stage, "; ".join(result.errors) or f"{stage} failed")
         self.state.save_checkpoint(video_id, stage, result.data)
@@ -139,7 +153,9 @@ class DailyOrchestrator:
         if video_id and self.state.get_video_state(video_id):
             vs = self.state.get_video_state(video_id)
         else:
-            vs = self.state.create_video_state(video_type=task.video_type, topic_category=task.topic_category)
+            vs = self.state.create_video_state(
+                video_type=task.video_type, topic_category=task.topic_category
+            )
         vid = vs.video_id
         logger.info("🎬 Pipeline %s [%s — %s]", vid, task.video_type, task.topic_category)
         try:
@@ -148,142 +164,303 @@ class DailyOrchestrator:
             self.state.update_state(vid, state=PipelineState.RESEARCHING)
             opening_brief = None
             if task.video_type == "news":
-                opening_res = await self._stage(vid, "daily_opening", lambda: self.daily_opening_agent.execute(), require_success=False)
+                opening_res = await self._stage(
+                    vid,
+                    "daily_opening",
+                    lambda: self.daily_opening_agent.execute(),
+                    require_success=False,
+                )
                 if opening_res:
                     opening_brief = opening_res.get("opening_brief")
 
-            research = await self._stage(vid, "research", lambda: self.research_agent.execute(
-                video_type=task.video_type, topic_category=task.topic_category, day_name=task.day_name))
+            research = await self._stage(
+                vid,
+                "research",
+                lambda: self.research_agent.execute(
+                    video_type=task.video_type,
+                    topic_category=task.topic_category,
+                    day_name=task.day_name,
+                ),
+            )
 
             learning = await self.learning_agent.execute(video_type=task.video_type)
-            prompt = await self._stage(vid, "prompt_engineering", lambda: self.prompt_agent.execute(
-                video_type=task.video_type, research_data=research, topic_category=task.topic_category))
+            prompt = await self._stage(
+                vid,
+                "prompt_engineering",
+                lambda: self.prompt_agent.execute(
+                    video_type=task.video_type,
+                    research_data=research,
+                    topic_category=task.topic_category,
+                ),
+            )
             prompt_text = prompt.get("prompt", "")
             if learning.data.get("style_notes"):
                 prompt_text += "\n\n" + learning.data["style_notes"]
 
             self.state.update_state(vid, state=PipelineState.SCRIPTING)
-            script_data = await self._stage(vid, "script_generation", lambda: self.script_agent.execute(
-                video_type=task.video_type, research_data=research, prompt_instructions=prompt_text,
-                min_words=prompt.get("min_words", 110), max_words=prompt.get("max_words", 135),
-                targets=prompt.get("targets")))
+            script_data = await self._stage(
+                vid,
+                "script_generation",
+                lambda: self.script_agent.execute(
+                    video_type=task.video_type,
+                    research_data=research,
+                    prompt_instructions=prompt_text,
+                    min_words=prompt.get("min_words", 110),
+                    max_words=prompt.get("max_words", 135),
+                    targets=prompt.get("targets"),
+                ),
+            )
             script = script_data.get("script", script_data)
             llm_used = script_data.get("llm", "")
 
             # Hook Director: Evaluate viral archetypes & enforce visual pairing contract
-            hook_res = await self._stage(vid, "hook_director", lambda: self.hook_agent.execute(
-                research_data=research, script=script, video_type=task.video_type), require_success=False)
+            hook_res = await self._stage(
+                vid,
+                "hook_director",
+                lambda: self.hook_agent.execute(
+                    research_data=research, script=script, video_type=task.video_type
+                ),
+                require_success=False,
+            )
             if hook_res and hook_res.get("approved_hook"):
                 app_h = hook_res["approved_hook"]
                 if app_h.get("text"):
                     script["hook"] = app_h["text"]
 
-            self.state.update_state(vid, state=PipelineState.VERIFYING, title=script.get("title", ""))
-            verification = await self._stage(vid, "fact_verification", lambda: self.verifier_agent.execute(
-                script=script, research_data=research))
+            self.state.update_state(
+                vid, state=PipelineState.VERIFYING, title=script.get("title", "")
+            )
+            verification = await self._stage(
+                vid,
+                "fact_verification",
+                lambda: self.verifier_agent.execute(script=script, research_data=research),
+            )
             script = verification.get("script") or script
 
-            quality = await self._stage(vid, "quality_check", lambda: self.quality_agent.execute(
-                script=script, verification=verification))
+            quality = await self._stage(
+                vid,
+                "quality_check",
+                lambda: self.quality_agent.execute(script=script, verification=verification),
+            )
 
-            creative = await self._stage(vid, "creative_direction", lambda: self.creative_agent.execute(script=script))
+            creative = await self._stage(
+                vid, "creative_direction", lambda: self.creative_agent.execute(script=script)
+            )
 
-            visual_res = await self._stage(vid, "news_visual_sourcing", lambda: self.visual_sourcing_agent.execute(
-                script=script, research_items=research.get("items", []), out_dir=f"output/{vid}/visuals"), require_success=False)
+            visual_res = await self._stage(
+                vid,
+                "news_visual_sourcing",
+                lambda: self.visual_sourcing_agent.execute(
+                    script=script,
+                    research_items=research.get("items", []),
+                    out_dir=f"output/{vid}/visuals",
+                ),
+                require_success=False,
+            )
             visual_assets = visual_res.get("visual_assets", []) if visual_res else []
 
-            vfx = await self._stage(vid, "vfx_direction", lambda: self.vfx_agent.execute(
-                script=script, creative_brief=creative), require_success=False)
+            vfx = await self._stage(
+                vid,
+                "vfx_direction",
+                lambda: self.vfx_agent.execute(script=script, creative_brief=creative),
+                require_success=False,
+            )
 
-            motion = await self._stage(vid, "motion_graphics", lambda: self.motion_agent.execute(
-                script=script, hook=script.get("hook", ""), opening_brief=opening_brief, out_dir=f"output/{vid}/overlays"), require_success=False)
+            motion = await self._stage(
+                vid,
+                "motion_graphics",
+                lambda: self.motion_agent.execute(
+                    script=script,
+                    hook=script.get("hook", ""),
+                    opening_brief=opening_brief,
+                    out_dir=f"output/{vid}/overlays",
+                ),
+                require_success=False,
+            )
 
-            audio_sound = await self._stage(vid, "audio_sound_design", lambda: self.audio_sound_agent.execute(
-                video_id=vid, script=script, duration=55.0, video_type=task.video_type), require_success=False)
+            audio_sound = await self._stage(
+                vid,
+                "audio_sound_design",
+                lambda: self.audio_sound_agent.execute(
+                    video_id=vid, script=script, duration=55.0, video_type=task.video_type
+                ),
+                require_success=False,
+            )
             audio_mix_plan = audio_sound.get("mix_plan") if audio_sound else None
 
-            master_edit = await self._stage(vid, "master_editing_director", lambda: self.master_editing_agent.execute(
-                video_id=vid, script=script, opening_brief=opening_brief, visual_assets=visual_assets,
-                vfx_data=vfx or {}, motion_data=motion or {}, audio_mix_plan=audio_mix_plan), require_success=False)
+            master_edit = await self._stage(
+                vid,
+                "master_editing_director",
+                lambda: self.master_editing_agent.execute(
+                    video_id=vid,
+                    script=script,
+                    opening_brief=opening_brief,
+                    visual_assets=visual_assets,
+                    vfx_data=vfx or {},
+                    motion_data=motion or {},
+                    audio_mix_plan=audio_mix_plan,
+                ),
+                require_success=False,
+            )
             master_timeline = master_edit.get("master_timeline") if master_edit else None
 
             self.state.update_state(vid, state=PipelineState.RENDERING)
-            production = await self._stage(vid, "video_production", lambda: self.producer_agent.execute(
-                video_id=vid, script=script, creative_brief=creative, research_data=research,
-                vfx_data=vfx, motion_data=motion, hook_data=hook_res, master_timeline=master_timeline))
+            production = await self._stage(
+                vid,
+                "video_production",
+                lambda: self.producer_agent.execute(
+                    video_id=vid,
+                    script=script,
+                    creative_brief=creative,
+                    research_data=research,
+                    vfx_data=vfx,
+                    motion_data=motion,
+                    hook_data=hook_res,
+                    master_timeline=master_timeline,
+                ),
+            )
 
             # Visual Audio Match Quality Assurance
-            qa_match = await self._stage(vid, "visual_audio_match_qa", lambda: self.visual_audio_qa_agent.execute(
-                video_id=vid, timeline=master_timeline, video_path=production.get("video_path", "")), require_success=False)
+            qa_match = await self._stage(
+                vid,
+                "visual_audio_match_qa",
+                lambda: self.visual_audio_qa_agent.execute(
+                    video_id=vid,
+                    timeline=master_timeline,
+                    video_path=production.get("video_path", ""),
+                ),
+                require_success=True,
+            )
+            if not qa_match or not qa_match.get("approved"):
+                qa_errs = (qa_match.get("errors") if qa_match else None) or [
+                    "Visual-Audio Match QA failed"
+                ]
+                raise StageError(
+                    "visual_audio_match_qa",
+                    "; ".join(qa_errs) if isinstance(qa_errs, list) else str(qa_errs),
+                )
 
             # Independent Post-Render Quality Assurance
             video_path = production.get("video_path", "")
             qa_verdict = self.qa_inspector.verify_video(video_path)
-            logger.info("Independent Video QA: approved=%s, score=%.1f, errors=%s, warnings=%s",
-                        qa_verdict.approved, qa_verdict.overall_score, qa_verdict.errors, qa_verdict.warnings)
+            logger.info(
+                "Independent Video QA: approved=%s, score=%.1f, errors=%s, warnings=%s",
+                qa_verdict.approved,
+                qa_verdict.overall_score,
+                qa_verdict.errors,
+                qa_verdict.warnings,
+            )
 
             if not qa_verdict.approved:
                 # If failure is due to slight duration overflow, attempt auto-repair
                 if any("exceeds Shorts limit" in f for f in qa_verdict.errors):
-                    repaired = self.qa_inspector.auto_repair_video(video_path, max_duration=SHORTS_HARD_LIMIT)
+                    repaired = self.qa_inspector.auto_repair_video(
+                        video_path, max_duration=SHORTS_HARD_LIMIT
+                    )
                     if repaired:
                         qa_verdict = self.qa_inspector.verify_video(repaired)
-                        production["duration"] = self.qa_inspector.inspect_streams(repaired).duration
+                        production["duration"] = self.qa_inspector.inspect_streams(
+                            repaired
+                        ).duration
 
                 if not qa_verdict.approved:
                     raise StageError("post_render_qa", "; ".join(qa_verdict.errors))
 
             dur = float(production.get("duration") or 0)
             if dur > SHORTS_HARD_LIMIT or (0 < dur < 15):
-                raise StageError("video_production", f"rendered video is {dur:.1f}s (Shorts must be 15-{SHORTS_HARD_LIMIT:.0f}s)")
+                raise StageError(
+                    "video_production",
+                    f"rendered video is {dur:.1f}s (Shorts must be 15-{SHORTS_HARD_LIMIT:.0f}s)",
+                )
 
-            seo = await self._stage(vid, "seo_optimization", lambda: self.seo_agent.execute(
-                script=script, production=production))
-            thumb = await self._stage(vid, "thumbnail_design", lambda: self.thumbnail_agent.execute(
-                video_id=vid, script=script, creative_brief=creative, production=production), require_success=False)
+            seo = await self._stage(
+                vid,
+                "seo_optimization",
+                lambda: self.seo_agent.execute(script=script, production=production),
+            )
+            thumb = await self._stage(
+                vid,
+                "thumbnail_design",
+                lambda: self.thumbnail_agent.execute(
+                    video_id=vid, script=script, creative_brief=creative, production=production
+                ),
+                require_success=False,
+            )
             self._upload_artifact_to_hf(vid, thumb.get("thumbnail_path"), "thumbnail.jpg")
 
             self.state.update_state(vid, state=PipelineState.PUBLISHING, title=seo.get("title", ""))
-            pub = await self._stage(vid, "publishing", lambda: self.publisher_agent.execute(
-                video_path=production.get("video_path", ""), seo_data=seo,
-                thumbnail_path=thumb.get("thumbnail_path"), video_type=task.video_type,
-                captions_path=production.get("captions_srt")))
+            pub = await self._stage(
+                vid,
+                "publishing",
+                lambda: self.publisher_agent.execute(
+                    video_path=production.get("video_path", ""),
+                    seo_data=seo,
+                    thumbnail_path=thumb.get("thumbnail_path"),
+                    video_type=task.video_type,
+                    captions_path=production.get("captions_srt"),
+                ),
+            )
 
             yt_id, yt_url = pub.get("youtube_id", ""), pub.get("youtube_url", "")
-            self.state.update_state(vid, state=PipelineState.COMPLETED, youtube_id=yt_id, youtube_url=yt_url)
+            self.state.update_state(
+                vid, state=PipelineState.COMPLETED, youtube_id=yt_id, youtube_url=yt_url
+            )
 
             # Remember what we used so it is never repeated (live runs only).
             if self.config.general.dry_run:
                 pass
             elif task.video_type == "news":
                 used_urls = set(script.get("sources", []))
-                self.history.mark_news([i for i in research.get("items", []) if i.get("source_url") in used_urls]
-                                       or research.get("items", [])[:3])
+                self.history.mark_news(
+                    [i for i in research.get("items", []) if i.get("source_url") in used_urls]
+                    or research.get("items", [])[:3]
+                )
             else:
                 item = (research.get("items") or [{}])[0]
-                self.history.mark_topic(item.get("seed") or item.get("title", ""), task.topic_category)
+                self.history.mark_topic(
+                    item.get("seed") or item.get("title", ""), task.topic_category
+                )
             if not self.config.general.dry_run:
-                self.history.mark_video({"video_id": vid, "video_type": task.video_type, "title": seo.get("title", ""),
-                                         "youtube_id": yt_id, "theme": creative.get("theme_name", ""),
-                                         "duration": production.get("duration", 0)})
+                self.history.mark_video(
+                    {
+                        "video_id": vid,
+                        "video_type": task.video_type,
+                        "title": seo.get("title", ""),
+                        "youtube_id": yt_id,
+                        "theme": creative.get("theme_name", ""),
+                        "duration": production.get("duration", 0),
+                    }
+                )
 
-            caption = (f"{'🧪 DRY-RUN' if self.config.general.dry_run else '✅ Published'}: "
-                       f"<b>{esc(seo.get('title', ''))}</b>\n{esc(yt_url)}")
+            caption = (
+                f"{'🧪 DRY-RUN' if self.config.general.dry_run else '✅ Published'}: "
+                f"<b>{esc(seo.get('title', ''))}</b>\n{esc(yt_url)}"
+            )
             if self.config.telegram.send_video:
-                self.notifier.send_video(production.get("video_path", ""), caption, thumb.get("thumbnail_path"))
-            self._summary_cache[vid] = {"duration": production.get("duration", 0), "sources": script.get("sources", []),
-                                        "llm": llm_used, "quality": quality.get("overall_score"),
-                                        "voice": production.get("voice_provider", ""),
-                                        "items": len(script.get("scenes", [])),
-                                        "images": production.get("images_found", 0)}
+                self.notifier.send_video(
+                    production.get("video_path", ""), caption, thumb.get("thumbnail_path")
+                )
+            self._summary_cache[vid] = {
+                "duration": production.get("duration", 0),
+                "sources": script.get("sources", []),
+                "llm": llm_used,
+                "quality": quality.get("overall_score"),
+                "voice": production.get("voice_provider", ""),
+                "items": len(script.get("scenes", [])),
+                "images": production.get("images_found", 0),
+            }
             logger.info("✅ %s done: %s", vid, yt_url)
 
         except Exception as exc:
             stage = getattr(exc, "stage", "pipeline")
             logger.exception("❌ %s failed at %s: %s", vid, stage, exc)
             self.failures.append(f"{task.video_type} @ {stage}: {exc}")
-            self.state.update_state(vid, state=PipelineState.FAILED, error_message=f"[{stage}] {exc}")
-            self.notifier.send_message(TelegramReportBuilder.build_failure_alert(stage, vid, str(exc)))
+            self.state.update_state(
+                vid, state=PipelineState.FAILED, error_message=f"[{stage}] {exc}"
+            )
+            self.notifier.send_message(
+                TelegramReportBuilder.build_failure_alert(stage, vid, str(exc))
+            )
 
         return self.state.get_video_state(vid)
 
@@ -292,14 +469,21 @@ class DailyOrchestrator:
         if not vs:
             logger.error("Unknown video_id %s", video_id)
             return None
-        task = VideoTask(vs.video_type, vs.topic_category, "", day_name=self._now().strftime("%A").lower())
+        task = VideoTask(
+            vs.video_type, vs.topic_category, "", day_name=self._now().strftime("%A").lower()
+        )
         return await self.run_pipeline(task, video_id=video_id)
 
     async def run_daily(self, video_type_filter: str = "all") -> List[VideoState]:
         import time as _time
+
         self._run_t0 = _time.monotonic()
-        logger.info("=== YT Daily Shorts run started (dry_run=%s, strict=%s, llm=%d candidates) ===",
-                    self.config.general.dry_run, self.config.general.strict_mode, len(self.llm.candidates))
+        logger.info(
+            "=== YT Daily Shorts run started (dry_run=%s, strict=%s, llm=%d candidates) ===",
+            self.config.general.dry_run,
+            self.config.general.strict_mode,
+            len(self.llm.candidates),
+        )
         self._summary_cache = {}
         try:
             await self.analytics_agent.execute()
@@ -320,16 +504,33 @@ class DailyOrchestrator:
         for r in results:
             if r.state == PipelineState.COMPLETED:
                 extra = self._summary_cache.get(r.video_id, {})
-                completed.append({"video_type": r.video_type, "title": r.title, "youtube_url": r.youtube_url, **extra})
+                completed.append(
+                    {
+                        "video_type": r.video_type,
+                        "title": r.title,
+                        "youtube_url": r.youtube_url,
+                        **extra,
+                    }
+                )
         insights = ""
         try:
-            insights = (await self.learning_agent.execute(video_type="news")).data.get("insights", "")
+            insights = (await self.learning_agent.execute(video_type="news")).data.get(
+                "insights", ""
+            )
         except Exception:
             pass
-        self.notifier.send_message(TelegramReportBuilder.build_daily_summary(
-            completed, failed_count=len(results) - len(completed), dry_run=self.config.general.dry_run,
-            failures=self.failures, insights=insights))
-        logger.info("=== Run completed: %d ok, %d failed ===", len(completed), len(results) - len(completed))
+        self.notifier.send_message(
+            TelegramReportBuilder.build_daily_summary(
+                completed,
+                failed_count=len(results) - len(completed),
+                dry_run=self.config.general.dry_run,
+                failures=self.failures,
+                insights=insights,
+            )
+        )
+        logger.info(
+            "=== Run completed: %d ok, %d failed ===", len(completed), len(results) - len(completed)
+        )
         self._backup_state_to_hf()
         await self._self_improve(results)
         return results
@@ -356,14 +557,25 @@ class DailyOrchestrator:
             from core import self_improve
 
             import time as _time
+
             errors = list(getattr(self, "failures", []) or [])
-            ok = all(
-                (getattr(getattr(r, "state", None), "value", getattr(r, "state", "")) == "completed")
-                for r in results
-            ) if results else False
-            elapsed_min = round((_time.monotonic() - getattr(self, "_run_t0", _time.monotonic())) / 60.0, 2)
-            self_improve.record_run("shorts", elapsed_min, ok, errors=errors,
-                                    extra={"videos": len(results or [])})
+            ok = (
+                all(
+                    (
+                        getattr(getattr(r, "state", None), "value", getattr(r, "state", ""))
+                        == "completed"
+                    )
+                    for r in results
+                )
+                if results
+                else False
+            )
+            elapsed_min = round(
+                (_time.monotonic() - getattr(self, "_run_t0", _time.monotonic())) / 60.0, 2
+            )
+            self_improve.record_run(
+                "shorts", elapsed_min, ok, errors=errors, extra={"videos": len(results or [])}
+            )
             from agents.error_analyst import ErrorAnalystAgent
 
             res = await ErrorAnalystAgent(self.config, self.state).execute()
@@ -381,8 +593,10 @@ class DailyOrchestrator:
             store = store_from_config(self.config)
             if not store.enabled:
                 return
-            paths = [getattr(self.config.database, "sqlite_path", ""),
-                     getattr(self.config.database, "history_path", "")]
+            paths = [
+                getattr(self.config.database, "sqlite_path", ""),
+                getattr(self.config.database, "history_path", ""),
+            ]
             urls = store.backup_state([p for p in paths if p])
             if urls:
                 logger.info("HF storage: state backup %s", ", ".join(urls))

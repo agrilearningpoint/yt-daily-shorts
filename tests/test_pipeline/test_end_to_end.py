@@ -27,6 +27,7 @@ async def test_full_pipeline_dry_run(tmp_path, monkeypatch):
 
     async def no_tts(self, text, out_file, voice):
         raise RuntimeError("offline")
+
     monkeypatch.setattr(TTSEngine, "_synth", no_tts)
     monkeypatch.setattr("asyncio.sleep", _instant)
 

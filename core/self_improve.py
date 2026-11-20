@@ -13,6 +13,7 @@ Three small pieces, no magic:
 The point is not a fancy ML loop; it is that a failure that happened twice must
 never be diagnosed from scratch a third time.
 """
+
 from __future__ import annotations
 
 import json
@@ -28,28 +29,50 @@ DATA = Path("data")
 
 # error class -> (matcher substrings, the fix that actually applies)
 ERROR_CLASSES: Dict[str, Dict[str, Any]] = {
-    "llm_quota":        {"match": ("429", "quota", "RESOURCE_EXHAUSTED", "rate limit"),
-                         "fix": "shift the stage to another provider; keep the flagship tier for script/SEO only"},
-    "llm_timeout":      {"match": ("timeout", "timed out", "ReadTimeout"),
-                         "fix": "the key/model is parked for the run — check the llm-check report before blaming code"},
-    "llm_unavailable":  {"match": ("503", "high demand", "overloaded"),
-                         "fix": "model is congested upstream; the chain already falls through, no action"},
-    "no_visual":        {"match": ("no visuals", "visual step", "no images"),
-                         "fix": "add 2 more concrete visual_queries for that beat/chapter"},
-    "media_download":   {"match": ("download", "HTTP 404", "HTTP 403"),
-                         "fix": "source threw a dead link; the sourcer now retries the next candidate"},
-    "render_ffmpeg":    {"match": ("ffmpeg failed", "Invalid argument", "filter"),
-                         "fix": "keep image sizes uniform (the pipeline rescales, this means a corrupt file)"},
-    "storage":          {"match": ("HF storage", "upload failed", "huggingface"),
-                         "fix": "storage is optional by design — never blocks a run, just check the token"},
-    "youtube_auth":     {"match": ("credentials", "invalid_grant", "401", "refresh"),
-                         "fix": "OAuth refresh token expired — re-run the YouTube auth flow once"},
-    "youtube_upload":   {"match": ("upload failed", "quotaExceeded", "video file missing"),
-                         "fix": "YouTube rejected the file/size; the artifact is kept on HF for a manual retry"},
-    "tts":              {"match": ("TTS", "edge-tts", "no audio"),
-                         "fix": "edge-tts hiccup; retried automatically, fallback voice is hi-IN-SwaraNeural"},
-    "unknown":          {"match": (),
-                         "fix": "read the traceback — a new failure class deserves a new rule here"},
+    "llm_quota": {
+        "match": ("429", "quota", "RESOURCE_EXHAUSTED", "rate limit"),
+        "fix": "shift the stage to another provider; keep the flagship tier for script/SEO only",
+    },
+    "llm_timeout": {
+        "match": ("timeout", "timed out", "ReadTimeout"),
+        "fix": "the key/model is parked for the run — check the llm-check report before blaming code",
+    },
+    "llm_unavailable": {
+        "match": ("503", "high demand", "overloaded"),
+        "fix": "model is congested upstream; the chain already falls through, no action",
+    },
+    "no_visual": {
+        "match": ("no visuals", "visual step", "no images"),
+        "fix": "add 2 more concrete visual_queries for that beat/chapter",
+    },
+    "media_download": {
+        "match": ("download", "HTTP 404", "HTTP 403"),
+        "fix": "source threw a dead link; the sourcer now retries the next candidate",
+    },
+    "render_ffmpeg": {
+        "match": ("ffmpeg failed", "Invalid argument", "filter"),
+        "fix": "keep image sizes uniform (the pipeline rescales, this means a corrupt file)",
+    },
+    "storage": {
+        "match": ("HF storage", "upload failed", "huggingface"),
+        "fix": "storage is optional by design — never blocks a run, just check the token",
+    },
+    "youtube_auth": {
+        "match": ("credentials", "invalid_grant", "401", "refresh"),
+        "fix": "OAuth refresh token expired — re-run the YouTube auth flow once",
+    },
+    "youtube_upload": {
+        "match": ("upload failed", "quotaExceeded", "video file missing"),
+        "fix": "YouTube rejected the file/size; the artifact is kept on HF for a manual retry",
+    },
+    "tts": {
+        "match": ("TTS", "edge-tts", "no audio"),
+        "fix": "edge-tts hiccup; retried automatically, fallback voice is hi-IN-SwaraNeural",
+    },
+    "unknown": {
+        "match": (),
+        "fix": "read the traceback — a new failure class deserves a new rule here",
+    },
 }
 
 
@@ -61,11 +84,21 @@ def classify_error(message: str) -> str:
     return "unknown"
 
 
-def record_run(kind: str, duration_min: float, ok: bool, errors: Optional[List[str]] = None,
-               extra: Optional[Dict[str, Any]] = None) -> None:
+def record_run(
+    kind: str,
+    duration_min: float,
+    ok: bool,
+    errors: Optional[List[str]] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> None:
     DATA.mkdir(exist_ok=True)
-    row = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "kind": kind, "minutes": round(duration_min, 2),
-           "ok": bool(ok), "classes": sorted({classify_error(e) for e in (errors or [])})}
+    row = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "kind": kind,
+        "minutes": round(duration_min, 2),
+        "ok": bool(ok),
+        "classes": sorted({classify_error(e) for e in (errors or [])}),
+    }
     if extra:
         row.update(extra)
     with open(DATA / "metrics.jsonl", "a", encoding="utf-8") as fh:
@@ -93,9 +126,14 @@ def report() -> str:
     classes = Counter(c for r in rows for c in r.get("classes", []))
     fails = sum(1 for r in rows if not r.get("ok"))
     avg = sum(r.get("minutes", 0) for r in rows) / len(rows)
-    lines = [f"# Self-improvement report",
-             f"", f"- runs analysed: **{len(rows)}**", f"- failed runs: **{fails}**",
-             f"- average duration: **{avg:.1f} min**", ""]
+    lines = [
+        "# Self-improvement report",
+        "",
+        f"- runs analysed: **{len(rows)}**",
+        f"- failed runs: **{fails}**",
+        f"- average duration: **{avg:.1f} min**",
+        "",
+    ]
     if classes:
         lines.append("## Recurring failure classes")
         lines.append("")
@@ -129,5 +167,7 @@ def lessons_for_prompt(limit_chars: int = 700) -> str:
     if not classes:
         return ""
     top = ", ".join(f"{c} x{n}" for c, n in classes.most_common(3))
-    return (f"Known pipeline failure history (avoid triggering these): {top}. "
-            "Prefer conservative choices that keep the run cheap and reliable.")
+    return (
+        f"Known pipeline failure history (avoid triggering these): {top}. "
+        "Prefer conservative choices that keep the run cheap and reliable."
+    )

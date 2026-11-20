@@ -7,7 +7,7 @@ evaluates audio quality, and selects optimal hook and core evidence clips.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from agents.base_agent import AgentResult, BaseAgent
 from core.agent_contracts import (
@@ -30,7 +30,12 @@ class ClipMomentSelectorAgent(BaseAgent):
 
     def validate_input(self, **kwargs: Any) -> bool:
         """Verify story or selected_clips are provided."""
-        return bool(kwargs.get("story") or kwargs.get("selected_clips") or kwargs.get("segments"))
+        return bool(
+            kwargs.get("story")
+            or kwargs.get("selected_clips")
+            or kwargs.get("segments")
+            or kwargs.get("transcription")
+        )
 
     async def execute(self, **kwargs: Any) -> AgentResult:
         """Execute clip moment selection from story transcript and scene metadata."""
@@ -42,8 +47,14 @@ class ClipMomentSelectorAgent(BaseAgent):
 
         video_id = kwargs.get("video_id", "lv_clip_unk")
         story: Optional[ExtractedStory] = kwargs.get("story")
-        segments: List[TranscriptSegment] = kwargs.get("segments", [])
-        scenes: List[VisualScene] = kwargs.get("scenes", [])
+        trans = kwargs.get("transcription") or {}
+        scene_an = kwargs.get("scene_analysis") or {}
+        segments: List[TranscriptSegment] = kwargs.get("segments") or (
+            trans.get("segments", []) if isinstance(trans, dict) else []
+        )
+        scenes: List[VisualScene] = kwargs.get("scenes") or (
+            scene_an.get("scenes", []) if isinstance(scene_an, dict) else []
+        )
         selected_clips: List[SelectedClip] = []
 
         # 1. Injected clips (test fixture or manual override)
@@ -101,7 +112,8 @@ class ClipMomentSelectorAgent(BaseAgent):
     ) -> List[SelectedClip]:
         """Isolate meaningful 3-8s soundbite moments snapped to natural speech pauses."""
         story_segs = [
-            s for s in segments
+            s
+            for s in segments
             if (s.start >= story.start_time - 1.0 and s.end <= story.end_time + 1.0)
         ]
         if not story_segs:
@@ -115,11 +127,15 @@ class ClipMomentSelectorAgent(BaseAgent):
             # Target 2.5 to 8.5 seconds
             if 2.5 <= dur <= 8.5:
                 crop_focus = "center"
-                matching_scene = next((sc for sc in scenes if sc.start <= seg.start <= sc.end), None)
+                matching_scene = next(
+                    (sc for sc in scenes if sc.start <= seg.start <= sc.end), None
+                )
                 if matching_scene:
                     crop_focus = matching_scene.speaker_position
 
-                is_hook = idx == 0 or any(k in seg.text for k in ["बड़ा फैसला", "खुलासा", "ऐतिहासिक", "महत्वपूर्ण", "स्पष्ट कहा"])
+                is_hook = idx == 0 or any(
+                    k in seg.text for k in ["बड़ा फैसला", "खुलासा", "ऐतिहासिक", "महत्वपूर्ण", "स्पष्ट कहा"]
+                )
                 purpose = "hook" if is_hook else "soundbite"
 
                 # Check audio quality based on confidence and speaker tags

@@ -7,6 +7,7 @@ The hero is a frame out of the film itself, so the thumbnail can never be
 off-topic — the failure mode that put a Gothic cathedral on a Hindu history film
 when the hero came from a keyword image search.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -37,8 +38,12 @@ def _hf_film(video_id: str) -> Optional[Path]:
         if not (token and repo):
             return None
         logger.info("downloading long/%s/film_1080p.mp4 from %s", video_id, repo)
-        local = hf_hub_download(repo_id=repo, repo_type="dataset", token=token,
-                                filename=f"long/{video_id}/film_1080p.mp4")
+        local = hf_hub_download(
+            repo_id=repo,
+            repo_type="dataset",
+            token=token,
+            filename=f"long/{video_id}/film_1080p.mp4",
+        )
         dest = Path("output") / "long" / video_id / "film_1080p.mp4"
         dest.parent.mkdir(parents=True, exist_ok=True)
         if not dest.exists():
@@ -60,8 +65,23 @@ def candidate_frames(film: Path, n: int = 8, tmp: Optional[Path] = None) -> List
         t = 60 + (dur - 120) * (i + 0.5) / n
         f = tmp / f"frame_{i:02d}.jpg"
         try:
-            R.run([R.ff(), "-y", "-ss", f"{t:.2f}", "-i", str(film), "-frames:v", "1",
-                   "-vf", "crop=iw:ih*0.78:0:0,scale=1920:-1", "-q:v", "2", str(f)])
+            R.run(
+                [
+                    R.ff(),
+                    "-y",
+                    "-ss",
+                    f"{t:.2f}",
+                    "-i",
+                    str(film),
+                    "-frames:v",
+                    "1",
+                    "-vf",
+                    "crop=iw:ih*0.78:0:0,scale=1920:-1",
+                    "-q:v",
+                    "2",
+                    str(f),
+                ]
+            )
             if f.exists() and f.stat().st_size > 20_000:
                 out.append(f)
         except Exception as exc:
@@ -72,6 +92,7 @@ def candidate_frames(film: Path, n: int = 8, tmp: Optional[Path] = None) -> List
 def score(path: Path) -> Tuple[float, float]:
     """(variance, mean brightness) — we want detail and a mid-tone exposure."""
     from PIL import Image
+
     im = Image.open(path).convert("L").resize((96, 54))
     px = list(im.get_flattened_data()) if hasattr(im, "get_flattened_data") else list(im.getdata())
     mean = sum(px) / max(1, len(px))
@@ -82,6 +103,7 @@ def score(path: Path) -> Tuple[float, float]:
 def grade(path: Path) -> Tuple[float, float, float]:
     """(variance, mean brightness, dark fraction) over a 96x54 luma sample."""
     from PIL import Image
+
     im = Image.open(path).convert("L").resize((96, 54))
     px = list(im.get_flattened_data()) if hasattr(im, "get_flattened_data") else list(im.getdata())
     mean = sum(px) / max(1, len(px))
@@ -122,6 +144,7 @@ def build(video_id: str, title: str, film: Optional[Path] = None) -> Optional[Pa
         logger.error("no film found for %s", video_id)
         return None
     import shutil
+
     tmp = film.parent / "thumbs_tmp"
     try:
         hero = pick_best(candidate_frames(film, tmp=tmp))
@@ -141,9 +164,12 @@ def set_on_youtube(video_id: str, thumb: Path) -> bool:
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
     from youtube.oauth import YouTubeOAuthManager
+
     cfg = load_config()
     yt = cfg.youtube
-    oauth = YouTubeOAuthManager(getattr(yt, "client_secret_json", ""), getattr(yt, "token_json", ""))
+    oauth = YouTubeOAuthManager(
+        getattr(yt, "client_secret_json", ""), getattr(yt, "token_json", "")
+    )
     creds = oauth.get_credentials()
     if not creds:
         logger.error("no YouTube credentials: %s", oauth.last_error)
@@ -161,7 +187,9 @@ def main() -> int:
     ap.add_argument("--yt-video-id", default="", help="published YouTube id to update")
     ap.add_argument("--set", action="store_true", help="push the new thumbnail to YouTube")
     a = ap.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    )
     thumb = build(a.video_id, a.title)
     if not thumb:
         return 1

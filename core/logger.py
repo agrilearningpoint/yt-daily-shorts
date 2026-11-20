@@ -24,21 +24,31 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 
 _SENSITIVE_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"(AIza[0-9A-Za-z_-]{35})", re.ASCII),          # Google API key
-    re.compile(r"(sk-[A-Za-z0-9]{20,})", re.ASCII),            # OpenAI-style key
-    re.compile(r"(gsk_[A-Za-z0-9]{20,})", re.ASCII),           # Groq key
-    re.compile(r"(hf_[A-Za-z0-9]{20,})", re.ASCII),            # HuggingFace token
-    re.compile(r"(ghp_[A-Za-z0-9]{36})", re.ASCII),            # GitHub PAT
-    re.compile(r"(bot\d{8,}:[A-Za-z0-9_-]{35})", re.ASCII),    # Telegram bot token
+    re.compile(r"(AIza[0-9A-Za-z_-]{35})", re.ASCII),  # Google API key
+    re.compile(r"(sk-[A-Za-z0-9]{20,})", re.ASCII),  # OpenAI-style key
+    re.compile(r"(gsk_[A-Za-z0-9]{20,})", re.ASCII),  # Groq key
+    re.compile(r"(hf_[A-Za-z0-9]{20,})", re.ASCII),  # HuggingFace token
+    re.compile(r"(ghp_[A-Za-z0-9]{36})", re.ASCII),  # GitHub PAT
+    re.compile(r"(bot\d{8,}:[A-Za-z0-9_-]{35})", re.ASCII),  # Telegram bot token
 ]
 
 _ENV_SENSITIVE_KEYS = {
-    "YT_GEMINI_API_KEY", "YT_GROQ_API_KEY", "YT_TELEGRAM_BOT_TOKEN",
-    "YT_PEXELS_API_KEY", "YT_PIXABAY_API_KEY", "YT_HF_TOKEN",
-    "YT_MONGODB_URI", "YT_CLOUDFLARE_R2_ACCESS_KEY",
-    "YT_CLOUDFLARE_R2_SECRET_KEY", "YT_YOUTUBE_CLIENT_SECRET_JSON",
-    "YT_YOUTUBE_TOKEN_JSON", "YT_MISTRAL_API_KEY", "YT_OPENROUTER_API_KEY",
-    "YT_NVIDIA_API_KEY", "YT_OLLAMA_API_KEY", "YT_TELEGRAM_CHAT_ID",
+    "YT_GEMINI_API_KEY",
+    "YT_GROQ_API_KEY",
+    "YT_TELEGRAM_BOT_TOKEN",
+    "YT_PEXELS_API_KEY",
+    "YT_PIXABAY_API_KEY",
+    "YT_HF_TOKEN",
+    "YT_MONGODB_URI",
+    "YT_CLOUDFLARE_R2_ACCESS_KEY",
+    "YT_CLOUDFLARE_R2_SECRET_KEY",
+    "YT_YOUTUBE_CLIENT_SECRET_JSON",
+    "YT_YOUTUBE_TOKEN_JSON",
+    "YT_MISTRAL_API_KEY",
+    "YT_OPENROUTER_API_KEY",
+    "YT_NVIDIA_API_KEY",
+    "YT_OLLAMA_API_KEY",
+    "YT_TELEGRAM_CHAT_ID",
 }
 
 

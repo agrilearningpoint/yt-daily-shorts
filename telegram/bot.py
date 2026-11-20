@@ -33,8 +33,12 @@ class TelegramNotifier:
             logger.info("Telegram not configured; skipped.")
             return False
         for chunk_start in range(0, len(text), 3900):
-            payload = {"chat_id": self.chat_id, "text": text[chunk_start:chunk_start + 3900],
-                       "parse_mode": parse_mode, "disable_web_page_preview": True}
+            payload = {
+                "chat_id": self.chat_id,
+                "text": text[chunk_start : chunk_start + 3900],
+                "parse_mode": parse_mode,
+                "disable_web_page_preview": True,
+            }
             try:
                 resp = requests.post(self._api("sendMessage"), json=payload, timeout=15)
                 if resp.status_code != 200:
@@ -49,7 +53,9 @@ class TelegramNotifier:
                 return False
         return True
 
-    def send_video(self, video_path: str, caption: str = "", thumb_path: Optional[str] = None) -> bool:
+    def send_video(
+        self, video_path: str, caption: str = "", thumb_path: Optional[str] = None
+    ) -> bool:
         if not self.enabled or not Path(video_path).exists():
             return False
         if Path(video_path).stat().st_size > 50 * 1024 * 1024:
@@ -60,8 +66,14 @@ class TelegramNotifier:
             files["video"] = open(video_path, "rb")
             if thumb_path and Path(thumb_path).exists():
                 files["thumbnail"] = open(thumb_path, "rb")
-            data = {"chat_id": self.chat_id, "caption": caption[:1000], "parse_mode": "HTML",
-                    "supports_streaming": "true", "width": 1080, "height": 1920}
+            data = {
+                "chat_id": self.chat_id,
+                "caption": caption[:1000],
+                "parse_mode": "HTML",
+                "supports_streaming": "true",
+                "width": 1080,
+                "height": 1920,
+            }
             resp = requests.post(self._api("sendVideo"), data=data, files=files, timeout=180)
             if resp.status_code != 200:
                 logger.warning("Telegram sendVideo %s: %s", resp.status_code, resp.text[:200])
@@ -71,9 +83,16 @@ class TelegramNotifier:
                 doc_files = {"document": files["video"]}
                 if "thumbnail" in files:
                     doc_files["thumbnail"] = files["thumbnail"]
-                resp = requests.post(self._api("sendDocument"), data={"chat_id": self.chat_id, "caption": caption[:1000]}, files=doc_files, timeout=180)
+                resp = requests.post(
+                    self._api("sendDocument"),
+                    data={"chat_id": self.chat_id, "caption": caption[:1000]},
+                    files=doc_files,
+                    timeout=180,
+                )
                 if resp.status_code != 200:
-                    logger.warning("Telegram sendDocument fallback %s: %s", resp.status_code, resp.text[:200])
+                    logger.warning(
+                        "Telegram sendDocument fallback %s: %s", resp.status_code, resp.text[:200]
+                    )
             return resp.status_code == 200
         except Exception as exc:
             logger.warning("Telegram sendVideo failed: %s", exc)
@@ -96,8 +115,12 @@ if __name__ == "__main__":
     parser.add_argument("--caption", type=str, default="", help="Video caption")
     parser.add_argument("--thumb", type=str, default=None, help="Path to thumbnail")
     parser.add_argument("--message", type=str, default="", help="Text message to send")
-    parser.add_argument("--token", type=str, default="", help="Bot token (or env YT_TELEGRAM_BOT_TOKEN)")
-    parser.add_argument("--chat-id", type=str, default="", help="Chat ID (or env YT_TELEGRAM_CHAT_ID)")
+    parser.add_argument(
+        "--token", type=str, default="", help="Bot token (or env YT_TELEGRAM_BOT_TOKEN)"
+    )
+    parser.add_argument(
+        "--chat-id", type=str, default="", help="Chat ID (or env YT_TELEGRAM_CHAT_ID)"
+    )
     args = parser.parse_args()
 
     token = args.token or os.environ.get("YT_TELEGRAM_BOT_TOKEN", "")

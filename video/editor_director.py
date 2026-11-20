@@ -7,6 +7,7 @@
            TV news editor and scores it 1-10 with concrete notes. Scores + notes are stored in
            data/editor_memory.json (kept between runs by the Actions cache) and steer the next plan().
 """
+
 from __future__ import annotations
 
 import base64
@@ -26,9 +27,18 @@ MEMORY = Path("data/editor_memory.json")
 STYLE_SPACE: Dict[str, List[Any]] = {
     # accent, dark, highlight (lower-third / badge / ticker colours) - broadcast palettes
     "palette": [
-        ["#E50914", "#0B0F1A", "#FFD60A"],   # BHARAT KI SOCH brand: red breaking + yellow highlight (fixed identity)
+        [
+            "#E50914",
+            "#0B0F1A",
+            "#FFD60A",
+        ],  # BHARAT KI SOCH brand: red breaking + yellow highlight (fixed identity)
     ],
-    "cut_fx": [["punch"], ["whip"], ["flash"], ["punch", "whip"]],   # story changes only; parts are clean cuts
+    "cut_fx": [
+        ["punch"],
+        ["whip"],
+        ["flash"],
+        ["punch", "whip"],
+    ],  # story changes only; parts are clean cuts
     "motion": ["kenburns_in", "kenburns_mix", "parallax_pan", "slow_push"],
     "grade": ["news_crisp", "warm_film", "cool_studio", "punchy", "neutral"],
     "zoom": [1.10, 1.14, 1.18],
@@ -67,7 +77,12 @@ def _save(mem: Dict[str, Any]) -> None:
 class EditorDirector:
     def __init__(self, gemini_key: str = "", models: Optional[List[str]] = None):
         self.key = gemini_key
-        self.models = models or ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
+        self.models = models or [
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
+        ]
         self.mem = _load()
 
     # ------------------------------------------------------------------ plan
@@ -80,14 +95,19 @@ class EditorDirector:
             weights = []
             for opt in options:
                 s = scores.get(f"{key}={json.dumps(opt)}")
-                w = (s["sum"] / s["n"]) if s and s.get("n") else 7.0   # unknown options get explored
+                w = (s["sum"] / s["n"]) if s and s.get("n") else 7.0  # unknown options get explored
                 if opt == last.get(key) and len(options) > 1:
-                    w *= 0.15                                         # never the same look two days running
+                    w *= 0.15  # never the same look two days running
                 weights.append(max(w, 0.5) ** 2)
             recipe[key] = rng.choices(options, weights=weights, k=1)[0]
         recipe["notes"] = self.mem.get("notes", [])[-3:]
-        logger.info("Editor recipe: palette=%s fx=%s motion=%s grade=%s", recipe["palette"][0],
-                    recipe["cut_fx"], recipe["motion"], recipe["grade"])
+        logger.info(
+            "Editor recipe: palette=%s fx=%s motion=%s grade=%s",
+            recipe["palette"][0],
+            recipe["cut_fx"],
+            recipe["motion"],
+            recipe["grade"],
+        )
         return recipe
 
     @staticmethod
@@ -100,8 +120,17 @@ class EditorDirector:
             hi = base.get("caption_highlight", "#FFD60A")
         else:
             acc, dark, hi = recipe.get("palette", ["#E50914", "#0B0F1A", "#FFD60A"])
-        t.update({"primary_color": acc, "background_color": dark, "secondary_color": dark,
-                  "caption_highlight": hi, "theme_name": base.get("theme_name") if base and base.get("theme_name") else f"editor-{acc}"})
+        t.update(
+            {
+                "primary_color": acc,
+                "background_color": dark,
+                "secondary_color": dark,
+                "caption_highlight": hi,
+                "theme_name": base.get("theme_name")
+                if base and base.get("theme_name")
+                else f"editor-{acc}",
+            }
+        )
         return t
 
     def unify_creative_plan(
@@ -129,51 +158,110 @@ class EditorDirector:
         return recipe
 
     # ---------------------------------------------------------------- review
-    def review(self, video_path: str, recipe: Dict[str, Any], out_dir: str, learn: bool = True) -> Dict[str, Any]:
+    def review(
+        self, video_path: str, recipe: Dict[str, Any], out_dir: str, learn: bool = True
+    ) -> Dict[str, Any]:
         result: Dict[str, Any] = {"score": None, "notes": [], "bad_tiles": []}
         sheet = str(Path(out_dir) / "editor_sheet.jpg")
         try:
             try:
-                dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of",
-                                            "csv=p=0", video_path], capture_output=True, text=True,
-                                           timeout=30).stdout.strip() or 120)
+                dur = float(
+                    subprocess.run(
+                        [
+                            "ffprobe",
+                            "-v",
+                            "error",
+                            "-show_entries",
+                            "format=duration",
+                            "-of",
+                            "csv=p=0",
+                            video_path,
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    ).stdout.strip()
+                    or 120
+                )
             except Exception:
                 dur = 120.0
             rows = max(1, -(-int(dur // 3 + 1) // 8))
-            subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", video_path, "-vf",
-                            f"fps=1/3,scale=200:-1,tile=8x{rows}", "-frames:v", "1", sheet],
-                           capture_output=True, timeout=120)
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-i",
+                    video_path,
+                    "-vf",
+                    f"fps=1/3,scale=200:-1,tile=8x{rows}",
+                    "-frames:v",
+                    "1",
+                    sheet,
+                ],
+                capture_output=True,
+                timeout=120,
+            )
         except Exception:
             pass
         if self.key and Path(sheet).exists():
-            prompt = ("You are the senior video editor of a top Indian TV news channel. This is a contact sheet "
-                      "(one frame every 3 s) of today's vertical Hindi news Short. Judge it like a pro: "
-                      "eye-catching? professional motion graphics? images relevant and varied? text readable? "
-                      "boring or repetitive? Also check Shorts editing rules: the first frame (tile 0) must hook instantly with a "
-                      "big readable headline and a strong picture (no logo/intro card first); a visual change at least every "
-                      "2-3 s; no two neighbouring tiles look the same; captions never cover faces; the last tile should loop "
-                      "back into the start. Tiles are numbered left-to-right, top-to-bottom from 0 (tile n = second 3n). "
-                      "List tiles whose PICTURE is irrelevant, generic (random building/plane/stock), repeated, "
-                      "blurry or a screenshot. Reply JSON only: {\"score\": 1-10, \"bad_tiles\": [numbers], "
-                      "\"notes\": [3 short concrete improvement instructions for tomorrow's edit]}")
-            body = {"contents": [{"parts": [{"text": prompt}, {"inline_data": {
-                "mime_type": "image/jpeg", "data": base64.b64encode(Path(sheet).read_bytes()).decode()}}]}],
-                "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}}
+            prompt = (
+                "You are the senior video editor of a top Indian TV news channel. This is a contact sheet "
+                "(one frame every 3 s) of today's vertical Hindi news Short. Judge it like a pro: "
+                "eye-catching? professional motion graphics? images relevant and varied? text readable? "
+                "boring or repetitive? Also check Shorts editing rules: the first frame (tile 0) must hook instantly with a "
+                "big readable headline and a strong picture (no logo/intro card first); a visual change at least every "
+                "2-3 s; no two neighbouring tiles look the same; captions never cover faces; the last tile should loop "
+                "back into the start. Tiles are numbered left-to-right, top-to-bottom from 0 (tile n = second 3n). "
+                "List tiles whose PICTURE is irrelevant, generic (random building/plane/stock), repeated, "
+                'blurry or a screenshot. Reply JSON only: {"score": 1-10, "bad_tiles": [numbers], '
+                '"notes": [3 short concrete improvement instructions for tomorrow\'s edit]}'
+            )
+            body = {
+                "contents": [
+                    {
+                        "parts": [
+                            {"text": prompt},
+                            {
+                                "inline_data": {
+                                    "mime_type": "image/jpeg",
+                                    "data": base64.b64encode(Path(sheet).read_bytes()).decode(),
+                                }
+                            },
+                        ]
+                    }
+                ],
+                "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
+            }
             for m in self.models:
                 try:
-                    r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
-                                      params={"key": self.key}, json=body, timeout=60)
+                    r = requests.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent",
+                        params={"key": self.key},
+                        json=body,
+                        timeout=60,
+                    )
                     if r.status_code != 200:
                         continue
-                    txt = "".join(p.get("text", "") for p in r.json()["candidates"][0]["content"]["parts"])
-                    data = json.loads(txt[txt.find("{"): txt.rfind("}") + 1])
+                    txt = "".join(
+                        p.get("text", "") for p in r.json()["candidates"][0]["content"]["parts"]
+                    )
+                    data = json.loads(txt[txt.find("{") : txt.rfind("}") + 1])
                     raw_score = data.get("score")
                     try:
-                        sc = max(1.0, min(10.0, float(raw_score))) if raw_score is not None else None
+                        sc = (
+                            max(1.0, min(10.0, float(raw_score))) if raw_score is not None else None
+                        )
                     except (TypeError, ValueError):
                         sc = None
-                    result = {"score": sc, "notes": [str(n) for n in (data.get("notes") or [])][:3],
-                              "bad_tiles": [int(x) for x in (data.get("bad_tiles") or []) if str(x).isdigit()][:12]}
+                    result = {
+                        "score": sc,
+                        "notes": [str(n) for n in (data.get("notes") or [])][:3],
+                        "bad_tiles": [
+                            int(x) for x in (data.get("bad_tiles") or []) if str(x).isdigit()
+                        ][:12],
+                    }
                     break
                 except Exception as exc:
                     logger.debug("editor review %s failed: %s", m, exc)
@@ -185,11 +273,18 @@ class EditorDirector:
     def _learn(self, recipe: Dict[str, Any], result: Dict[str, Any]) -> None:
         mem = self.mem
         clean = {k: v for k, v in recipe.items() if k in STYLE_SPACE}
-        mem.setdefault("runs", []).append({"at": datetime.now(timezone.utc).isoformat(timespec="minutes"),
-                                           "recipe": clean, "score": result.get("score")})
+        mem.setdefault("runs", []).append(
+            {
+                "at": datetime.now(timezone.utc).isoformat(timespec="minutes"),
+                "recipe": clean,
+                "score": result.get("score"),
+            }
+        )
         if result.get("score"):
             for k, v in clean.items():
-                s = mem.setdefault("option_scores", {}).setdefault(f"{k}={json.dumps(v)}", {"sum": 0.0, "n": 0})
+                s = mem.setdefault("option_scores", {}).setdefault(
+                    f"{k}={json.dumps(v)}", {"sum": 0.0, "n": 0}
+                )
                 s["sum"] += result["score"]
                 s["n"] += 1
         mem.setdefault("notes", []).extend(n for n in result.get("notes", []) if isinstance(n, str))

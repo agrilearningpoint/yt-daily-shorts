@@ -40,6 +40,7 @@ def _get_session():
         try:
             import onnxruntime as ort
             import requests
+
             MODEL_DIR.mkdir(parents=True, exist_ok=True)
             path = None
             for url in MODEL_URLS:
@@ -74,6 +75,7 @@ def depth_map(img):
     """Relative depth in 0..1 (1 = nearest), same HxW as img (BGR uint8)."""
     import cv2
     import numpy as np
+
     sess = _get_session()
     if sess is None:
         return None
@@ -81,8 +83,13 @@ def depth_map(img):
     # model works on multiples of 14; keep the photo's shape, ~518 on the short side
     s = 518 / min(h, w)
     ih, iw = max(14, int(round(h * s / 14)) * 14), max(14, int(round(w * s / 14)) * 14)
-    x = cv2.resize(img, (iw, ih), interpolation=cv2.INTER_AREA)[:, :, ::-1].astype(np.float32) / 255.0
-    x = (x - np.array([0.485, 0.456, 0.406], np.float32)) / np.array([0.229, 0.224, 0.225], np.float32)
+    x = (
+        cv2.resize(img, (iw, ih), interpolation=cv2.INTER_AREA)[:, :, ::-1].astype(np.float32)
+        / 255.0
+    )
+    x = (x - np.array([0.485, 0.456, 0.406], np.float32)) / np.array(
+        [0.229, 0.224, 0.225], np.float32
+    )
     x = x.transpose(2, 0, 1)[None]
     name = sess.get_inputs()[0].name
     d = sess.run(None, {name: x})[0]
@@ -111,8 +118,16 @@ def _ease(t):
     return t * t * (3 - 2 * t)
 
 
-def make_clip(image_path: str, out_path: str, seconds: float, width: int = 1080, height: int = 1920,
-              fps: int = 30, style: int = 0, strength: float = 1.0) -> Optional[str]:
+def make_clip(
+    image_path: str,
+    out_path: str,
+    seconds: float,
+    width: int = 1080,
+    height: int = 1920,
+    fps: int = 30,
+    style: int = 0,
+    strength: float = 1.0,
+) -> Optional[str]:
     """Render a W x H mp4 of the photo with depth parallax. image_path is the composed (oversized) bg."""
     try:
         import cv2
@@ -132,36 +147,66 @@ def make_clip(image_path: str, out_path: str, seconds: float, width: int = 1080,
     box = _photo_box(image_path, sw, sh)
     if box:
         x, y, w, h = box
-        sub = depth_map(img[y:y + h, x:x + w])
+        sub = depth_map(img[y : y + h, x : x + w])
         if sub is not None:
-            depth = np.zeros((sh, sw), np.float32)    # blurred fill stays flat, far away
-            depth[y:y + h, x:x + w] = 0.25 + 0.75 * sub
+            depth = np.zeros((sh, sw), np.float32)  # blurred fill stays flat, far away
+            depth[y : y + h, x : x + w] = 0.25 + 0.75 * sub
             depth = cv2.GaussianBlur(depth, (0, 0), 6)
     else:
         depth = depth_map(img)
     if depth is None:
         return None
     frames = max(int(round(seconds * fps)), 2)
-    gx, gy = np.meshgrid(np.arange(width, dtype=np.float32) - width / 2,
-                         np.arange(height, dtype=np.float32) - height / 2)
+    gx, gy = np.meshgrid(
+        np.arange(width, dtype=np.float32) - width / 2,
+        np.arange(height, dtype=np.float32) - height / 2,
+    )
     cx, cy = sw / 2, sh / 2
     pad = max(0.0, min((sw - width) / 2, (sh - height) / 2))
     amp = min(max(14.0, min(pad * 0.72, 68.0)), max(pad * 0.85, 8.0)) * strength
-    base_zoom = max(1.0, 1.0 + (2.0 * abs(amp) + 4.0) / max(min(width, height), 1)) if pad < 12.0 else 1.0
+    base_zoom = (
+        max(1.0, 1.0 + (2.0 * abs(amp) + 4.0) / max(min(width, height), 1)) if pad < 12.0 else 1.0
+    )
     dirs = [(0, 0, 1), (1, 0, 0), (-1, 0, 0), (0, -1, 1), (1, -1, 0), (-1, 1, 1)]
     dx, dy, dolly = dirs[style % len(dirs)]
     proc = subprocess.Popen(
-        [ffmpeg, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{width}x{height}",
-         "-r", str(fps), "-i", "-", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
-         "-pix_fmt", "yuv420p", out_path], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+        [
+            ffmpeg,
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "bgr24",
+            "-s",
+            f"{width}x{height}",
+            "-r",
+            str(fps),
+            "-i",
+            "-",
+            "-an",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "18",
+            "-pix_fmt",
+            "yuv420p",
+            out_path,
+        ],
+        stdin=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     denom = max(frames - 1, 1)
     try:
         for i in range(frames):
             t = _ease(i / denom)
-            zoom = base_zoom + 0.045 * t                     # gentle overall push
+            zoom = base_zoom + 0.045 * t  # gentle overall push
             bx, by = cx + gx / zoom, cy + gy / zoom
             d = cv2.remap(depth, bx, by, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-            k = d - 0.5                                       # near moves one way, far the other
+            k = d - 0.5  # near moves one way, far the other
             near_zoom = 1.0 + (0.07 * t * d if dolly else 0.0)
             ox = dx * amp * (t - 0.5) * k * 2
             oy = dy * amp * (t - 0.5) * k * 2

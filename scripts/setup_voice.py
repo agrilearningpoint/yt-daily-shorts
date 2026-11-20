@@ -11,6 +11,7 @@ Providers read it, nothing hardcodes it:
   * Gemini TTS has no rate parameter, so the style string is rewritten to say it
     in words ("fast, brisk pace"), which is what actually made the anchor drag.
 """
+
 from __future__ import annotations
 
 import os
@@ -49,8 +50,11 @@ def pace_for(percent: int) -> str:
 def rewrite_style(style: str, percent: int) -> str:
     """Swap only the pace part of the prompt; keep every other quality hint intact."""
     wanted = PACE_WORDS[pace_for(percent)]
-    pace_re = re.compile(r"(^|,\s*)(a\s+)?(steady|calm|normal|medium|slow|fast|brisk|quick|rapid)"
-                         r"[, ]*(pace|tempo|speed|crisp delivery|deliberate)?[^,]*", re.I)
+    pace_re = re.compile(
+        r"(^|,\s*)(a\s+)?(steady|calm|normal|medium|slow|fast|brisk|quick|rapid)"
+        r"[, ]*(pace|tempo|speed|crisp delivery|deliberate)?[^,]*",
+        re.I,
+    )
     parts = [p.strip() for p in style.split(",")]
     kept = [p for p in parts if p and not pace_re.match(p)]
     kept.append(wanted)
@@ -88,8 +92,10 @@ def test_voice(rate: str) -> int:
     """Synthesise one short line with the configured voice and report the real speed."""
     from video.tts import TTSEngine, probe_duration
 
-    text = ("नमस्कार दोस्तों, आज हम भारत के इतिहास की एक ऐसी कहानी सुनेंगे जो आपको हैरान कर देगी। "
-            "यह कहानी शुरू होती है चार हज़ार साल पहले।")
+    text = (
+        "नमस्कार दोस्तों, आज हम भारत के इतिहास की एक ऐसी कहानी सुनेंगे जो आपको हैरान कर देगी। "
+        "यह कहानी शुरू होती है चार हज़ार साल पहले।"
+    )
     out = Path("/tmp/voice_test.mp3")
     tts = TTSEngine(voice="hi-IN-MadhurNeural", rate=rate)
     asyncio.run(tts.synthesize_segment(text, str(out)))

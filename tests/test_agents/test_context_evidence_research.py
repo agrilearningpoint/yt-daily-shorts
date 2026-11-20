@@ -1,7 +1,5 @@
 """Unit tests for ContextEvidenceResearchAgent."""
 
-import json
-from pathlib import Path
 import pytest
 
 from agents.context_evidence_research.agent import ContextEvidenceResearchAgent
@@ -52,7 +50,14 @@ async def test_evidence_verification_injected_dossier(evidence_agent):
                 "claim_text": "सुप्रीम कोर्ट ने नया फैसला दिया",
                 "status": "verified",
                 "confidence": 0.98,
-                "sources": [{"name": "PIB", "url": "https://pib.gov.in", "reliability_score": 1.0, "is_government": True}],
+                "sources": [
+                    {
+                        "name": "PIB",
+                        "url": "https://pib.gov.in",
+                        "reliability_score": 1.0,
+                        "is_government": True,
+                    }
+                ],
             }
         ]
     }

@@ -77,13 +77,22 @@ class ShortsAdaptationAgent(BaseAgent):
         else:
             story: ExtractedStory = kwargs["story"]
             ranking: Optional[StoryRanking] = kwargs.get("ranking")
-            clips: List[SelectedClip] = kwargs.get("selected_clips", [])
+            moments_data = kwargs.get("selected_moments") or {}
+            clips: List[SelectedClip] = kwargs.get("selected_clips") or (
+                moments_data.get("selected_clips", []) if isinstance(moments_data, dict) else []
+            )
             evidence: List[EvidenceClaim] = kwargs.get("evidence_claims", [])
-            target_dur = kwargs.get("target_duration") or (ranking.recommended_duration if ranking else 60)
+            target_dur = int(
+                kwargs.get("target_duration") or (ranking.recommended_duration if ranking else 56)
+            )
+            if target_dur > 60:
+                target_dur = 56
             adapted = await self._adapt_story_to_script(story, ranking, clips, evidence, target_dur)
 
+        script_dict = adapted.to_script_dict() if hasattr(adapted, "to_script_dict") else {}
         result_data = {
             "adapted_script": adapted,
+            "script": script_dict,
             "estimated_duration": adapted.estimated_duration,
             "scene_count": len(adapted.scenes),
             "short_id": adapted.short_id,
@@ -92,7 +101,11 @@ class ShortsAdaptationAgent(BaseAgent):
         agent_res = AgentResult(
             success=True,
             data=result_data,
-            metadata={"video_id": video_id, "short_id": adapted.short_id, "duration": adapted.estimated_duration},
+            metadata={
+                "video_id": video_id,
+                "short_id": adapted.short_id,
+                "duration": adapted.estimated_duration,
+            },
         )
         self.save_result(video_id, agent_res)
         return agent_res
@@ -150,9 +163,15 @@ class ShortsAdaptationAgent(BaseAgent):
                             scene_type=s.get("scene_type", "photo_context"),
                             duration=float(s.get("duration", 5.0)),
                             narration_hi=s.get("narration_hi", ""),
-                            source_clip_id=primary_clip.clip_id if s.get("scene_type") == "source_clip" and primary_clip else None,
-                            clip_start=primary_clip.start_time if s.get("scene_type") == "source_clip" and primary_clip else None,
-                            clip_end=primary_clip.end_time if s.get("scene_type") == "source_clip" and primary_clip else None,
+                            source_clip_id=primary_clip.clip_id
+                            if s.get("scene_type") == "source_clip" and primary_clip
+                            else None,
+                            clip_start=primary_clip.start_time
+                            if s.get("scene_type") == "source_clip" and primary_clip
+                            else None,
+                            clip_end=primary_clip.end_time
+                            if s.get("scene_type") == "source_clip" and primary_clip
+                            else None,
                             visual_query=s.get("visual_query", story.title),
                             on_screen_text=s.get("on_screen_text", ""),
                             headline_chip=s.get("headline_chip", ""),
@@ -165,18 +184,25 @@ class ShortsAdaptationAgent(BaseAgent):
                     short_id=short_id,
                     story_id=story.story_id,
                     title_hi=parsed.get("title_hi", story.title),
-                    hook_text_hi=parsed.get("hook_text_hi", scenes[0].narration_hi if scenes else ""),
+                    hook_text_hi=parsed.get(
+                        "hook_text_hi", scenes[0].narration_hi if scenes else ""
+                    ),
                     hook_archetype=parsed.get("hook_archetype", HookArchetype.CURIOSITY_GAP.value),
                     target_duration=target_dur,
                     estimated_duration=round(total_dur, 2),
                     scenes=scenes,
-                    outro_hi=parsed.get("outro_hi", "देश और दुनिया की हर बड़ी खबर के लिए भारत की सोच को अभी सब्सक्राइब करें।"),
+                    outro_hi=parsed.get(
+                        "outro_hi",
+                        "देश और दुनिया की हर बड़ी खबर के लिए भारत की सोच को अभी सब्सक्राइब करें।",
+                    ),
                     source_attributions=[f"Source: {story.lead_speaker or 'Broadcast'}"],
                     evidence_citations=[c.claim_text for c in evidence[:2]],
                     category_badge=parsed.get("category_badge", "खास खबर"),
                 )
         except Exception as exc:
-            self.logger.warning("LLM adaptation script generation failed (%s); using deterministic template.", exc)
+            self.logger.warning(
+                "LLM adaptation script generation failed (%s); using deterministic template.", exc
+            )
 
         # Deterministic script generation
         return self._build_template_script(story, primary_clip, evidence, target_dur)
@@ -242,7 +268,13 @@ class ShortsAdaptationAgent(BaseAgent):
         )
 
         # Scene 3: Evidence & Facts (8.0s)
-        fact_text = evidence[0].claim_text if evidence else story.key_facts[0] if story.key_facts else "आधिकारिक आंकड़े जारी किए गए हैं।"
+        fact_text = (
+            evidence[0].claim_text
+            if evidence
+            else story.key_facts[0]
+            if story.key_facts
+            else "आधिकारिक आंकड़े जारी किए गए हैं।"
+        )
         scenes.append(
             AdaptedShortScene(
                 scene_index=len(scenes),

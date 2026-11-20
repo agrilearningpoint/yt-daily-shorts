@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 from agents.audio_sound_design.agent import AudioSoundDesignAgent
-from core.agent_contracts import AudioMixPlan, SoundCueContract
+from core.agent_contracts import AudioMixPlan
 from core.configuration import AppConfig
 from core.state_manager import StateManager
 

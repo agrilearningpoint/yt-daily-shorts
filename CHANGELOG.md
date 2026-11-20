@@ -5,6 +5,38 @@ All notable changes to the **YT Daily Shorts** platform will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - Production Hardening, Duration Policy & Architecture Integration
+
+### Added
+- **Centralized Shorts Duration Policy**:
+  - Defined authoritative constants in `core/duration.py`: `SHORTS_HARD_LIMIT = 59.9`, `SHORTS_SAFE_MAX = 59.5`, `SHORTS_MIN_DURATION = 15.0`, `NEWS_TARGET_DURATION = 56.0`.
+  - Added `is_duration_valid()` predicate and unified validation across all orchestrators and agents.
+  - Synchronized `config/settings.yaml`, `core/configuration.py`, `prompts/scripting/news_script.j2`, and `agents/prompt_engineer/agent.py` to target 56s (8 news stories: 6 national, 2 international).
+  - Hard duration check in `PublisherAgent`: probe-based rejection before YouTube upload if duration $> 59.9$s or $< 15.0$s.
+- **Strict Blocking QA Gates**:
+  - `visual_audio_match_qa` stage in `core/orchestrator.py` and `core/newsroom_orchestrator.py` now enforces `require_success=True` and `approved=True`. Rejections immediately abort with `StageError` and mark pipeline `FAILED`.
+  - Added semantic and provenance integrity checks in `agents/visual_audio_match_qa/agent.py` preventing corrupt, fake, or mismatched assets.
+  - Post-render `VideoQAInspector` checks video streams, vertical dimensions (1080x1920), duration bounds, and audio stream presence.
+- **Master Editing Director & Motion Presets Integration**:
+  - Connected `MasterEditingDirectorAgent` timeline segments directly to `VideoRenderer._beat_clip()` in `video/renderer.py`.
+  - Implemented dynamic rendering of all 56 motion presets via FFmpeg filtergraph construction supporting zoom, pan, drift, punch, blur, shake, rotate, and overlay animations.
+- **Multi-Track Audio Sound Design**:
+  - Overhauled `AudioSoundDesignAgent.render_mix()` to construct multi-track FFmpeg filtergraphs mixing narration voice, ducked background news bed (-24 dB during speech), and timed sound effects cues.
+  - Applied EBU R128 / ATSC A/85 broadcast loudness normalization (`loudnorm=I=-14:LRA=7:TP=-1.0`).
+- **Female Hindi News Voice Lock**:
+  - Standardized Hindi news voice strictly to `hi-IN-SwaraNeural` (primary) and `hi-IN-KavyaNeural` (female fallback) in `video/tts.py`, `agents/video_producer/agent.py`, and `config/settings.yaml`.
+- **Long-Video-to-Shorts Repurposing Pipeline Completion**:
+  - Standardized agent input/output contracts across all 9 repurposing agents (`LongVideoIntakeAgent`, `TranscriptionDiarizationAgent`, `SceneUnderstandingAgent`, `StoryExtractionAgent`, `ContextEvidenceResearchAgent`, `ShortsOpportunityRankerAgent`, `ClipMomentSelectorAgent`, `ShortsAdaptationAgent`, `RightsAttributionAgent`).
+  - Added `AdaptedShortScript.to_script_dict()` bridge for seamless downstream rendering.
+  - Fixed chunked story extraction and duration capping in `ShortsAdaptationAgent`.
+- **State Manager In-Memory Database Fix**:
+  - Added persistent connection caching for `":memory:"` SQLite databases in `core/state_manager.py` to prevent table loss during testing.
+
+### Changed
+- Refactored `NewsroomOrchestrator.produce_daily_bulletin()` to delegate directly to `DailyOrchestrator` for unified execution.
+- Standardized `NewsVisualSourcingAgent` and `MediaCollector` signatures and Fair Dealing license provenance tracking.
+- Resolved all Ruff linting and formatting violations across 190 Python files.
+
 ## [0.1.0] - Initial Production Implementation
 
 ### Added

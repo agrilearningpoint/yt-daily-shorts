@@ -25,8 +25,12 @@ BRAND_OUTRO_PRESETS: List[MotionPresetSpec] = [
         duration_max=3.0,
         ffmpeg_filter_template="fade=t=in:st=0:d=0.2",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=0.8, scale_y=0.8, opacity=0.0, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=0.3, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=0.8, scale_y=0.8, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.3, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT
+            ),
         ],
         parameters={"primary_color": "0xFF9933", "segment_label": "देश की बात"},
         tags=["bumper", "national", "segment", "brand"],
@@ -42,8 +46,12 @@ BRAND_OUTRO_PRESETS: List[MotionPresetSpec] = [
         duration_max=3.0,
         ffmpeg_filter_template="fade=t=in:st=0:d=0.2",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=0.8, scale_y=0.8, opacity=0.0, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=0.3, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=0.8, scale_y=0.8, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.3, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT
+            ),
         ],
         parameters={"primary_color": "0x3B82F6", "segment_label": "दुनिया जहान"},
         tags=["bumper", "international", "globe", "geopolitics"],
@@ -59,8 +67,12 @@ BRAND_OUTRO_PRESETS: List[MotionPresetSpec] = [
         duration_max=3.0,
         ffmpeg_filter_template="fade=t=in:st=0:d=0.2",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=0.8, scale_y=0.8, opacity=0.0, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=0.3, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=0.8, scale_y=0.8, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.3, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT
+            ),
         ],
         parameters={"primary_color": "0x10B981", "segment_label": "कारोबार & बाजार"},
         tags=["bumper", "economy", "markets", "business"],
@@ -76,8 +88,12 @@ BRAND_OUTRO_PRESETS: List[MotionPresetSpec] = [
         duration_max=5.0,
         ffmpeg_filter_template="fade=t=in:st=0:d=0.25",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=0.9, scale_y=0.9, opacity=0.0, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=0.4, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=0.9, scale_y=0.9, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.4, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT
+            ),
         ],
         parameters={"card_style": "parchment_gold", "icon": "calendar"},
         tags=["calendar", "observance", "anniversary", "history"],
@@ -93,7 +109,9 @@ BRAND_OUTRO_PRESETS: List[MotionPresetSpec] = [
         duration_max=3.0,
         ffmpeg_filter_template="",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, pos_y=100.0, opacity=0.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, pos_y=100.0, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
             KeyframeAnimation(time_offset=0.3, pos_y=0.0, opacity=1.0, easing=EasingType.EASE_OUT),
         ],
         parameters={"ticker_y": 1726, "live_tag_color": "0xE11D48"},
@@ -127,8 +145,12 @@ BRAND_OUTRO_PRESETS: List[MotionPresetSpec] = [
         duration_max=4.5,
         ffmpeg_filter_template="fade=t=in:st=0:d=0.25:color=black",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=0.85, scale_y=0.85, opacity=0.0, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=0.35, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.SPRING),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=0.85, scale_y=0.85, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.35, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.SPRING
+            ),
         ],
         parameters={"channel_title": "भारत की सोच", "cta_text": "सब्सक्राइब करें और जुड़े रहें"},
         tags=["outro", "subscribe", "brand", "channel_id"],

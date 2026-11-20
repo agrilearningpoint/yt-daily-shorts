@@ -19,9 +19,23 @@ def test_jaccard_similarity():
 
 def test_deduplicate_articles():
     now = datetime.now(timezone.utc)
-    a1 = RawArticle("ISRO launches new rocket successfully", "https://isro.gov.in/1", "summary", now, "ISRO")
-    a2 = RawArticle("ISRO launches new rocket successfully from Sriharikota", "https://thehindu.com/1", "summary", now, "The Hindu")
-    a3 = RawArticle("Government introduces new semiconductor incentive policy", "https://pib.gov.in/2", "summary", now, "PIB")
+    a1 = RawArticle(
+        "ISRO launches new rocket successfully", "https://isro.gov.in/1", "summary", now, "ISRO"
+    )
+    a2 = RawArticle(
+        "ISRO launches new rocket successfully from Sriharikota",
+        "https://thehindu.com/1",
+        "summary",
+        now,
+        "The Hindu",
+    )
+    a3 = RawArticle(
+        "Government introduces new semiconductor incentive policy",
+        "https://pib.gov.in/2",
+        "summary",
+        now,
+        "PIB",
+    )
 
     unique = deduplicate_articles([a1, a2, a3], threshold=0.4)
     assert len(unique) == 2

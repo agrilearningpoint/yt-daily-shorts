@@ -42,7 +42,9 @@ class HistoryStore:
 
     def mark_topic(self, topic: str, category: str = "") -> None:
         with self._lock:
-            self.data.setdefault("topics", []).append({"topic": topic, "category": category, "at": self._now()})
+            self.data.setdefault("topics", []).append(
+                {"topic": topic, "category": category, "at": self._now()}
+            )
             self._save()
 
     # News -----------------------------------------------------------------
@@ -61,7 +63,12 @@ class HistoryStore:
         with self._lock:
             for it in items:
                 self.data.setdefault("news", []).append(
-                    {"url": it.get("source_url", ""), "title": it.get("title", ""), "at": self._now()})
+                    {
+                        "url": it.get("source_url", ""),
+                        "title": it.get("title", ""),
+                        "at": self._now(),
+                    }
+                )
             self.data["news"] = self.data["news"][-400:]
             self._save()
 

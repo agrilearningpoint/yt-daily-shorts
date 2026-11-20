@@ -9,7 +9,6 @@ the final rendering pipeline.
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -18,11 +17,8 @@ from core.agent_contracts import (
     AudioMixPlan,
     DailyOpeningBrief,
     MasterEditingTimeline,
-    MotionGraphicsPlanItem,
     NewsVisualAsset,
     TimelineSegmentContract,
-    VFXPlanItem,
-    WordTimingItem,
 )
 from core.configuration import AppConfig
 from core.state_manager import StateManager
@@ -56,7 +52,6 @@ class MasterEditingDirectorAgent(BaseAgent):
         scenes = script.get("scenes", [])
         hook_text = script.get("hook", "")
         video_type = script.get("video_type", "news")
-        is_news = video_type == "news"
 
         opening_brief: Optional[DailyOpeningBrief] = kwargs.get("opening_brief")
         visual_assets: List[NewsVisualAsset] = kwargs.get("visual_assets", [])
@@ -90,27 +85,31 @@ class MasterEditingDirectorAgent(BaseAgent):
         # 3. Build structural scene beats
         beats: List[Dict[str, Any]] = []
         if hook_text:
-            beats.append({
-                "scene_id": "scene_000_hook",
-                "kind": "hook",
-                "text": hook_text,
-                "headline": hook_text[:75],
-                "category": "बड़ी खबर",
-                "is_hook": True,
-            })
+            beats.append(
+                {
+                    "scene_id": "scene_000_hook",
+                    "kind": "hook",
+                    "text": hook_text,
+                    "headline": hook_text[:75],
+                    "category": "बड़ी खबर",
+                    "is_hook": True,
+                }
+            )
 
         for idx, sc in enumerate(scenes, 1):
             scene_id = f"scene_{idx:03d}"
             narr = sc.get("narration") or sc.get("text") or ""
             headline = sc.get("on_screen_text") or sc.get("headline") or narr[:65]
-            beats.append({
-                "scene_id": scene_id,
-                "kind": "scene",
-                "text": narr,
-                "headline": headline,
-                "category": sc.get("category", "राष्ट्रीय"),
-                "is_hook": False,
-            })
+            beats.append(
+                {
+                    "scene_id": scene_id,
+                    "kind": "scene",
+                    "text": narr,
+                    "headline": headline,
+                    "category": sc.get("category", "राष्ट्रीय"),
+                    "is_hook": False,
+                }
+            )
 
         total_beats = len(beats)
         if not measured_durations:
@@ -183,11 +182,17 @@ class MasterEditingDirectorAgent(BaseAgent):
             if isinstance(visual_assets, list) and idx < len(visual_assets):
                 va = visual_assets[idx]
             elif isinstance(visual_assets, dict):
-                va = visual_assets.get(idx) or visual_assets.get(str(idx)) or visual_assets.get(scene_id)
+                va = (
+                    visual_assets.get(idx)
+                    or visual_assets.get(str(idx))
+                    or visual_assets.get(scene_id)
+                )
 
             if va:
                 asset_path = getattr(va, "local_path", getattr(va, "path", ""))
-                asset_source = getattr(va, "source_provider", getattr(va, "source", "sourcing_agent"))
+                asset_source = getattr(
+                    va, "source_provider", getattr(va, "source", "sourcing_agent")
+                )
                 asset_id = getattr(va, "asset_id", asset_id)
             elif beat.get("is_hook") and opening_brief:
                 # Use opening hook visual if available
@@ -217,7 +222,9 @@ class MasterEditingDirectorAgent(BaseAgent):
             elif is_video:
                 preset_id = "video_speaker_focus_reframe"
             else:
-                preset_id = vfx_preset or ("photo_slow_push_in" if idx % 2 == 0 else "photo_diagonal_pan")
+                preset_id = vfx_preset or (
+                    "photo_slow_push_in" if idx % 2 == 0 else "photo_diagonal_pan"
+                )
 
             segment = TimelineSegmentContract(
                 scene_id=scene_id,
@@ -283,7 +290,9 @@ class MasterEditingDirectorAgent(BaseAgent):
         self.save_result(video_id, agent_result)
         return agent_result
 
-    def build_renderer_clips(self, timeline: MasterEditingTimeline, work_dir: Path) -> Tuple[List[SceneClip], List[float]]:
+    def build_renderer_clips(
+        self, timeline: MasterEditingTimeline, work_dir: Path
+    ) -> Tuple[List[SceneClip], List[float]]:
         """Translate authoritative timeline into renderer SceneClips and quantized durations."""
         clips: List[SceneClip] = []
         durs: List[float] = []
@@ -323,6 +332,7 @@ class MasterEditingDirectorAgent(BaseAgent):
     def _generate_solid_card(self, out_path: str, label: str) -> None:
         """Create fallback background frame if no image was provided."""
         from PIL import Image, ImageDraw
+
         p = Path(out_path)
         p.parent.mkdir(parents=True, exist_ok=True)
         im = Image.new("RGB", (1080, 1920), color=(15, 23, 42))
@@ -334,6 +344,7 @@ class MasterEditingDirectorAgent(BaseAgent):
     def _generate_transparent_png(self, out_path: str) -> None:
         """Create empty transparent 1080x1920 PNG."""
         from PIL import Image
+
         p = Path(out_path)
         p.parent.mkdir(parents=True, exist_ok=True)
         im = Image.new("RGBA", (1080, 1920), color=(0, 0, 0, 0))

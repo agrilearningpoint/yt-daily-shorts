@@ -41,7 +41,9 @@ class ContextEvidenceResearchAgent(BaseAgent):
         if not self.validate_input(**kwargs):
             return AgentResult(
                 success=False,
-                errors=["No stories or evidence dossiers provided to ContextEvidenceResearchAgent."],
+                errors=[
+                    "No stories or evidence dossiers provided to ContextEvidenceResearchAgent."
+                ],
             )
 
         video_id = kwargs.get("video_id", "lv_evidence_unk")
@@ -87,9 +89,15 @@ class ContextEvidenceResearchAgent(BaseAgent):
                 dossiers[story.story_id] = claims
 
         total_claims = sum(len(c) for c in dossiers.values())
-        verified_count = sum(1 for claims in dossiers.values() for c in claims if c.status == "verified")
-        unverified_count = sum(1 for claims in dossiers.values() for c in claims if c.status == "unverified")
-        flagged_count = sum(1 for claims in dossiers.values() for c in claims if c.status != "verified")
+        verified_count = sum(
+            1 for claims in dossiers.values() for c in claims if c.status == "verified"
+        )
+        unverified_count = sum(
+            1 for claims in dossiers.values() for c in claims if c.status == "unverified"
+        )
+        flagged_count = sum(
+            1 for claims in dossiers.values() for c in claims if c.status != "verified"
+        )
 
         result_data = {
             "evidence_dossiers": dossiers,
@@ -102,7 +110,11 @@ class ContextEvidenceResearchAgent(BaseAgent):
         agent_res = AgentResult(
             success=True,
             data=result_data,
-            metadata={"video_id": video_id, "story_count": len(dossiers), "total_claims": total_claims},
+            metadata={
+                "video_id": video_id,
+                "story_count": len(dossiers),
+                "total_claims": total_claims,
+            },
         )
         self.save_result(video_id, agent_res)
         return agent_res
@@ -111,8 +123,7 @@ class ContextEvidenceResearchAgent(BaseAgent):
         """Verify the factual claims of a single story against authoritative sources."""
         # Find matching trusted sources
         matching_sources = [
-            s for s in DEFAULT_TRUSTED_SOURCES
-            if s.category == story.category or s.is_government
+            s for s in DEFAULT_TRUSTED_SOURCES if s.category == story.category or s.is_government
         ][:3]
         if not matching_sources:
             matching_sources = DEFAULT_TRUSTED_SOURCES[:2]
@@ -181,8 +192,15 @@ class ContextEvidenceResearchAgent(BaseAgent):
         claims = []
         for idx, fact in enumerate(claim_texts[:3]):
             # Check if story has government/official or verified institutional backing
-            is_supported = any(gov in fact.lower() or gov in story.title.lower() for gov in ["इसरो", "सुप्रीम कोर्ट", "सर्वोच्च न्यायालय", "आरबीआई", "संसद", "सरकार", "pib"])
-            status = "verified" if is_supported and story.completeness_score >= 0.7 else "context_required"
+            is_supported = any(
+                gov in fact.lower() or gov in story.title.lower()
+                for gov in ["इसरो", "सुप्रीम कोर्ट", "सर्वोच्च न्यायालय", "आरबीआई", "संसद", "सरकार", "pib"]
+            )
+            status = (
+                "verified"
+                if is_supported and story.completeness_score >= 0.7
+                else "context_required"
+            )
             confidence = 0.95 if status == "verified" else 0.60
             claims.append(
                 EvidenceClaim(
@@ -191,9 +209,13 @@ class ContextEvidenceResearchAgent(BaseAgent):
                     claim_text=fact,
                     status=status,
                     confidence=confidence,
-                    explanation="Institutional record match verified." if status == "verified" else "Secondary claim requiring primary gazette confirmation.",
+                    explanation="Institutional record match verified."
+                    if status == "verified"
+                    else "Secondary claim requiring primary gazette confirmation.",
                     sources=evidence_sources,
-                    updated_context="आधिकारिक पुष्टि उपलब्ध है।" if status == "verified" else "अतिरिक्त साक्ष्य आवश्यक।",
+                    updated_context="आधिकारिक पुष्टि उपलब्ध है।"
+                    if status == "verified"
+                    else "अतिरिक्त साक्ष्य आवश्यक।",
                 )
             )
 

@@ -12,11 +12,10 @@ Generates broadcast TV news layers:
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, features
+from PIL import Image, ImageDraw, ImageFont, features
 
 logger = logging.getLogger("video.motion_graphics")
 
@@ -25,14 +24,14 @@ FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 
 # Category color themes (Accent, Background)
 CATEGORY_COLORS: Dict[str, Tuple[Tuple[int, int, int], Tuple[int, int, int]]] = {
-    "राष्ट्रीय": ((255, 153, 51), (15, 23, 42)),       # Saffron + Dark Slate
-    "अंतरराष्ट्रीय": ((59, 130, 246), (15, 23, 42)),    # Blue + Dark Slate
-    "कारोबार": ((16, 185, 129), (6, 78, 59)),         # Emerald Green
-    "रक्षा": ((239, 68, 68), (69, 10, 10)),           # Crimson Red
-    "विज्ञान": ((139, 92, 246), (46, 16, 101)),        # Purple
-    "खेल": ((245, 158, 11), (67, 20, 7)),             # Amber
-    "आज": ((244, 63, 94), (19, 78, 74)),              # Rose Teal
-    "default": ((225, 29, 72), (15, 23, 42)),         # Ruby
+    "राष्ट्रीय": ((255, 153, 51), (15, 23, 42)),  # Saffron + Dark Slate
+    "अंतरराष्ट्रीय": ((59, 130, 246), (15, 23, 42)),  # Blue + Dark Slate
+    "कारोबार": ((16, 185, 129), (6, 78, 59)),  # Emerald Green
+    "रक्षा": ((239, 68, 68), (69, 10, 10)),  # Crimson Red
+    "विज्ञान": ((139, 92, 246), (46, 16, 101)),  # Purple
+    "खेल": ((245, 158, 11), (67, 20, 7)),  # Amber
+    "आज": ((244, 63, 94), (19, 78, 74)),  # Rose Teal
+    "default": ((225, 29, 72), (15, 23, 42)),  # Ruby
 }
 
 
@@ -47,7 +46,9 @@ def _get_font(size: int, weight: str = "Bold") -> ImageFont.FreeTypeFont:
         return ImageFont.load_default()
 
 
-def _wrap_headline(draw: ImageDraw.ImageDraw, text: str, fnt, max_w: int, max_lines: int = 2) -> List[str]:
+def _wrap_headline(
+    draw: ImageDraw.ImageDraw, text: str, fnt, max_w: int, max_lines: int = 2
+) -> List[str]:
     words = text.split()
     lines: List[str] = []
     curr = ""
@@ -77,7 +78,7 @@ class MotionGraphicsEngine:
         story_index: int,
         total_stories: int,
         date_str: str = "",
-        is_hook: bool = False
+        is_hook: bool = False,
     ) -> str:
         """Compose a full 1080x1920 transparent PNG overlay with TV-style lower thirds and header."""
         out_file = Path(out_path)
@@ -127,7 +128,9 @@ class MotionGraphicsEngine:
             fnt_cat = _get_font(34, "Bold")
             cat_w = d.textlength(cat_name, font=fnt_cat)
             cat_x = 40 + cw + 55
-            d.rounded_rectangle([cat_x, 160, cat_x + cat_w + 40, 224], radius=16, fill=cat_color + (240,))
+            d.rounded_rectangle(
+                [cat_x, 160, cat_x + cat_w + 40, 224], radius=16, fill=cat_color + (240,)
+            )
             d.text((cat_x + 20, 169), cat_name, font=fnt_cat, fill=(255, 255, 255, 255))
 
         # -------------------------------------------------------------
@@ -135,14 +138,20 @@ class MotionGraphicsEngine:
         # -------------------------------------------------------------
         if headline.strip():
             fnt_head = _get_font(72, "ExtraBold") if is_hook else _get_font(60, "Bold")
-            lines = _wrap_headline(d, headline.strip(), fnt_head, W - 140, max_lines=3 if is_hook else 2)
+            lines = _wrap_headline(
+                d, headline.strip(), fnt_head, W - 140, max_lines=3 if is_hook else 2
+            )
 
             box_h = len(lines) * 88 + 48
             box_y = 1380 - box_h  # positioned cleanly above YouTube UI controls
 
             # Translucent dark backdrop
-            d.rounded_rectangle([40, box_y, W - 40, box_y + box_h], radius=24, fill=(10, 15, 28, 230))
-            d.rounded_rectangle([40, box_y, W - 40, box_y + box_h], radius=24, outline=(255, 255, 255, 30), width=2)
+            d.rounded_rectangle(
+                [40, box_y, W - 40, box_y + box_h], radius=24, fill=(10, 15, 28, 230)
+            )
+            d.rounded_rectangle(
+                [40, box_y, W - 40, box_y + box_h], radius=24, outline=(255, 255, 255, 30), width=2
+            )
 
             # Left accent highlight bar
             accent_col = (255, 214, 10, 255) if is_hook else (225, 29, 72, 255)
@@ -151,8 +160,14 @@ class MotionGraphicsEngine:
             # Headline text
             ty = box_y + 22
             for line in lines:
-                d.text((70, ty), line, font=fnt_head, fill=(255, 255, 255, 255),
-                       stroke_width=2, stroke_fill=(0, 0, 0, 180))
+                d.text(
+                    (70, ty),
+                    line,
+                    font=fnt_head,
+                    fill=(255, 255, 255, 255),
+                    stroke_width=2,
+                    stroke_fill=(0, 0, 0, 180),
+                )
                 ty += 84
 
         # -------------------------------------------------------------

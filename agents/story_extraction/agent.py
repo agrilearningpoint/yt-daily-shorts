@@ -12,7 +12,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from agents.base_agent import AgentResult, BaseAgent
-from core.agent_contracts import ExtractedStory, SourceVideoManifest, TranscriptSegment, VisualScene
+from core.agent_contracts import ExtractedStory, SourceVideoManifest, TranscriptSegment
 from core.configuration import AppConfig
 from core.llm_client import LLMClient
 from core.state_manager import StateManager
@@ -28,15 +28,23 @@ class StoryExtractionAgent(BaseAgent):
         self.llm = LLMClient(config.llm)
 
     def validate_input(self, **kwargs: Any) -> bool:
-        """Verify segments or stories are provided."""
-        return bool(kwargs.get("segments") or kwargs.get("stories") or kwargs.get("transcript"))
+        """Verify segments, stories, or transcription are provided."""
+        return bool(
+            kwargs.get("segments")
+            or kwargs.get("stories")
+            or kwargs.get("extracted_stories")
+            or kwargs.get("transcript")
+            or kwargs.get("transcription")
+        )
 
     async def execute(self, **kwargs: Any) -> AgentResult:
         """Extract stories from segments and metadata without truncation."""
         if not self.validate_input(**kwargs):
             return AgentResult(
                 success=False,
-                errors=["No transcript segments or text provided to StoryExtractionAgent."],
+                errors=[
+                    "No transcript segments, stories, or transcription provided to StoryExtractionAgent."
+                ],
             )
 
         manifest: Optional[SourceVideoManifest] = kwargs.get("manifest")
@@ -45,8 +53,9 @@ class StoryExtractionAgent(BaseAgent):
         stories: List[ExtractedStory] = []
 
         # 1. Injected stories (e.g. fixtures or manual override)
-        if kwargs.get("stories"):
-            for idx, st in enumerate(kwargs["stories"]):
+        injected_stories = kwargs.get("stories") or kwargs.get("extracted_stories")
+        if injected_stories:
+            for idx, st in enumerate(injected_stories):
                 if isinstance(st, ExtractedStory):
                     stories.append(st)
                 elif isinstance(st, dict):
@@ -67,9 +76,13 @@ class StoryExtractionAgent(BaseAgent):
                     )
 
         # 2. Extract from segments with chunking
-        elif kwargs.get("segments"):
-            segments: List[TranscriptSegment] = kwargs["segments"]
-            stories = await self._extract_stories_chunked(segments, manifest)
+        elif kwargs.get("segments") or kwargs.get("transcription"):
+            trans_data = kwargs.get("transcription") or {}
+            segments = kwargs.get("segments") or (
+                trans_data.get("segments", []) if isinstance(trans_data, dict) else []
+            )
+            if segments:
+                stories = await self._extract_stories_chunked(segments, manifest)
 
         # 3. Extract from raw transcript string
         elif kwargs.get("transcript"):
@@ -92,6 +105,15 @@ class StoryExtractionAgent(BaseAgent):
         )
         self.save_result(video_id, agent_res)
         return agent_res
+
+    async def _chunk_and_extract(
+        self,
+        segments: List[TranscriptSegment],
+        scenes: Optional[List[Any]] = None,
+        manifest: Optional[SourceVideoManifest] = None,
+    ) -> List[ExtractedStory]:
+        """Wrapper for _extract_stories_chunked."""
+        return await self._extract_stories_chunked(segments, manifest)
 
     async def _extract_stories_chunked(
         self, segments: List[TranscriptSegment], manifest: Optional[SourceVideoManifest]
@@ -117,13 +139,16 @@ class StoryExtractionAgent(BaseAgent):
             all_extracted.extend(extracted)
             if end_idx >= len(segments):
                 break
-            start_idx += (chunk_size - overlap)
+            start_idx += chunk_size - overlap
             chunk_idx += 1
 
         return all_extracted
 
     async def _process_segment_window(
-        self, window: List[TranscriptSegment], manifest: Optional[SourceVideoManifest], chunk_index: int
+        self,
+        window: List[TranscriptSegment],
+        manifest: Optional[SourceVideoManifest],
+        chunk_index: int,
     ) -> List[ExtractedStory]:
         """Process one window of transcript segments."""
         condensed_lines = []
@@ -178,17 +203,28 @@ class StoryExtractionAgent(BaseAgent):
                 if extracted:
                     return extracted
         except Exception as exc:
-            self.logger.warning("LLM story extraction failed or in mock mode (%s); using heuristic clusterer.", exc)
+            self.logger.warning(
+                "LLM story extraction failed or in mock mode (%s); using heuristic clusterer.", exc
+            )
 
         return self._heuristic_segment_clustering(window, manifest, chunk_index)
 
     def _heuristic_segment_clustering(
-        self, segments: List[TranscriptSegment], manifest: Optional[SourceVideoManifest], chunk_index: int = 0
+        self,
+        segments: List[TranscriptSegment],
+        manifest: Optional[SourceVideoManifest],
+        chunk_index: int = 0,
     ) -> List[ExtractedStory]:
         """Heuristic rule-based segmentation clustering adjacent segments."""
         transition_patterns = [
-            r"अगली\s+खबर", r"बड़ी\s+खबर", r"अब\s+बात\s+करते\s+हैं", r"संसद\s+में",
-            r"दूसरी\s+तरफ", r"वैज्ञानिकों", r"अंतरराष्ट्रीय", r"अर्थव्यवस्था",
+            r"अगली\s+खबर",
+            r"बड़ी\s+खबर",
+            r"अब\s+बात\s+करते\s+हैं",
+            r"संसद\s+में",
+            r"दूसरी\s+तरफ",
+            r"वैज्ञानिकों",
+            r"अंतरराष्ट्रीय",
+            r"अर्थव्यवस्था",
         ]
 
         clusters: List[List[TranscriptSegment]] = []
@@ -196,7 +232,9 @@ class StoryExtractionAgent(BaseAgent):
 
         for seg in segments:
             is_transition = any(re.search(pat, seg.text) for pat in transition_patterns)
-            cluster_dur = (current_cluster[-1].end - current_cluster[0].start) if current_cluster else 0.0
+            cluster_dur = (
+                (current_cluster[-1].end - current_cluster[0].start) if current_cluster else 0.0
+            )
 
             if current_cluster and (is_transition or cluster_dur >= 45.0):
                 clusters.append(current_cluster)
@@ -233,7 +271,8 @@ class StoryExtractionAgent(BaseAgent):
                     start_time=round(start_t, 2),
                     end_time=round(end_t, 2),
                     key_facts=[c_text[:120]],
-                    entities=[w for w in ["भारत", "सरकार", "संसद", "इसरो"] if w in c_text] or ["भारत"],
+                    entities=[w for w in ["भारत", "सरकार", "संसद", "इसरो"] if w in c_text]
+                    or ["भारत"],
                     transcript_excerpt=c_text[:200],
                     completeness_score=0.9,
                     lead_speaker=cl[0].speaker_id,
@@ -253,7 +292,9 @@ class StoryExtractionAgent(BaseAgent):
             # Check overlap in time or entity
             duplicate = False
             for existing in unique:
-                overlap_time = max(0.0, min(s.end_time, existing.end_time) - max(s.start_time, existing.start_time))
+                overlap_time = max(
+                    0.0, min(s.end_time, existing.end_time) - max(s.start_time, existing.start_time)
+                )
                 if overlap_time > 15.0:
                     duplicate = True
                     break
@@ -266,7 +307,9 @@ class StoryExtractionAgent(BaseAgent):
 
         return unique
 
-    async def _extract_from_raw_text(self, text: str, manifest: Optional[SourceVideoManifest]) -> List[ExtractedStory]:
+    async def _extract_from_raw_text(
+        self, text: str, manifest: Optional[SourceVideoManifest]
+    ) -> List[ExtractedStory]:
         """Extract stories from raw unsegmented text string."""
         paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
         if not paragraphs:

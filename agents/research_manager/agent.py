@@ -56,14 +56,21 @@ class ResearchManagerAgent(BaseAgent):
             sources = [i.source_url for i in items if getattr(i, "source_url", "")]
             return AgentResult(
                 success=bool(data_items),
-                data={"items": data_items, "sources": sources, "day_name": day_name, "topic": topic},
+                data={
+                    "items": data_items,
+                    "sources": sources,
+                    "day_name": day_name,
+                    "topic": topic,
+                },
                 metadata={"video_type": "repurposing", "topic": topic},
             )
 
         if video_type == "news":
             exclude = self.history.recent_news() if self.history else []
             n = self.config.video.news_headline_count
-            items = self.collector.collect_and_rank_news(target_count=max(n + 25, 60), exclude=exclude)
+            items = self.collector.collect_and_rank_news(
+                target_count=max(n + 25, 60), exclude=exclude
+            )
             data_items = [vars(i) for i in items]
             sources = [i.source_url for i in items]
             # The bulletin opens with today: date + parv, rashifal, then trading news
@@ -86,14 +93,23 @@ class ResearchManagerAgent(BaseAgent):
                 seed = await self._llm_fresh_topic(topic_category, used)
             topic = self.trend.discover_calendar_topic(day_name, used, seed_override=seed)
             if not topic.summary and self.config.general.strict_mode:
-                return AgentResult(success=False, errors=[f"No Wikipedia content for topic '{topic.title}'"])
+                return AgentResult(
+                    success=False, errors=[f"No Wikipedia content for topic '{topic.title}'"]
+                )
             data_items = [vars(topic)]
             sources = [topic.source_url] + list(topic.extra_sources)
 
         return AgentResult(
             success=bool(data_items),
-            data={"items": data_items, "sources": [s for s in sources if s], "day_name": day_name,
-                  **({"daily": daily, "trading_count": len(daily.get("trading", []))}
-                     if video_type == "news" else {})},
+            data={
+                "items": data_items,
+                "sources": [s for s in sources if s],
+                "day_name": day_name,
+                **(
+                    {"daily": daily, "trading_count": len(daily.get("trading", []))}
+                    if video_type == "news"
+                    else {}
+                ),
+            },
             metadata={"video_type": video_type, "topic_category": topic_category},
         )

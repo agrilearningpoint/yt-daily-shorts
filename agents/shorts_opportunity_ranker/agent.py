@@ -17,7 +17,7 @@ and recommended Shorts duration targets (30s, 45s, 60s).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from agents.base_agent import AgentResult, BaseAgent
 from core.agent_contracts import (
@@ -40,7 +40,6 @@ DEFAULT_FACTOR_WEIGHTS: Dict[str, float] = {
     "novelty": 0.05,
 }
 FACTOR_WEIGHTS = DEFAULT_FACTOR_WEIGHTS
-
 
 
 class ShortsOpportunityRankerAgent(BaseAgent):
@@ -97,7 +96,11 @@ class ShortsOpportunityRankerAgent(BaseAgent):
         rankings.sort(key=lambda r: r.composite_score, reverse=True)
 
         story_map = {s.story_id: s for s in stories}
-        top_stories = [story_map[r.story_id] for r in rankings if r.story_id in story_map and r.priority_flag in ("top_pick", "viable")]
+        top_stories = [
+            story_map[r.story_id]
+            for r in rankings
+            if r.story_id in story_map and r.priority_flag in ("top_pick", "viable")
+        ]
 
         top_picks_count = sum(1 for r in rankings if r.priority_flag == "top_pick")
         viable_count = sum(1 for r in rankings if r.priority_flag == "viable")
@@ -145,14 +148,28 @@ class ShortsOpportunityRankerAgent(BaseAgent):
 
         # 2. Emotional / High-Impact Quotient (15%)
         impact = 40.0
-        impact_keywords = ["फैसला", "ऐतिहासिक", "चेतावनी", "बड़ा", "खुलासा", "क्रांति", "नया रिकॉर्ड", "संकट"]
-        matches = sum(1 for k in impact_keywords if k in story.title or k in story.transcript_excerpt)
+        impact_keywords = [
+            "फैसला",
+            "ऐतिहासिक",
+            "चेतावनी",
+            "बड़ा",
+            "खुलासा",
+            "क्रांति",
+            "नया रिकॉर्ड",
+            "संकट",
+        ]
+        matches = sum(
+            1 for k in impact_keywords if k in story.title or k in story.transcript_excerpt
+        )
         impact += min(45.0, matches * 12.0)
         factors["emotional_impact"] = min(96.0, impact)
 
         # 3. Information Freshness (15%)
         freshness = 50.0
-        if any(k in story.title or k in story.transcript_excerpt for k in ["ताज़ा", "आज", "अभी", "हाल ही"]):
+        if any(
+            k in story.title or k in story.transcript_excerpt
+            for k in ["ताज़ा", "आज", "अभी", "हाल ही"]
+        ):
             freshness += 40.0
         else:
             freshness += 20.0
@@ -163,14 +180,18 @@ class ShortsOpportunityRankerAgent(BaseAgent):
             verified_count = sum(1 for c in dossier if c.status == "verified")
             unverified_count = sum(1 for c in dossier if c.status == "unverified")
             disputed_count = sum(1 for c in dossier if c.status == "disputed")
-            evidence_score = (verified_count * 90.0 + unverified_count * 30.0 - disputed_count * 40.0) / len(dossier)
+            evidence_score = (
+                verified_count * 90.0 + unverified_count * 30.0 - disputed_count * 40.0
+            ) / len(dossier)
             evidence_score = max(10.0, min(98.0, evidence_score))
         else:
             evidence_score = 45.0
         factors["evidence_strength"] = round(evidence_score, 1)
 
         # 5. Standalone Comprehensibility (10%)
-        factors["standalone_comprehensibility"] = round(max(20.0, min(95.0, story.completeness_score * 95.0)), 1)
+        factors["standalone_comprehensibility"] = round(
+            max(20.0, min(95.0, story.completeness_score * 95.0)), 1
+        )
 
         # 6. Curiosity / Hook Potential (10%)
         curiosity = 50.0
@@ -206,7 +227,9 @@ class ShortsOpportunityRankerAgent(BaseAgent):
         # Strict priority classification
         if composite >= 80.0 and factors["evidence_strength"] >= 70.0:
             flag = "top_pick"
-        elif composite >= 65.0 and (factors["evidence_strength"] >= 45.0 or story.completeness_score >= 0.8):
+        elif composite >= 65.0 and (
+            factors["evidence_strength"] >= 45.0 or story.completeness_score >= 0.8
+        ):
             flag = "viable"
         elif composite >= 40.0:
             flag = "backlog"
@@ -218,7 +241,9 @@ class ShortsOpportunityRankerAgent(BaseAgent):
             f"प्रमाण: {factors['evidence_strength']:.0f}, प्रभाव: {factors['emotional_impact']:.0f}."
         )
 
-        hook_angle = f"क्या आप जानते हैं {story.entities[0] if story.entities else 'भारत'} का यह बड़ा कदम?"
+        hook_angle = (
+            f"क्या आप जानते हैं {story.entities[0] if story.entities else 'भारत'} का यह बड़ा कदम?"
+        )
 
         return StoryRanking(
             story_id=story.story_id,

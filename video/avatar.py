@@ -22,7 +22,9 @@ class AvatarEngine:
 
     def generate_presenter_clip(self, audio_path: str, output_path: str) -> Optional[str]:
         if not self.enable_avatar or not self.can_run_gpu_avatar():
-            logger.info("Avatar mode disabled or CPU environment detected. Using stock/motion graphics fallback.")
+            logger.info(
+                "Avatar mode disabled or CPU environment detected. Using stock/motion graphics fallback."
+            )
             return None
 
         # GPU placeholder

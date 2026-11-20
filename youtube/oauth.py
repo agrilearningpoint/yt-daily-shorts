@@ -62,7 +62,9 @@ class YouTubeOAuthManager:
         client = self._client_info()
         token.setdefault("client_id", client.get("client_id", ""))
         token.setdefault("client_secret", client.get("client_secret", ""))
-        token.setdefault("token_uri", client.get("token_uri", "https://oauth2.googleapis.com/token"))
+        token.setdefault(
+            "token_uri", client.get("token_uri", "https://oauth2.googleapis.com/token")
+        )
         try:
             creds = Credentials.from_authorized_user_info(token, token.get("scopes") or SCOPES)
             if not creds.valid and creds.refresh_token:

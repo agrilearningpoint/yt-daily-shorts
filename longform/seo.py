@@ -14,6 +14,7 @@ runs" loop available to documentaries:
 Everything degrades to the deterministic default when the LLM is unavailable, so a
 quota error can never block a finished film from being published.
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,9 +24,20 @@ from core.self_improve import lessons_for_prompt, record_run
 
 logger = logging.getLogger("longform.seo")
 
-DEFAULT_TAGS = ["हिंदू धर्म", "hindu dharma", "history of hinduism in hindi", "सिंधु घाटी सभ्यता",
-                "वैदिक काल", "उपनिषद", "भक्ति आंदोलन", "भारतीय इतिहास", "sanatan dharma explained",
-                "indian history documentary hindi", "hinduism explained", "hindu temple history"]
+DEFAULT_TAGS = [
+    "हिंदू धर्म",
+    "hindu dharma",
+    "history of hinduism in hindi",
+    "सिंधु घाटी सभ्यता",
+    "वैदिक काल",
+    "उपनिषद",
+    "भक्ति आंदोलन",
+    "भारतीय इतिहास",
+    "sanatan dharma explained",
+    "indian history documentary hindi",
+    "hinduism explained",
+    "hindu temple history",
+]
 
 PROMPT = """You are the SEO editor of a Hindi documentary channel. Return JSON only.
 
@@ -55,7 +67,9 @@ def _outline(chapters: List[Dict[str, Any]], limit: int = 10) -> str:
     return "\n".join(lines) or "(none)"
 
 
-def _fallback(title: str, chapters: List[Dict[str, Any]], stamps: List[str], duration: float) -> Dict[str, Any]:
+def _fallback(
+    title: str, chapters: List[Dict[str, Any]], stamps: List[str], duration: float
+) -> Dict[str, Any]:
     desc = (
         f"{title}\n\n"
         "इस वीडियो में हम हिंदू धर्म की यात्रा को उसकी शुरुआत से आज तक समझेंगे — सिंधु घाटी से "
@@ -64,32 +78,48 @@ def _fallback(title: str, chapters: List[Dict[str, Any]], stamps: List[str], dur
         "⏱ अध्याय\n" + "\n".join(stamps) + "\n\n"
         "यह वीडियो शैक्षिक उद्देश्य से बनाया गया है। तिथियाँ और तथ्य मानक इतिहास-ग्रंथों पर आधारित "
         "हैं; जहाँ इतिहासकारों में मतभेद है, वहाँ स्पष्ट रूप से बताया गया है।\n\n"
-        f"#हिंदूधर्म #इतिहास #भारत #सनातन #documentary"
+        "#हिंदूधर्म #इतिहास #भारत #सनातन #documentary"
     )
-    return {"title": title[:95], "description": desc[:4900], "tags": list(DEFAULT_TAGS),
-            "duration_sec": round(duration, 1), "chapter_stamps": stamps, "seo": "fallback"}
+    return {
+        "title": title[:95],
+        "description": desc[:4900],
+        "tags": list(DEFAULT_TAGS),
+        "duration_sec": round(duration, 1),
+        "chapter_stamps": stamps,
+        "seo": "fallback",
+    }
 
 
-async def build_metadata(llm, title: str, chapters: List[Dict[str, Any]], stamps: List[str],
-                         duration: float) -> Dict[str, Any]:
+async def build_metadata(
+    llm, title: str, chapters: List[Dict[str, Any]], stamps: List[str], duration: float
+) -> Dict[str, Any]:
     base = _fallback(title, chapters, stamps, duration)
     if llm is None:
         return base
     try:
-        meta = await llm.generate_json(PROMPT.format(
-            title=title, minutes=duration / 60.0, chapters=len(chapters),
-            outline=_outline(chapters), lessons=lessons_for_prompt(600) or "(none yet)"),
-            tier="quality")
+        meta = await llm.generate_json(
+            PROMPT.format(
+                title=title,
+                minutes=duration / 60.0,
+                chapters=len(chapters),
+                outline=_outline(chapters),
+                lessons=lessons_for_prompt(600) or "(none yet)",
+            ),
+            tier="quality",
+        )
     except Exception as exc:
         logger.warning("SEO generation failed (%s) — shipping the deterministic metadata", exc)
         return base
 
-    titles = [str(t).strip() for t in (meta.get("titles") or meta.get("title") or []) if str(t).strip()]
+    titles = [
+        str(t).strip() for t in (meta.get("titles") or meta.get("title") or []) if str(t).strip()
+    ]
     if isinstance(meta.get("title"), str) and meta["title"].strip():
         titles.append(meta["title"].strip())
     best = ""
     try:
         from youtube.seo import pick_best_title
+
         best = pick_best_title(titles) or ""
     except Exception:
         best = titles[0] if titles else ""
@@ -113,13 +143,18 @@ async def build_metadata(llm, title: str, chapters: List[Dict[str, Any]], stamps
                 merged.append(t)
         out["tags"] = merged[:15]
     out["seo"] = "llm"
-    logger.info("SEO: title=%r tags=%d desc=%d chars", out["title"], len(out["tags"]),
-                len(out["description"]))
+    logger.info(
+        "SEO: title=%r tags=%d desc=%d chars",
+        out["title"],
+        len(out["tags"]),
+        len(out["description"]),
+    )
     return out
 
 
-def record_film(kind: str, minutes: float, ok: bool, errors: List[str] | None = None,
-                **extra: Any) -> None:
+def record_film(
+    kind: str, minutes: float, ok: bool, errors: List[str] | None = None, **extra: Any
+) -> None:
     """One metrics line per film so the error analyst can see long-form runs."""
     try:
         record_run(kind, minutes, ok, errors or [], extra=extra or None)

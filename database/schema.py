@@ -124,8 +124,6 @@ def init_database(db_path: str = "data/yt_shorts.db") -> None:
     cur = conn.execute("SELECT version FROM schema_version")
     row = cur.fetchone()
     if row is None:
-        conn.execute(
-            "INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,)
-        )
+        conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
     conn.commit()
     conn.close()

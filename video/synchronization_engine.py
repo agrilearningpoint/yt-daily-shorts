@@ -7,9 +7,7 @@ karaoke captions, and motion-graphics overlays. Eliminates narration-to-visual d
 from __future__ import annotations
 
 import logging
-import math
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.agent_contracts import MasterEditingTimeline, TimelineSegmentContract
@@ -19,6 +17,7 @@ logger = logging.getLogger("video.synchronization_engine")
 
 class SyncError(RuntimeError):
     """Raised when timeline validation or synchronization fails strict QA."""
+
     pass
 
 
@@ -103,7 +102,6 @@ class SynchronizationEngine:
             visual_path = getattr(asset, "path", "") if asset else ""
 
             # Check if this is the start of a story/item
-            story_start = (p_idx == 0)
 
             # Determine transition effect
             kind = beat.get("kind", "item")
@@ -199,7 +197,9 @@ class SynchronizationEngine:
 
         drift = abs(total_audio - total_visual)
         if drift > self.max_drift_tolerance:
-            errors.append(f"Cumulative timeline drift {drift:.4f}s exceeds limit {self.max_drift_tolerance}s")
+            errors.append(
+                f"Cumulative timeline drift {drift:.4f}s exceeds limit {self.max_drift_tolerance}s"
+            )
 
         if missing_visuals:
             warnings.append(f"{len(missing_visuals)} segments lack dedicated visual path")
@@ -247,12 +247,14 @@ class SynchronizationEngine:
                     bounded_start = round(max(seg_start, min(seg_end, raw_start)), 3)
                     bounded_end = round(max(bounded_start, min(seg_end, raw_end)), 3)
 
-                    aligned_words.append({
-                        "word": w_text,
-                        "start": bounded_start,
-                        "end": bounded_end,
-                        "segment_id": seg.segment_id,
-                    })
+                    aligned_words.append(
+                        {
+                            "word": w_text,
+                            "start": bounded_start,
+                            "end": bounded_end,
+                            "segment_id": seg.segment_id,
+                        }
+                    )
             else:
                 # Fallback: distribute words across segment duration
                 words = seg.text.split()
@@ -264,12 +266,14 @@ class SynchronizationEngine:
                         w_dur = seg_dur * (w_len / total_len)
                         w_start = round(t_cur, 3)
                         w_end = round(t_cur + w_dur, 3)
-                        aligned_words.append({
-                            "word": w_txt,
-                            "start": w_start,
-                            "end": w_end,
-                            "segment_id": seg.segment_id,
-                        })
+                        aligned_words.append(
+                            {
+                                "word": w_txt,
+                                "start": w_start,
+                                "end": w_end,
+                                "segment_id": seg.segment_id,
+                            }
+                        )
                         t_cur += w_dur
 
         return aligned_words

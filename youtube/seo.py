@@ -14,10 +14,53 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 DESKTOP, MOBILE, HARD = 60, 40, 100
-VAGUE = {"amazing", "incredible", "insane", "crazy", "huge", "massive", "ultimate", "best", "secret",
-         "shocking", "epic", "viral", "जबरदस्त", "धमाकेदार", "चौंकाने", "हैरान", "सनसनीखेज"}
-STOP = {"the", "a", "an", "of", "for", "to", "in", "on", "and", "or", "is", "are", "का", "की", "के", "में",
-        "है", "हैं", "और", "से", "को", "पर", "ने", "यह", "वह", "क्या"}
+VAGUE = {
+    "amazing",
+    "incredible",
+    "insane",
+    "crazy",
+    "huge",
+    "massive",
+    "ultimate",
+    "best",
+    "secret",
+    "shocking",
+    "epic",
+    "viral",
+    "जबरदस्त",
+    "धमाकेदार",
+    "चौंकाने",
+    "हैरान",
+    "सनसनीखेज",
+}
+STOP = {
+    "the",
+    "a",
+    "an",
+    "of",
+    "for",
+    "to",
+    "in",
+    "on",
+    "and",
+    "or",
+    "is",
+    "are",
+    "का",
+    "की",
+    "के",
+    "में",
+    "है",
+    "हैं",
+    "और",
+    "से",
+    "को",
+    "पर",
+    "ने",
+    "यह",
+    "वह",
+    "क्या",
+}
 
 
 @dataclass
@@ -82,11 +125,13 @@ def query_coverage(queries: List[str], title: str, first_lines: str) -> float:
 def build_tags(tags: List[str], limit_chars: int = 480, max_tags: int = 30) -> List[str]:
     seen, out, size = set(), [], 0
     for t in tags:
-        t = " ".join(str(t).replace("#", "").replace(",", " ").replace("<", "").replace(">", "").split()).strip()
+        t = " ".join(
+            str(t).replace("#", "").replace(",", " ").replace("<", "").replace(">", "").split()
+        ).strip()
         k = t.lower()
         if not t or k in seen or len(t) > 60:
             continue
-        cost = len(t) + (2 if " " in t else 0) + 1   # YouTube counts quotes around multi-word tags
+        cost = len(t) + (2 if " " in t else 0) + 1  # YouTube counts quotes around multi-word tags
         if size + cost > limit_chars or len(out) >= max_tags:
             break
         seen.add(k)
@@ -117,12 +162,18 @@ class YouTubeSEOFormatter:
         return clean
 
     @staticmethod
-    def format_description(summary_hook: str, source_urls: Optional[List[str]] = None,
-                           hashtags: Optional[List[str]] = None,
-                           channel_name: str = "BHARAT KI SOCH",
-                           media_credits: Optional[List[str]] = None, max_length: int = 5000,
-                           story_lines: Optional[List[str]] = None, sources_title: str = "",
-                           keywords_paragraph: str = "", headlines_title: str = "आज की बड़ी खबरें") -> str:
+    def format_description(
+        summary_hook: str,
+        source_urls: Optional[List[str]] = None,
+        hashtags: Optional[List[str]] = None,
+        channel_name: str = "BHARAT KI SOCH",
+        media_credits: Optional[List[str]] = None,
+        max_length: int = 5000,
+        story_lines: Optional[List[str]] = None,
+        sources_title: str = "",
+        keywords_paragraph: str = "",
+        headlines_title: str = "आज की बड़ी खबरें",
+    ) -> str:
         """No source links and no image credits (Satyam, 2026-11-10). source_urls is ignored."""
         parts = [summary_hook.strip()]
         if story_lines:

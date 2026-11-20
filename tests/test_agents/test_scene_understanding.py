@@ -83,4 +83,3 @@ async def test_scene_understanding_inaccessible_video_fails_honestly(scene_agent
     result = await scene_agent.execute(manifest=manifest)
     assert result.success is False
     assert result.data.get("scene_analysis_status") == "video_inaccessible"
-

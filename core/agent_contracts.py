@@ -31,6 +31,7 @@ class VisualAssetType(str, Enum):
 # Research & Fact Checking Contracts
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ResearchItem:
     title: str
@@ -71,6 +72,7 @@ class FactVerificationReport:
 # Creative & Hook Contracts
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CreativeBrief:
     theme_name: str
@@ -101,14 +103,14 @@ class HookArchetype(str, Enum):
 class HookCandidate:
     archetype: HookArchetype
     text: str
-    impact_score: float         # 0-100: First-second attention grabbing
-    curiosity_score: float      # 0-100: Compelling intrigue
-    clarity_score: float        # 0-100: Clear, direct meaning
-    factual_score: float        # 0-100: Strict adherence to research facts
-    naturalness_score: float    # 0-100: Natural spoken Hindi phrasing
-    visual_potential: float     # 0-100: Matches high-impact visual
+    impact_score: float  # 0-100: First-second attention grabbing
+    curiosity_score: float  # 0-100: Compelling intrigue
+    clarity_score: float  # 0-100: Clear, direct meaning
+    factual_score: float  # 0-100: Strict adherence to research facts
+    naturalness_score: float  # 0-100: Natural spoken Hindi phrasing
+    visual_potential: float  # 0-100: Matches high-impact visual
     composite_score: float = 0.0
-    visual_pairing: str = ""    # Subject/entity required for visual pairing
+    visual_pairing: str = ""  # Subject/entity required for visual pairing
 
 
 @dataclass
@@ -124,6 +126,7 @@ class ApprovedHook:
 # ---------------------------------------------------------------------------
 # Script & Narration Contracts
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class VisualBeatSpec:
@@ -163,20 +166,23 @@ class ApprovedScript:
     sources: List[str] = field(default_factory=list)
 
     def word_count(self) -> int:
-        return (len(self.hook.text.split())
-                + sum(len(s.narration.split()) for s in self.scenes)
-                + len(self.outro.split()))
+        return (
+            len(self.hook.text.split())
+            + sum(len(s.narration.split()) for s in self.scenes)
+            + len(self.outro.split())
+        )
 
 
 # ---------------------------------------------------------------------------
 # Synchronization, VFX & Motion Graphics Contracts
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class WordTimingItem:
     word: str
     start: float  # seconds from video start
-    end: float    # seconds from video start
+    end: float  # seconds from video start
 
 
 @dataclass
@@ -209,7 +215,7 @@ class TimelineSegmentContract:
 class VFXPlanItem:
     scene_id: str
     transition_effect: str  # clean_cut, whip_pan, punch, flash, light_leak, dip
-    camera_motion: str      # push_in, pull_out, pan_left, pan_right, subtle_drift
+    camera_motion: str  # push_in, pull_out, pan_left, pan_right, subtle_drift
     color_grade: str
     intensity: float = 1.0
     sfx_type: Optional[str] = None
@@ -247,6 +253,7 @@ class MasterEditingTimeline:
 # ---------------------------------------------------------------------------
 # Quality & Output Artifact Contracts
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class QualityVerificationVerdict:
@@ -295,6 +302,7 @@ class ProductionArtifacts:
 # ---------------------------------------------------------------------------
 # Long Video Intelligence & Shorts Repurposing Contracts
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class SourceVideoManifest:
@@ -458,6 +466,32 @@ class AdaptedShortScript:
     evidence_citations: List[str] = field(default_factory=list)
     category_badge: str = ""
 
+    def to_script_dict(self) -> Dict[str, Any]:
+        return {
+            "title": self.title_hi,
+            "hook": self.hook_text_hi,
+            "outro": self.outro_hi,
+            "video_type": "repurposed_news",
+            "scenes": [
+                {
+                    "scene_index": s.scene_index,
+                    "scene_type": s.scene_type,
+                    "duration": s.duration,
+                    "narration": s.narration_hi,
+                    "visual_keywords": s.visual_query,
+                    "image_query": s.visual_query,
+                    "on_screen_text": s.on_screen_text,
+                    "headline": s.headline_chip,
+                    "category": getattr(self, "category_badge", "राष्ट्रीय") or "राष्ट्रीय",
+                    "camera_motion": s.camera_motion,
+                    "transition_effect": s.transition,
+                }
+                for s in self.scenes
+            ],
+            "sources": self.source_attributions,
+            "evidence": self.evidence_citations,
+        }
+
 
 @dataclass
 class MediaRightsRecord:
@@ -488,6 +522,7 @@ class RepurposingJobResult:
 # ---------------------------------------------------------------------------
 # Phase 2 — Daily Opening, Audio Sound Design & Visual Sourcing Contracts
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class DailyOpeningBrief:
@@ -570,7 +605,9 @@ class NewsVisualAsset:
     attribution_text: str = ""
     event_match_score: float = 1.0
     visual_description: str = ""
-    actual_event_or_stock: str = "actual_event"  # actual_event, institutional_broll, stock, illustrative_graphic
+    actual_event_or_stock: str = (
+        "actual_event"  # actual_event, institutional_broll, stock, illustrative_graphic
+    )
     is_ai_generated: bool = False
     visual_confidence: float = 1.0
     quality_score: float = 1.0
@@ -578,5 +615,3 @@ class NewsVisualAsset:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
-
-

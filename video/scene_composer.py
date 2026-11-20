@@ -35,7 +35,9 @@ def font(size: int, weight: str = "ExtraBold") -> ImageFont.FreeTypeFont:
         return ImageFont.load_default()
 
 
-def wrap_text(draw: ImageDraw.ImageDraw, text: str, fnt, max_width: int, max_lines: int = 3) -> List[str]:
+def wrap_text(
+    draw: ImageDraw.ImageDraw, text: str, fnt, max_width: int, max_lines: int = 3
+) -> List[str]:
     words = text.split()
     lines: List[str] = []
     cur = ""
@@ -72,8 +74,9 @@ class SceneComposer:
         self.channel_name = channel_name
 
     # ------------------------------------------------------------------
-    def compose_background(self, image_path: Optional[str], out_path: str, seed: int = 0,
-                           card_text: str = "") -> str:
+    def compose_background(
+        self, image_path: Optional[str], out_path: str, seed: int = 0, card_text: str = ""
+    ) -> str:
         bw, bh = int(W * ZOOM_PAD), int(H * ZOOM_PAD)
         box = ""
         src = None
@@ -87,8 +90,14 @@ class SceneComposer:
             # blurred cover fill
             scale = max(bw / src.width, bh / src.height)
             fill = src.resize((int(src.width * scale) + 1, int(src.height * scale) + 1))
-            fill = fill.crop(((fill.width - bw) // 2, (fill.height - bh) // 2,
-                              (fill.width - bw) // 2 + bw, (fill.height - bh) // 2 + bh))
+            fill = fill.crop(
+                (
+                    (fill.width - bw) // 2,
+                    (fill.height - bh) // 2,
+                    (fill.width - bw) // 2 + bw,
+                    (fill.height - bh) // 2 + bh,
+                )
+            )
             fill = fill.filter(ImageFilter.GaussianBlur(28))
             fill = Image.blend(fill, Image.new("RGB", fill.size, (0, 0, 0)), 0.45)
             # sharp foreground: fill most of the frame if portrait-ish, else fit width
@@ -97,7 +106,9 @@ class SceneComposer:
                 fs = max(bw / src.width, bh / src.height)
             else:
                 fs = (bw * 1.0) / src.width
-            fg = src.resize((max(1, int(src.width * fs)), max(1, int(src.height * fs))), Image.LANCZOS)
+            fg = src.resize(
+                (max(1, int(src.width * fs)), max(1, int(src.height * fs))), Image.LANCZOS
+            )
             if fg.height > bh:
                 top = (fg.height - bh) // 2
                 fg = fg.crop((0, top, fg.width, top + bh))
@@ -126,7 +137,7 @@ class SceneComposer:
         canvas = Image.composite(Image.new("RGB", (bw, bh), (0, 0, 0)), canvas, shade)
         Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         canvas.save(out_path, "JPEG", quality=92)
-        side = Path(out_path + ".box")   # where the sharp photo sits (used by the 3D photo motion)
+        side = Path(out_path + ".box")  # where the sharp photo sits (used by the 3D photo motion)
         if box:
             side.write_text(box)
         elif side.exists():
@@ -142,7 +153,11 @@ class SceneComposer:
         for _ in range(7):
             r = rnd.randint(120, 420)
             cx, cy = rnd.randint(0, bw), rnd.randint(int(bh * 0.25), int(bh * 0.8))
-            d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=self.primary + (60,), width=rnd.randint(3, 10))
+            d.ellipse(
+                [cx - r, cy - r, cx + r, cy + r],
+                outline=self.primary + (60,),
+                width=rnd.randint(3, 10),
+            )
         for i in range(0, bw, 90):
             d.line([(i, 0), (i - bh // 3, bh)], fill=(255, 255, 255, 10), width=2)
         img = Image.alpha_composite(img.convert("RGBA"), layer.filter(ImageFilter.GaussianBlur(2)))
@@ -153,14 +168,21 @@ class SceneComposer:
             y = int(bh * 0.45) - len(lines) * 85
             for ln in lines:
                 tw = d2.textlength(ln, font=f)
-                d2.text(((bw - tw) / 2, y), ln, font=f, fill=(255, 255, 255, 235),
-                        stroke_width=4, stroke_fill=(0, 0, 0, 160))
+                d2.text(
+                    ((bw - tw) / 2, y),
+                    ln,
+                    font=f,
+                    fill=(255, 255, 255, 235),
+                    stroke_width=4,
+                    stroke_fill=(0, 0, 0, 160),
+                )
                 y += 175
         return img.convert("RGB")
 
     # ------------------------------------------------------------------
-    def compose_overlay(self, out_path: str, headline: str, badge: str, index: int, total: int,
-                        date_label: str = "") -> str:
+    def compose_overlay(
+        self, out_path: str, headline: str, badge: str, index: int, total: int, date_label: str = ""
+    ) -> str:
         img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
 
@@ -174,8 +196,14 @@ class SceneComposer:
         if date_label:
             df = font(40, "Medium")
             dw = d.textlength(date_label, font=df)
-            d.text((W - 60 - dw, 163), date_label, font=df, fill=(255, 255, 255, 230),
-                   stroke_width=2, stroke_fill=(0, 0, 0, 180))
+            d.text(
+                (W - 60 - dw, 163),
+                date_label,
+                font=df,
+                fill=(255, 255, 255, 230),
+                stroke_width=2,
+                stroke_fill=(0, 0, 0, 180),
+            )
 
         # headline
         if headline.strip():
@@ -185,7 +213,9 @@ class SceneComposer:
             for ln in lines:
                 tw = d.textlength(ln, font=hf)
                 pad = 26
-                d.rounded_rectangle([60 - 6, y + 18, 60 + tw + pad * 2, y + 140], radius=18, fill=(0, 0, 0, 150))
+                d.rounded_rectangle(
+                    [60 - 6, y + 18, 60 + tw + pad * 2, y + 140], radius=18, fill=(0, 0, 0, 150)
+                )
                 d.text((60 + pad, y), ln, font=hf, fill=(255, 255, 255, 255))
                 y += 138
             d.rectangle([60, y + 18, 220, y + 30], fill=self.primary + (255,))
@@ -234,7 +264,10 @@ class SceneComposer:
 # Motion-graphics layers (v3): static frame + sliding headline chip + cards
 # ---------------------------------------------------------------------------
 
-def compose_ticker(composer: "SceneComposer", out_path: str, headlines: List[str], height: int = 84) -> str:
+
+def compose_ticker(
+    composer: "SceneComposer", out_path: str, headlines: List[str], height: int = 84
+) -> str:
     """Long scrolling news-ticker strip (RGBA) with all of today's headlines."""
     f = font(46, "Bold")
     sep = "   |   "
@@ -250,8 +283,17 @@ def compose_ticker(composer: "SceneComposer", out_path: str, headlines: List[str
     return out_path
 
 
-def compose_frame(composer: "SceneComposer", out_path: str, badge: str, index: int, total: int,
-                  counter: str = "", date_label: str = "", ticker_y: int = 0, stat: str = "") -> str:
+def compose_frame(
+    composer: "SceneComposer",
+    out_path: str,
+    badge: str,
+    index: int,
+    total: int,
+    counter: str = "",
+    date_label: str = "",
+    ticker_y: int = 0,
+    stat: str = "",
+) -> str:
     """Transparent 1080x1920 frame: top progress bar, badge, counter pill, watermark."""
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -273,21 +315,47 @@ def compose_frame(composer: "SceneComposer", out_path: str, badge: str, index: i
     if counter:
         cf = font(64)
         cw = d.textlength(counter, font=cf)
-        d.rounded_rectangle([W - 60 - cw - 56, 132, W - 60, 228], radius=24, fill=(0, 0, 0, 170),
-                            outline=composer.primary + (255,), width=4)
+        d.rounded_rectangle(
+            [W - 60 - cw - 56, 132, W - 60, 228],
+            radius=24,
+            fill=(0, 0, 0, 170),
+            outline=composer.primary + (255,),
+            width=4,
+        )
         d.text((W - 60 - cw - 28, 132), counter, font=cf, fill=(255, 255, 255, 255))
     elif date_label:
         df = font(40, "Medium")
         dw = d.textlength(date_label, font=df)
-        d.text((W - 60 - dw, 153), date_label, font=df, fill=(255, 255, 255, 230),
-               stroke_width=2, stroke_fill=(0, 0, 0, 180))
-    if ticker_y and composer.channel_name:  # channel bug on the left of the ticker, like TV channels
+        d.text(
+            (W - 60 - dw, 153),
+            date_label,
+            font=df,
+            fill=(255, 255, 255, 230),
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 180),
+        )
+    if (
+        ticker_y and composer.channel_name
+    ):  # channel bug on the left of the ticker, like TV channels
         lf = font(40)
         lw = d.textlength(composer.channel_name, font=lf)
-        d.polygon([(0, ticker_y - 8), (lw + 70, ticker_y - 8), (lw + 40, ticker_y + 92), (0, ticker_y + 92)],
-                  fill=composer.primary + (255,))
-        d.text((24, ticker_y + 12), composer.channel_name, font=lf, fill=(255, 255, 255, 255),
-               stroke_width=2, stroke_fill=(0, 0, 0, 160))
+        d.polygon(
+            [
+                (0, ticker_y - 8),
+                (lw + 70, ticker_y - 8),
+                (lw + 40, ticker_y + 92),
+                (0, ticker_y + 92),
+            ],
+            fill=composer.primary + (255,),
+        )
+        d.text(
+            (24, ticker_y + 12),
+            composer.channel_name,
+            font=lf,
+            fill=(255, 255, 255, 255),
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 160),
+        )
     elif composer.channel_name:
         wf = font(38, "Medium")
         ww = d.textlength(composer.channel_name, font=wf)
@@ -299,12 +367,23 @@ def compose_frame(composer: "SceneComposer", out_path: str, badge: str, index: i
         x1, y0 = W - 60, 300
         x0 = max(60, x1 - sw - 80)
         d.rounded_rectangle([x0 + 8, y0 + 10, x1 + 8, y0 + 222], radius=24, fill=(0, 0, 0, 120))
-        d.rounded_rectangle([x0, y0, x1, y0 + 212], radius=24, fill=(10, 12, 24, 225),
-                            outline=composer.primary + (255,), width=5)
+        d.rounded_rectangle(
+            [x0, y0, x1, y0 + 212],
+            radius=24,
+            fill=(10, 12, 24, 225),
+            outline=composer.primary + (255,),
+            width=5,
+        )
         d.rectangle([x0, y0, x0 + 150, y0 + 40], fill=composer.primary + (255,))
         d.text((x0 + 14, y0 + 2), "आँकड़ा", font=lf, fill=(255, 255, 255, 255))
-        d.text((x0 + 40, y0 + 36), stat, font=sf, fill=(255, 214, 10, 255), stroke_width=2,
-               stroke_fill=(0, 0, 0, 200))
+        d.text(
+            (x0 + 40, y0 + 36),
+            stat,
+            font=sf,
+            fill=(255, 214, 10, 255),
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 200),
+        )
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     img.save(out_path, "PNG")
     return out_path
@@ -327,7 +406,9 @@ def compose_chip(composer: "SceneComposer", out_path: str, text: str, size: int 
     d = ImageDraw.Draw(img)
     top = tag_h - 6
     # soft shadow
-    d.rounded_rectangle([10, top + 14, width + 10, top + height + 14], radius=18, fill=(0, 0, 0, 110))
+    d.rounded_rectangle(
+        [10, top + 14, width + 10, top + height + 14], radius=18, fill=(0, 0, 0, 110)
+    )
     # glass panel with vertical gradient
     panel = Image.new("RGBA", (width, height))
     pd = ImageDraw.Draw(panel)
@@ -338,21 +419,37 @@ def compose_chip(composer: "SceneComposer", out_path: str, text: str, size: int 
     ImageDraw.Draw(mask).rounded_rectangle([0, 0, width - 1, height - 1], radius=18, fill=255)
     img.paste(panel, (0, top), mask)
     d.rounded_rectangle([0, top, 16, top + height], radius=6, fill=composer.primary + (255,))
-    d.line([(24, top + height - 3), (width - 24, top + height - 3)], fill=composer.primary + (200,), width=3)
+    d.line(
+        [(24, top + height - 3), (width - 24, top + height - 3)],
+        fill=composer.primary + (200,),
+        width=3,
+    )
     # tag
     d.rounded_rectangle([0, 0, tag_w, tag_h], radius=10, fill=composer.primary + (255,))
     d.text((20, 9), tag, font=tag_f, fill=(255, 255, 255, 255))
     y = top + 18
     for ln in lines:
-        d.text((44, y - int(size * 0.12)), ln, font=f, fill=(255, 255, 255, 255),
-               stroke_width=2, stroke_fill=(0, 0, 0, 200))
+        d.text(
+            (44, y - int(size * 0.12)),
+            ln,
+            font=f,
+            fill=(255, 255, 255, 255),
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 200),
+        )
         y += line_h
     img.save(out_path, "PNG")
     return out_path
 
 
-def compose_title_card(composer: "SceneComposer", out_path: str, big: str, small: str = "",
-                       image_path: Optional[str] = None, seed: int = 0) -> str:
+def compose_title_card(
+    composer: "SceneComposer",
+    out_path: str,
+    big: str,
+    small: str = "",
+    image_path: Optional[str] = None,
+    seed: int = 0,
+) -> str:
     """Hook / outro background: photo or gradient + huge title text (rendered into the bg)."""
     bg_path = composer.compose_background(image_path, out_path, seed=seed)
     img = Image.open(bg_path).convert("RGBA")
@@ -366,14 +463,19 @@ def compose_title_card(composer: "SceneComposer", out_path: str, big: str, small
     for i, ln in enumerate(lines):
         tw = d.textlength(ln, font=f)
         fill = composer.primary + (255,) if i == 0 else (255, 255, 255, 255)
-        d.text(((bw - tw) / 2, y), ln, font=f, fill=fill, stroke_width=6, stroke_fill=(0, 0, 0, 255))
+        d.text(
+            ((bw - tw) / 2, y), ln, font=f, fill=fill, stroke_width=6, stroke_fill=(0, 0, 0, 255)
+        )
         y += 180
     if small:
         sf = font(70, "Bold")
         for ln in wrap_text(d, small, sf, int(bw * 0.8), 2):
             tw = d.textlength(ln, font=sf)
-            d.rounded_rectangle([(bw - tw) / 2 - 30, y + 30, (bw + tw) / 2 + 30, y + 130], radius=20,
-                                fill=composer.primary + (255,))
+            d.rounded_rectangle(
+                [(bw - tw) / 2 - 30, y + 30, (bw + tw) / 2 + 30, y + 130],
+                radius=20,
+                fill=composer.primary + (255,),
+            )
             d.text(((bw - tw) / 2, y + 28), ln, font=sf, fill=(10, 10, 10, 255))
             y += 120
     Path(out_path + ".box").unlink(missing_ok=True)

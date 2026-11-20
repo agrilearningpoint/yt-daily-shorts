@@ -11,8 +11,6 @@ from video.motion_presets.brand_outros import BRAND_OUTRO_PRESETS
 from video.motion_presets.data_graphics import DATA_GRAPHICS_PRESETS
 from video.motion_presets.headline_reveals import HEADLINE_REVEAL_PRESETS
 from video.motion_presets.models import (
-    EasingType,
-    KeyframeAnimation,
     MotionPresetSpec,
     PresetCategory,
 )
@@ -62,7 +60,9 @@ class MotionPresetCatalog:
         """Fetch preset specification by exact ID."""
         return self._registry.get(preset_id)
 
-    def get_or_default(self, preset_id: str, default_id: str = "photo_slow_push_in") -> MotionPresetSpec:
+    def get_or_default(
+        self, preset_id: str, default_id: str = "photo_slow_push_in"
+    ) -> MotionPresetSpec:
         """Fetch preset specification, falling back to safe default if not found."""
         return self._registry.get(preset_id) or self._registry[default_id]
 
@@ -90,8 +90,7 @@ class MotionPresetCatalog:
         return {
             "total_presets": len(self._registry),
             "categories": {
-                cat.value: [p.to_dict() for p in self.list_presets(cat)]
-                for cat in PresetCategory
+                cat.value: [p.to_dict() for p in self.list_presets(cat)] for cat in PresetCategory
             },
         }
 

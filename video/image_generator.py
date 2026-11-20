@@ -39,8 +39,8 @@ DEFAULT_IMAGE_MODELS: List[str] = [
 
 # Text-to-video models, kept for the long-form milestone (needs credits).
 DEFAULT_VIDEO_MODELS: List[str] = [
-    "Lightricks/LTX-Video-0.9.8-13B-distilled",   # fast
-    "tencent/HunyuanVideo",                        # quality
+    "Lightricks/LTX-Video-0.9.8-13B-distilled",  # fast
+    "tencent/HunyuanVideo",  # quality
     "Wan-AI/Wan2.2-TI2V-5B",
 ]
 
@@ -50,7 +50,9 @@ DEFAULT_SPACES: List[str] = [
     "black-forest-labs/FLUX.1-dev",
 ]
 
-_PROMPT_SUFFIX = ", vertical 9:16 composition, photorealistic, no text, no letters, no watermark, no logos"
+_PROMPT_SUFFIX = (
+    ", vertical 9:16 composition, photorealistic, no text, no letters, no watermark, no logos"
+)
 
 _SPACE_API = "/infer"
 
@@ -58,11 +60,17 @@ _SPACE_API = "/infer"
 class AIImageGenerator:
     """Generates images (or short clips) for free: credits → Space → Pollinations."""
 
-    def __init__(self, hf_token: str = "", model_id: Optional[str] = None,
-                 models: Optional[List[str]] = None, provider: str = "auto",
-                 timeout: float = 120.0, use_space: bool = True,
-                 use_pollinations: bool = True,
-                 spaces: Optional[List[str]] = None) -> None:
+    def __init__(
+        self,
+        hf_token: str = "",
+        model_id: Optional[str] = None,
+        models: Optional[List[str]] = None,
+        provider: str = "auto",
+        timeout: float = 120.0,
+        use_space: bool = True,
+        use_pollinations: bool = True,
+        spaces: Optional[List[str]] = None,
+    ) -> None:
         self.hf_token = hf_token
         self.models = list(models or ([model_id] if model_id else DEFAULT_IMAGE_MODELS))
         self.provider = provider
@@ -70,8 +78,8 @@ class AIImageGenerator:
         self.use_space = use_space
         self.use_pollinations = use_pollinations
         self.spaces = list(spaces or DEFAULT_SPACES)
-        self.dead = False              # credits route exhausted
-        self.space_dead = False        # every Space failed
+        self.dead = False  # credits route exhausted
+        self.space_dead = False  # every Space failed
         self.pollinations_dead = False
         self.last_error = ""
         self._client = None
@@ -80,23 +88,27 @@ class AIImageGenerator:
     # ------------------------------------------------------------------ client
     def _get_client(self):
         if self._client is None:
-            from huggingface_hub import InferenceClient   # optional dependency
+            from huggingface_hub import InferenceClient  # optional dependency
 
-            self._client = InferenceClient(provider=self.provider, api_key=self.hf_token,
-                                           timeout=self.timeout)
+            self._client = InferenceClient(
+                provider=self.provider, api_key=self.hf_token, timeout=self.timeout
+            )
         return self._client
 
     def _get_space(self, space_id: str):
         if space_id not in self._space_clients:
-            from gradio_client import Client                # optional dependency
+            from gradio_client import Client  # optional dependency
 
             logger.info("connecting to Space %s", space_id)
-            self._space_clients[space_id] = Client(space_id, token=self.hf_token or None,
-                                                  verbose=False)
+            self._space_clients[space_id] = Client(
+                space_id, token=self.hf_token or None, verbose=False
+            )
         return self._space_clients[space_id]
 
     # ------------------------------------------------------------------ images
-    def generate(self, prompt: str, output_path: str, width: int = 768, height: int = 1344) -> Optional[str]:
+    def generate(
+        self, prompt: str, output_path: str, width: int = 768, height: int = 1344
+    ) -> Optional[str]:
         """Render one image. Returns the saved path or ``None``."""
         self._req_size = (width, height)
         out_file = Path(output_path)
@@ -129,10 +141,12 @@ class AIImageGenerator:
                 if "402" in msg or "Payment Required" in msg:
                     # no inference credits on this account — stop trying this run
                     self.dead = True
-                    logger.info("HF inference needs credits (%s) — trying free Space instead", model)
+                    logger.info(
+                        "HF inference needs credits (%s) — trying free Space instead", model
+                    )
                     return False
                 if "410" in msg or "deprecated" in msg:
-                    continue      # model retired on this provider, next candidate
+                    continue  # model retired on this provider, next candidate
                 logger.warning("HF image failed via %s: %s", model, self.last_error)
                 continue
             try:
@@ -168,7 +182,7 @@ class AIImageGenerator:
                 self.last_error = f"space:{space_id}: {type(exc).__name__}: {str(exc)[:160]}"
                 logger.warning("Space %s failed: %s", space_id, exc)
                 self._space_clients.pop(space_id, None)
-        self.space_dead = True         # every Space failed; don't hammer in this run
+        self.space_dead = True  # every Space failed; don't hammer in this run
         return False
 
     # -- backend 3: Pollinations (free, keyless)
@@ -180,11 +194,20 @@ class AIImageGenerator:
             from urllib.parse import quote
 
             import shutil
+
             req_w, req_h = getattr(self, "_req_size", (768, 1344))
             url = "https://image.pollinations.ai/prompt/" + quote(text[:900], safe="")
-            resp = requests.get(url, params={"width": req_w, "height": req_h, "model": "flux",
-                                             "nologo": "true", "enhance": "false"},
-                                timeout=self.timeout)
+            resp = requests.get(
+                url,
+                params={
+                    "width": req_w,
+                    "height": req_h,
+                    "model": "flux",
+                    "nologo": "true",
+                    "enhance": "false",
+                },
+                timeout=self.timeout,
+            )
             if resp.status_code != 200 or len(resp.content) < 20_000:
                 raise RuntimeError(f"HTTP {resp.status_code}, {len(resp.content)} bytes")
             tmp_dir = Path(tempfile.mkdtemp())
@@ -202,13 +225,15 @@ class AIImageGenerator:
             return False
 
     # ------------------------------------------------------------------ video
-    def generate_clip(self, prompt: str, output_path: str, model: Optional[str] = None) -> Optional[str]:
+    def generate_clip(
+        self, prompt: str, output_path: str, model: Optional[str] = None
+    ) -> Optional[str]:
         """Render a short clip (long-form milestone). Needs inference credits."""
         if not self.hf_token or self.dead:
             return None
         out_file = Path(output_path)
         out_file.parent.mkdir(parents=True, exist_ok=True)
-        for candidate in ([model] if model else DEFAULT_VIDEO_MODELS):
+        for candidate in [model] if model else DEFAULT_VIDEO_MODELS:
             try:
                 payload = self._get_client().text_to_video(prompt, model=candidate)
             except Exception as exc:  # noqa: BLE001
@@ -234,6 +259,7 @@ class AIImageGenerator:
         """Convert whatever the backend produced (webp/png/jpeg) to the .jpg path."""
         try:
             from PIL import Image
+
             with Image.open(src) as im:
                 im.convert("RGB").save(dest, "JPEG", quality=92)
         except Exception:  # noqa: BLE001 — PIL missing or odd format: copy bytes as-is

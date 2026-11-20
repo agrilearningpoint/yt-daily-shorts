@@ -10,15 +10,14 @@ Performs frame-accurate pre-render and post-render quality assurance:
 from __future__ import annotations
 
 import logging
-import os
 import shutil
-import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from agents.base_agent import AgentResult, BaseAgent
 from core.agent_contracts import MasterEditingTimeline, VisualAudioMatchResult
 from core.configuration import AppConfig
+from core.duration import SHORTS_HARD_LIMIT, SHORTS_MIN_DURATION
 from core.state_manager import StateManager
 from video.qa_inspector import VideoQAInspector
 
@@ -37,7 +36,8 @@ class VisualAudioMatchQAAgent(BaseAgent):
             target_width=config.video.width,
             target_height=config.video.height,
             target_fps=config.video.fps,
-            max_duration=getattr(config.video, "news_max_duration", 59.0),
+            max_duration=float(getattr(config.video, "news_max_duration", SHORTS_HARD_LIMIT)),
+            min_duration=float(getattr(config.video, "min_duration", SHORTS_MIN_DURATION)),
         )
 
     def validate_input(self, **kwargs: Any) -> bool:
@@ -75,16 +75,38 @@ class VisualAudioMatchQAAgent(BaseAgent):
                 if v_path:
                     p = Path(v_path)
                     if not p.exists() or p.stat().st_size < 100:
-                        errors.append(f"Segment {seg_id}: Visual asset missing or corrupt ({v_path})")
+                        errors.append(
+                            f"Segment {seg_id}: Visual asset missing or corrupt ({v_path})"
+                        )
                         pre_render_passed = False
                 else:
-                    warnings.append(f"Segment {seg_id}: No visual asset assigned, using generated card")
+                    warnings.append(
+                        f"Segment {seg_id}: No visual asset assigned, using generated card"
+                    )
+
+                # Verify source provenance & metadata
+                meta = getattr(seg, "metadata", {}) if hasattr(seg, "metadata") else {}
+                entity = getattr(seg, "entity", "") or (
+                    meta.get("entity", "") if isinstance(meta, dict) else ""
+                )
+                provenance = getattr(seg, "source", "") or (
+                    meta.get("source", "") if isinstance(meta, dict) else ""
+                )
+                if provenance and provenance.lower() in ("unknown", "corrupt", "fake"):
+                    warnings.append(
+                        f"Segment {seg_id}: Questionable asset provenance '{provenance}'"
+                    )
 
                 # Semantic relevance heuristic
                 if text and v_path:
-                    # Check if any keyword in narration matches filename/description
                     text_words = set(text.lower().split())
-                    path_words = set(Path(v_path).stem.lower().replace("_", " ").replace("-", " ").split())
+                    path_words = set(
+                        Path(v_path).stem.lower().replace("_", " ").replace("-", " ").split()
+                    )
+                    if entity:
+                        path_words.update(
+                            entity.lower().replace("_", " ").replace("-", " ").split()
+                        )
                     common = text_words.intersection(path_words)
                     score = min(1.0, 0.4 + (0.6 if common else 0.0))
                     semantic_scores.append(score)
@@ -95,6 +117,7 @@ class VisualAudioMatchQAAgent(BaseAgent):
             if timeline.master_audio_path and Path(timeline.master_audio_path).exists():
                 try:
                     import wave
+
                     with wave.open(timeline.master_audio_path, "rb") as w:
                         frames = w.getnframes()
                         rate = w.getframerate()
@@ -114,8 +137,7 @@ class VisualAudioMatchQAAgent(BaseAgent):
 
         # Semantic match ratio
         semantic_ratio = (
-            sum(semantic_scores) / max(len(semantic_scores), 1)
-            if semantic_scores else 1.0
+            sum(semantic_scores) / max(len(semantic_scores), 1) if semantic_scores else 1.0
         )
         checks["semantic_match_ratio"] = round(semantic_ratio, 2)
 
@@ -136,7 +158,9 @@ class VisualAudioMatchQAAgent(BaseAgent):
             checks["post_render_evaluated"] = False
 
         # 3. Overall Verdict
-        overall_approved = pre_render_passed and (post_render_passed or not video_path) and len(errors) == 0
+        overall_approved = (
+            pre_render_passed and (post_render_passed or not video_path) and len(errors) == 0
+        )
         overall_score = 100.0 - (len(errors) * 35.0) - (len(warnings) * 10.0)
         overall_score = max(0.0, min(100.0, overall_score))
 

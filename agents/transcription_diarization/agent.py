@@ -7,7 +7,6 @@ and normalizes Devanagari Hindi text. Never fabricates placeholder transcripts.
 
 from __future__ import annotations
 
-import os
 import re
 import shutil
 import subprocess
@@ -42,6 +41,7 @@ class TranscriptionDiarizationAgent(BaseAgent):
             or kwargs.get("existing_captions_path")
             or kwargs.get("raw_transcript")
             or kwargs.get("segments")
+            or kwargs.get("transcript_segments")
         )
 
     async def execute(self, **kwargs: Any) -> AgentResult:
@@ -49,7 +49,9 @@ class TranscriptionDiarizationAgent(BaseAgent):
         if not self.validate_input(**kwargs):
             return AgentResult(
                 success=False,
-                errors=["No media manifest, audio file, or transcript provided to TranscriptionDiarizationAgent."],
+                errors=[
+                    "No media manifest, audio file, or transcript provided to TranscriptionDiarizationAgent."
+                ],
             )
 
         manifest: Optional[SourceVideoManifest] = kwargs.get("manifest")
@@ -62,8 +64,9 @@ class TranscriptionDiarizationAgent(BaseAgent):
         transcription_status = "unprocessed"
 
         # 1. Pre-computed or injected segments (testing or checkpointed)
-        if kwargs.get("segments"):
-            raw_segs = kwargs["segments"]
+        provided_segs = kwargs.get("segments") or kwargs.get("transcript_segments")
+        if provided_segs:
+            raw_segs = provided_segs
             for idx, item in enumerate(raw_segs):
                 if isinstance(item, TranscriptSegment):
                     segments.append(item)
@@ -92,7 +95,9 @@ class TranscriptionDiarizationAgent(BaseAgent):
             transcription_status = "provided_segments"
 
         # 2. Existing Captions / SRT / VTT file
-        elif kwargs.get("existing_captions_path") and Path(kwargs["existing_captions_path"]).exists():
+        elif (
+            kwargs.get("existing_captions_path") and Path(kwargs["existing_captions_path"]).exists()
+        ):
             cap_file = Path(kwargs["existing_captions_path"])
             segments = self._parse_srt_or_vtt(cap_file)
             transcription_status = "extracted_captions"
@@ -106,7 +111,11 @@ class TranscriptionDiarizationAgent(BaseAgent):
 
         # 4. Extract audio and transcribe using Whisper adapter
         else:
-            local_video = manifest.local_path if (manifest and manifest.is_local_file) else kwargs.get("video_path")
+            local_video = (
+                manifest.local_path
+                if (manifest and manifest.is_local_file)
+                else kwargs.get("video_path")
+            )
             if local_video and Path(local_video).exists():
                 extracted_audio = work_dir / "extracted_audio.wav"
                 if not extracted_audio.exists():
@@ -118,7 +127,9 @@ class TranscriptionDiarizationAgent(BaseAgent):
                 # No local media and no captions -> Honest failure! Never fabricate fake news transcripts.
                 return AgentResult(
                     success=False,
-                    errors=[f"Source video media or audio track is not accessible for video_id={video_id}."],
+                    errors=[
+                        f"Source video media or audio track is not accessible for video_id={video_id}."
+                    ],
                     data={"transcription_status": "media_inaccessible"},
                 )
 
@@ -146,7 +157,11 @@ class TranscriptionDiarizationAgent(BaseAgent):
         agent_res = AgentResult(
             success=True,
             data=result_data,
-            metadata={"video_id": video_id, "total_words": len(full_text.split()), "status": transcription_status},
+            metadata={
+                "video_id": video_id,
+                "total_words": len(full_text.split()),
+                "status": transcription_status,
+            },
         )
         self.save_result(video_id, agent_res)
         return agent_res
@@ -157,26 +172,37 @@ class TranscriptionDiarizationAgent(BaseAgent):
             cmd = [
                 self.ffmpeg_path,
                 "-y",
-                "-i", str(video_path),
+                "-i",
+                str(video_path),
                 "-vn",
-                "-acodec", "pcm_s16le",
-                "-ar", "16000",
-                "-ac", "1",
+                "-acodec",
+                "pcm_s16le",
+                "-ar",
+                "16000",
+                "-ac",
+                "1",
                 str(output_audio),
             ]
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True, timeout=120)
+            subprocess.run(
+                cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True, timeout=120
+            )
         except Exception as exc:
             self.logger.warning("Audio extraction failed (%s).", exc)
 
-    async def _transcribe_audio(self, audio_path: Path, manifest: Optional[SourceVideoManifest]) -> List[TranscriptSegment]:
+    async def _transcribe_audio(
+        self, audio_path: Path, manifest: Optional[SourceVideoManifest]
+    ) -> List[TranscriptSegment]:
         """Transcribe audio with faster-whisper adapter."""
         if not audio_path.exists() or audio_path.stat().st_size < 1000:
             return []
 
         try:
             import faster_whisper  # type: ignore
+
             model_size = getattr(getattr(self.config, "transcription", None), "model_size", "small")
-            whisper_model = faster_whisper.WhisperModel(model_size, device="auto", compute_type="default")
+            whisper_model = faster_whisper.WhisperModel(
+                model_size, device="auto", compute_type="default"
+            )
             transcribe_segments, info = whisper_model.transcribe(
                 str(audio_path),
                 language="hi",
@@ -188,7 +214,14 @@ class TranscriptionDiarizationAgent(BaseAgent):
                 words = []
                 if hasattr(seg, "words") and seg.words:
                     for w in seg.words:
-                        words.append(WordTiming(word=w.word.strip(), start=w.start, end=w.end, confidence=getattr(w, "probability", 0.9)))
+                        words.append(
+                            WordTiming(
+                                word=w.word.strip(),
+                                start=w.start,
+                                end=w.end,
+                                confidence=getattr(w, "probability", 0.9),
+                            )
+                        )
                 parsed_segs.append(
                     TranscriptSegment(
                         segment_id=f"seg_{idx:03d}",
@@ -233,7 +266,9 @@ class TranscriptionDiarizationAgent(BaseAgent):
                 w_time = current_time
                 w_delta = seg_duration / len(words)
                 for w in words:
-                    word_list.append(WordTiming(word=w, start=round(w_time, 2), end=round(w_time + w_delta, 2)))
+                    word_list.append(
+                        WordTiming(word=w, start=round(w_time, 2), end=round(w_time + w_delta, 2))
+                    )
                     w_time += w_delta
 
             segments.append(
@@ -263,7 +298,7 @@ class TranscriptionDiarizationAgent(BaseAgent):
         )
 
         for idx, block in enumerate(blocks):
-            lines = [l.strip() for l in block.split("\n") if l.strip()]
+            lines = [line_item.strip() for line_item in block.split("\n") if line_item.strip()]
             time_match = None
             text_lines = []
             for line in lines:
@@ -293,7 +328,9 @@ class TranscriptionDiarizationAgent(BaseAgent):
                     w_delta = (end_sec - start_sec) / len(words)
                     w_t = start_sec
                     for w in words:
-                        w_list.append(WordTiming(word=w, start=round(w_t, 2), end=round(w_t + w_delta, 2)))
+                        w_list.append(
+                            WordTiming(word=w, start=round(w_t, 2), end=round(w_t + w_delta, 2))
+                        )
                         w_t += w_delta
 
                 segments.append(

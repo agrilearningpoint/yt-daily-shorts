@@ -31,8 +31,17 @@ class LLMError(RuntimeError):
 # JSON helpers
 # ---------------------------------------------------------------------------
 
-ROTATE_ON = ("HTTP 429", "HTTP 413", "HTTP 401", "HTTP 403", "HTTP 503", "quota",
-             "RESOURCE_EXHAUSTED", "timeout", "timed out")
+ROTATE_ON = (
+    "HTTP 429",
+    "HTTP 413",
+    "HTTP 401",
+    "HTTP 403",
+    "HTTP 503",
+    "quota",
+    "RESOURCE_EXHAUSTED",
+    "timeout",
+    "timed out",
+)
 
 
 def split_keys(value: str) -> List[str]:
@@ -76,8 +85,12 @@ class _KeyRing:
                     if not hasattr(self, "_bad"):
                         self._bad = set()
                     self._bad.add(key)
-                    logger.warning("%s key %s…%s is stalling — parked for this run",
-                                   getattr(self, "name", "llm"), key[:6], key[-4:])
+                    logger.warning(
+                        "%s key %s…%s is stalling — parked for this run",
+                        getattr(self, "name", "llm"),
+                        key[:6],
+                        key[-4:],
+                    )
                 raise
         last = None
         for step in range(len(usable)):
@@ -94,12 +107,19 @@ class _KeyRing:
                     if not hasattr(self, "_bad"):
                         self._bad = set()
                     self._bad.add(key)
-                    logger.warning("%s key %s…%s is stalling — parked for this run",
-                                   getattr(self, "name", "llm"), key[:6], key[-4:])
+                    logger.warning(
+                        "%s key %s…%s is stalling — parked for this run",
+                        getattr(self, "name", "llm"),
+                        key[:6],
+                        key[-4:],
+                    )
                 if not any(c in msg for c in ROTATE_ON):
                     raise
-                logger.info("%s key #%d hit a limit, trying the next key", getattr(self, "name", "llm"),
-                            (self._ki + step) % len(usable) + 1)
+                logger.info(
+                    "%s key #%d hit a limit, trying the next key",
+                    getattr(self, "name", "llm"),
+                    (self._ki + step) % len(usable) + 1,
+                )
         raise last
 
 
@@ -120,7 +140,7 @@ def extract_json(text: str) -> Dict[str, Any]:
     end = cleaned.rfind("}")
     if start == -1 or end <= start:
         raise LLMError("no JSON object in LLM response")
-    snippet = cleaned[start:end + 1]
+    snippet = cleaned[start : end + 1]
     snippet = re.sub(r",\s*([}\]])", r"\1", snippet)  # trailing commas
     try:
         data = json.loads(snippet)
@@ -135,16 +155,19 @@ def extract_json(text: str) -> Dict[str, Any]:
 # Providers
 # ---------------------------------------------------------------------------
 
+
 class BaseLLMProvider(ABC):
     name: str = "base"
 
     @abstractmethod
-    async def generate_text(self, prompt: str, system_prompt: Optional[str] = None,
-                            json_mode: bool = False) -> str:
-        ...
+    async def generate_text(
+        self, prompt: str, system_prompt: Optional[str] = None, json_mode: bool = False
+    ) -> str: ...
 
-    async def generate_json(self, prompt: str, system_prompt: Optional[str] = None) -> Dict[str, Any]:
-        instr = ("\n\nReturn ONLY one valid JSON object. No markdown fences, no commentary.")
+    async def generate_json(
+        self, prompt: str, system_prompt: Optional[str] = None
+    ) -> Dict[str, Any]:
+        instr = "\n\nReturn ONLY one valid JSON object. No markdown fences, no commentary."
         text = await self.generate_text(prompt + instr, system_prompt, json_mode=True)
         return extract_json(text)
 
@@ -155,8 +178,14 @@ class GeminiProvider(_KeyRing, BaseLLMProvider):
     name = "gemini"
     URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
-    def __init__(self, api_key: str, model_name: str, temperature: float = 0.7,
-                 max_tokens: int = 4096, timeout: int = 90):
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+        timeout: int = 90,
+    ):
         self._init_keys(api_key)
         self.model_name = model_name
         self.temperature = temperature
@@ -166,7 +195,10 @@ class GeminiProvider(_KeyRing, BaseLLMProvider):
     def _call(self, prompt: str, system_prompt: Optional[str], json_mode: bool) -> str:
         body: Dict[str, Any] = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": self.temperature, "maxOutputTokens": self.max_tokens},
+            "generationConfig": {
+                "temperature": self.temperature,
+                "maxOutputTokens": self.max_tokens,
+            },
         }
         if json_mode:
             body["generationConfig"]["responseMimeType"] = "application/json"
@@ -176,20 +208,32 @@ class GeminiProvider(_KeyRing, BaseLLMProvider):
             resp = requests.post(
                 self.URL.format(model=self.model_name),
                 headers={"x-goog-api-key": self._key(), "Content-Type": "application/json"},
-                json=body, timeout=self.timeout,
+                json=body,
+                timeout=self.timeout,
             )
-        except requests.RequestException as exc:   # hang / reset: rotate to the next key
+        except requests.RequestException as exc:  # hang / reset: rotate to the next key
             raise LLMError(f"gemini/{self.model_name} timeout: {type(exc).__name__}") from exc
         if resp.status_code == 400 and (json_mode or system_prompt):
             fallback_body: Dict[str, Any] = {
-                "contents": [{"role": "user", "parts": [{"text": f"{system_prompt}\n\n{prompt}" if system_prompt else prompt}]}],
-                "generationConfig": {"temperature": self.temperature, "maxOutputTokens": self.max_tokens},
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"text": f"{system_prompt}\n\n{prompt}" if system_prompt else prompt}
+                        ],
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": self.temperature,
+                    "maxOutputTokens": self.max_tokens,
+                },
             }
             try:
                 resp = requests.post(
                     self.URL.format(model=self.model_name),
                     headers={"x-goog-api-key": self._key(), "Content-Type": "application/json"},
-                    json=fallback_body, timeout=self.timeout,
+                    json=fallback_body,
+                    timeout=self.timeout,
                 )
             except requests.RequestException as exc:
                 raise LLMError(f"gemini/{self.model_name} timeout: {type(exc).__name__}") from exc
@@ -198,7 +242,9 @@ class GeminiProvider(_KeyRing, BaseLLMProvider):
         try:
             data = resp.json()
         except ValueError as exc:
-            raise LLMError(f"gemini/{self.model_name} non-JSON response: {resp.text[:200]}") from exc
+            raise LLMError(
+                f"gemini/{self.model_name} non-JSON response: {resp.text[:200]}"
+            ) from exc
         try:
             parts = data["candidates"][0]["content"]["parts"]
         except (KeyError, IndexError) as exc:
@@ -218,11 +264,18 @@ class OpenAICompatProvider(_KeyRing, BaseLLMProvider):
         "openrouter": "https://openrouter.ai/api/v1",
         "nvidia": "https://integrate.api.nvidia.com/v1",
         "ollama": "https://ollama.com/v1",
-        "agnes": "https://apihub.agnes-ai.com/v1",   # free tier, text + images
+        "agnes": "https://apihub.agnes-ai.com/v1",  # free tier, text + images
     }
 
-    def __init__(self, provider: str, api_key: str, model_name: str, temperature: float = 0.7,
-                 max_tokens: int = 4096, timeout: int = 90):
+    def __init__(
+        self,
+        provider: str,
+        api_key: str,
+        model_name: str,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+        timeout: int = 90,
+    ):
         self.name = provider
         self.base_url = self.BASE_URLS[provider]
         self._init_keys(api_key)
@@ -241,8 +294,12 @@ class OpenAICompatProvider(_KeyRing, BaseLLMProvider):
     def _post(self, payload: Dict[str, Any]):
         """POST with transport errors converted into rotatable LLMErrors."""
         try:
-            return requests.post(f"{self.base_url}/chat/completions", headers=self._headers(),
-                                 json=payload, timeout=self.timeout)
+            return requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=self._headers(),
+                json=payload,
+                timeout=self.timeout,
+            )
         except requests.RequestException as exc:
             raise LLMError(f"{self.name}/{self.model_name} timeout: {type(exc).__name__}") from exc
 
@@ -264,15 +321,21 @@ class OpenAICompatProvider(_KeyRing, BaseLLMProvider):
             payload.pop("response_format")
             resp = self._post(payload)
         if resp.status_code != 200:
-            raise LLMError(f"{self.name}/{self.model_name} HTTP {resp.status_code}: {resp.text[:300]}")
+            raise LLMError(
+                f"{self.name}/{self.model_name} HTTP {resp.status_code}: {resp.text[:300]}"
+            )
         try:
             data = resp.json()
         except ValueError as exc:
-            raise LLMError(f"{self.name}/{self.model_name} non-JSON response: {resp.text[:200]}") from exc
+            raise LLMError(
+                f"{self.name}/{self.model_name} non-JSON response: {resp.text[:200]}"
+            ) from exc
         try:
             content = data["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError) as exc:
-            raise LLMError(f"{self.name}/{self.model_name} bad response: {str(data)[:300]}") from exc
+            raise LLMError(
+                f"{self.name}/{self.model_name} bad response: {str(data)[:300]}"
+            ) from exc
         return content
 
     async def generate_text(self, prompt, system_prompt=None, json_mode=False) -> str:
@@ -289,20 +352,28 @@ class MockLLMProvider(BaseLLMProvider):
             return json.dumps(await self.generate_json(prompt))
         return "यह एक परीक्षण उत्तर है।"
 
-    async def generate_json(self, prompt: str, system_prompt: Optional[str] = None,
-                            tier: str = "") -> Dict[str, Any]:
+    async def generate_json(
+        self, prompt: str, system_prompt: Optional[str] = None, tier: str = ""
+    ) -> Dict[str, Any]:
         if "FACT_CHECK" in prompt:
             return {"verdict": "pass", "confidence": 0.9, "issues": [], "corrected_scenes": []}
         # v2 news schema: the prompt asks for "national"/"international" story buckets.
         if '"national"' in prompt and '"international"' in prompt:
+
             def _count(pattern: str, default: int) -> int:
                 hit = re.search(pattern, prompt)
                 return int(hit.group(1)) if hit else default
 
-            n_nat = _count(r"(\d+)\s+DIFFERENT Indian stories", 17)
-            n_int = _count(r"(\d+)\s+DIFFERENT world stories", 5)
-            topics = ["डिजिटल इंडिया", "इसरो मिशन", "किसान योजना", "रेलवे विस्तार",
-                      "निर्यात वृद्धि", "शिक्षा नीति"]
+            n_nat = _count(r"(\d+)\s+DIFFERENT Indian stories", 6)
+            n_int = _count(r"(\d+)\s+DIFFERENT world stories", 2)
+            topics = [
+                "डिजिटल इंडिया",
+                "इसरो मिशन",
+                "किसान योजना",
+                "रेलवे विस्तार",
+                "निर्यात वृद्धि",
+                "शिक्षा नीति",
+            ]
 
             def story(i: int, _section: str) -> Dict[str, Any]:
                 topic = topics[i % len(topics)]
@@ -310,38 +381,127 @@ class MockLLMProvider(BaseLLMProvider):
                     "on_screen_text": topic,
                     "src": (i % 6) + 1,
                     "parts": [
-                        {"say": f"सरकार ने {topic} पर बड़ा फैसला लिया है",
-                         "visual": "Indian parliament building", "entity": "Parliament House (India)",
-                         "search": "india parliament", "source": "entity"},
-                        {"say": "इससे लाखों लोगों को सीधा फायदा मिलेगा",
-                         "visual": "happy indian families", "entity": "",
-                         "search": "indian family", "source": "stock"},
+                        {
+                            "say": f"सरकार ने {topic} पर बड़ा फैसला लिया है",
+                            "visual": "Indian parliament building",
+                            "entity": "Parliament House (India)",
+                            "search": "india parliament",
+                            "source": "entity",
+                        },
+                        {
+                            "say": "इससे लाखों लोगों को सीधा फायदा मिलेगा",
+                            "visual": "happy indian families",
+                            "entity": "",
+                            "search": "indian family",
+                            "source": "stock",
+                        },
                     ],
                 }
 
             return {
                 "title": "आज की बड़ी खबरें",
                 "hook": f"आज की सबसे बड़ी खबर: {topics[0]} पर सरकार का बड़ा फैसला",
-                "national": [story(i, "national") for i in range(max(n_nat, 16))],
-                "international": [story(i, "international") for i in range(max(n_int, 5))],
+                "national": [story(i, "national") for i in range(max(n_nat, 4))],
+                "international": [story(i, "international") for i in range(max(n_int, 1))],
                 "sources": ["https://pib.gov.in", "https://ddnews.gov.in"],
             }
         if "SEO_METADATA" in prompt:
-            return {"title": "भारत की बड़ी उपलब्धि | 60 सेकंड में", "tags": ["india", "hindi news"],
-                    "description_hook": "जानिए आज की सबसे अहम बात।"}
+            return {
+                "title": "भारत की बड़ी उपलब्धि | 60 सेकंड में",
+                "tags": ["india", "hindi news"],
+                "description_hook": "जानिए आज की सबसे अहम बात।",
+            }
         return {
             "title": "आज की बड़ी खबरें - 60 सेकंड में",
             "hook": "क्या आप जानते हैं आज देश में कौन सा बड़ा फैसला हुआ?",
             "scenes": [
-                {"scene_number": 1, "on_screen_text": "बड़ा फैसला",
-                 "parts": [{"say": "भारत सरकार ने आज डिजिटल इंफ्रास्ट्रक्चर को लेकर", "visual": "india digital infrastructure", "entity": "", "search": "india digital infrastructure", "source": "stock"}, {"say": "एक बड़ा और अहम निर्णय लिया है जिसका", "visual": "india digital infrastructure", "entity": "", "search": "india digital infrastructure", "source": "stock"}, {"say": "असर करोड़ों लोगों पर होगा।", "visual": "india digital infrastructure", "entity": "", "search": "india digital infrastructure", "source": "stock"}],
-                 "visual_keywords": "india digital infrastructure", "sources": ["https://pib.gov.in"]},
-                {"scene_number": 2, "on_screen_text": "युवाओं को फायदा",
-                 "parts": [{"say": "इस परियोजना से लाखों युवाओं को रोजगार मिलेगा", "visual": "indian youth technology", "entity": "", "search": "indian youth technology", "source": "stock"}, {"say": "और गांवों तक तेज इंटरनेट पहुंचेगा, जिससे पढ़ाई", "visual": "indian youth technology", "entity": "", "search": "indian youth technology", "source": "stock"}, {"say": "और कारोबार दोनों आसान होंगे।", "visual": "indian youth technology", "entity": "", "search": "indian youth technology", "source": "stock"}],
-                 "visual_keywords": "indian youth technology", "sources": ["https://pib.gov.in"]},
-                {"scene_number": 3, "on_screen_text": "आपकी राय?",
-                 "parts": [{"say": "विशेषज्ञ मानते हैं कि यह कदम अर्थव्यवस्था को", "visual": "india economy growth", "entity": "", "search": "india economy growth", "source": "stock"}, {"say": "नई रफ्तार देगा। आपको क्या लगता है? कमेंट", "visual": "india economy growth", "entity": "", "search": "india economy growth", "source": "stock"}, {"say": "में बताइए और चैनल को सब्सक्राइब कीजिए।", "visual": "india economy growth", "entity": "", "search": "india economy growth", "source": "stock"}],
-                 "visual_keywords": "india economy growth", "sources": ["https://pib.gov.in"]},
+                {
+                    "scene_number": 1,
+                    "on_screen_text": "बड़ा फैसला",
+                    "parts": [
+                        {
+                            "say": "भारत सरकार ने आज डिजिटल इंफ्रास्ट्रक्चर को लेकर",
+                            "visual": "india digital infrastructure",
+                            "entity": "",
+                            "search": "india digital infrastructure",
+                            "source": "stock",
+                        },
+                        {
+                            "say": "एक बड़ा और अहम निर्णय लिया है जिसका",
+                            "visual": "india digital infrastructure",
+                            "entity": "",
+                            "search": "india digital infrastructure",
+                            "source": "stock",
+                        },
+                        {
+                            "say": "असर करोड़ों लोगों पर होगा।",
+                            "visual": "india digital infrastructure",
+                            "entity": "",
+                            "search": "india digital infrastructure",
+                            "source": "stock",
+                        },
+                    ],
+                    "visual_keywords": "india digital infrastructure",
+                    "sources": ["https://pib.gov.in"],
+                },
+                {
+                    "scene_number": 2,
+                    "on_screen_text": "युवाओं को फायदा",
+                    "parts": [
+                        {
+                            "say": "इस परियोजना से लाखों युवाओं को रोजगार मिलेगा",
+                            "visual": "indian youth technology",
+                            "entity": "",
+                            "search": "indian youth technology",
+                            "source": "stock",
+                        },
+                        {
+                            "say": "और गांवों तक तेज इंटरनेट पहुंचेगा, जिससे पढ़ाई",
+                            "visual": "indian youth technology",
+                            "entity": "",
+                            "search": "indian youth technology",
+                            "source": "stock",
+                        },
+                        {
+                            "say": "और कारोबार दोनों आसान होंगे।",
+                            "visual": "indian youth technology",
+                            "entity": "",
+                            "search": "indian youth technology",
+                            "source": "stock",
+                        },
+                    ],
+                    "visual_keywords": "indian youth technology",
+                    "sources": ["https://pib.gov.in"],
+                },
+                {
+                    "scene_number": 3,
+                    "on_screen_text": "आपकी राय?",
+                    "parts": [
+                        {
+                            "say": "विशेषज्ञ मानते हैं कि यह कदम अर्थव्यवस्था को",
+                            "visual": "india economy growth",
+                            "entity": "",
+                            "search": "india economy growth",
+                            "source": "stock",
+                        },
+                        {
+                            "say": "नई रफ्तार देगा। आपको क्या लगता है? कमेंट",
+                            "visual": "india economy growth",
+                            "entity": "",
+                            "search": "india economy growth",
+                            "source": "stock",
+                        },
+                        {
+                            "say": "में बताइए और चैनल को सब्सक्राइब कीजिए।",
+                            "visual": "india economy growth",
+                            "entity": "",
+                            "search": "india economy growth",
+                            "source": "stock",
+                        },
+                    ],
+                    "visual_keywords": "india economy growth",
+                    "sources": ["https://pib.gov.in"],
+                },
             ],
             "sources": ["https://pib.gov.in"],
         }
@@ -351,12 +511,22 @@ class MockLLMProvider(BaseLLMProvider):
 # Fallback chain
 # ---------------------------------------------------------------------------
 
+
 def _openrouter_free_models(api_key: str, limit: int = 4) -> List[str]:
     try:
-        resp = requests.get("https://openrouter.ai/api/v1/models",
-                            headers={"Authorization": f"Bearer {api_key}"}, timeout=20)
-        models = [m["id"] for m in resp.json().get("data", []) if str(m.get("id", "")).endswith(":free")]
-        preferred = [m for m in models if any(k in m for k in ("gemini", "llama", "qwen", "gpt-oss", "deepseek", "mistral"))]
+        resp = requests.get(
+            "https://openrouter.ai/api/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=20,
+        )
+        models = [
+            m["id"] for m in resp.json().get("data", []) if str(m.get("id", "")).endswith(":free")
+        ]
+        preferred = [
+            m
+            for m in models
+            if any(k in m for k in ("gemini", "llama", "qwen", "gpt-oss", "deepseek", "mistral"))
+        ]
         return (preferred or models)[:limit]
     except Exception as exc:  # pragma: no cover - network
         logger.warning("OpenRouter model discovery failed: %s", exc)
@@ -369,15 +539,55 @@ def _openrouter_free_models(api_key: str, limit: int = 4) -> List[str]:
 # first (if still listed), then the best discovered ones.
 # ---------------------------------------------------------------------------
 
-_EXCLUDE = ("tts", "audio", "image", "embed", "whisper", "guard", "safety", "transcribe", "live",
-            "robotics", "vision", "ocr", "rerank", "parse", "moderation", "translate", "orpheus",
-            "omni", "lyria", "veo", "imagen", "computer-use", "deep-research", "antigravity", "argon",
-            "nano-banana", "calibration", "reward", "nemoguard", "-pro")
+_EXCLUDE = (
+    "tts",
+    "audio",
+    "image",
+    "embed",
+    "whisper",
+    "guard",
+    "safety",
+    "transcribe",
+    "live",
+    "robotics",
+    "vision",
+    "ocr",
+    "rerank",
+    "parse",
+    "moderation",
+    "translate",
+    "orpheus",
+    "omni",
+    "lyria",
+    "veo",
+    "imagen",
+    "computer-use",
+    "deep-research",
+    "antigravity",
+    "argon",
+    "nano-banana",
+    "calibration",
+    "reward",
+    "nemoguard",
+    "-pro",
+)
 _PREFER = {
     "gemini": ("flash",),
     "groq": ("gpt-oss-120b", "qwen", "gpt-oss-20b", "llama"),
-    "mistral": ("mistral-medium-latest", "mistral-small-latest", "mistral-large-latest", "ministral-14b-latest"),
-    "nvidia": ("nemotron-3-ultra", "nemotron-3.5-super", "deepseek-v4", "gpt-oss", "mistral-large", "nemotron"),
+    "mistral": (
+        "mistral-medium-latest",
+        "mistral-small-latest",
+        "mistral-large-latest",
+        "ministral-14b-latest",
+    ),
+    "nvidia": (
+        "nemotron-3-ultra",
+        "nemotron-3.5-super",
+        "deepseek-v4",
+        "gpt-oss",
+        "mistral-large",
+        "nemotron",
+    ),
     "ollama": ("gpt-oss", "qwen", "deepseek"),
 }
 
@@ -394,17 +604,30 @@ def discover_models(provider: str, api_key: str, limit: int = 4, timeout: int = 
     """Return currently-available chat model ids for *provider* (best first)."""
     try:
         if provider == "gemini":
-            r = requests.get("https://generativelanguage.googleapis.com/v1beta/models",
-                             headers={"x-goog-api-key": api_key}, params={"pageSize": 200}, timeout=timeout)
-            ids = [m["name"].split("/", 1)[-1] for m in r.json().get("models", [])
-                   if "generateContent" in m.get("supportedGenerationMethods", [])]
-            ids = [i for i in ids if ("flash" in i or "gemma" in i) and not any(x in i for x in _EXCLUDE)]
+            r = requests.get(
+                "https://generativelanguage.googleapis.com/v1beta/models",
+                headers={"x-goog-api-key": api_key},
+                params={"pageSize": 200},
+                timeout=timeout,
+            )
+            ids = [
+                m["name"].split("/", 1)[-1]
+                for m in r.json().get("models", [])
+                if "generateContent" in m.get("supportedGenerationMethods", [])
+            ]
+            ids = [
+                i
+                for i in ids
+                if ("flash" in i or "gemma" in i) and not any(x in i for x in _EXCLUDE)
+            ]
             flash = sorted([i for i in ids if "flash" in i and "latest" not in i], key=_version_key)
             return (flash + [i for i in ids if "gemma" in i])[:limit]
         if provider == "openrouter":
             return _openrouter_free_models(api_key, limit)
         base = OpenAICompatProvider.BASE_URLS[provider]
-        r = requests.get(f"{base}/models", headers={"Authorization": f"Bearer {api_key}"}, timeout=timeout)
+        r = requests.get(
+            f"{base}/models", headers={"Authorization": f"Bearer {api_key}"}, timeout=timeout
+        )
         ids = [m.get("id", "") for m in r.json().get("data", []) if m.get("id")]
         ids = [i for i in ids if not any(x in i.lower() for x in _EXCLUDE)]
         ranked: List[str] = []
@@ -421,8 +644,12 @@ class FallbackLLM(BaseLLMProvider):
 
     name = "fallback"
 
-    def __init__(self, candidates: List[BaseLLMProvider], allow_mock: bool = False,
-                 tiers: Optional[Dict[str, List[BaseLLMProvider]]] = None):
+    def __init__(
+        self,
+        candidates: List[BaseLLMProvider],
+        allow_mock: bool = False,
+        tiers: Optional[Dict[str, List[BaseLLMProvider]]] = None,
+    ):
         self.candidates = candidates
         # Stage routing: {"quality": [preferred candidates..., rest of the chain]}
         self.tiers: Dict[str, List[BaseLLMProvider]] = tiers or {}
@@ -440,8 +667,14 @@ class FallbackLLM(BaseLLMProvider):
         """Candidates for one call — a tier reorders the chain, never shrinks it."""
         return self.tiers.get(tier) or self.candidates
 
-    async def _run(self, method: str, prompt: str, system_prompt: Optional[str],
-                   tier: str = "", json_mode: bool = False) -> Any:
+    async def _run(
+        self,
+        method: str,
+        prompt: str,
+        system_prompt: Optional[str],
+        tier: str = "",
+        json_mode: bool = False,
+    ) -> Any:
         self.errors = []
         for cand in self.order_for(tier):
             label = f"{cand.name}/{getattr(cand, 'model_name', '')}"
@@ -462,34 +695,49 @@ class FallbackLLM(BaseLLMProvider):
                     msg = str(exc)
                     self.errors.append(f"{label}: {msg[:200]}")
                     logger.warning("LLM %s failed (attempt %d): %s", label, attempt + 1, msg[:200])
-                    if any(c in msg for c in ("HTTP 404", "HTTP 410", "HTTP 402", "HTTP 401", "HTTP 403")):
-                        self.dead.add(label)  # model retired / no access: skip for the rest of the run
+                    if any(
+                        c in msg
+                        for c in ("HTTP 404", "HTTP 410", "HTTP 402", "HTTP 401", "HTTP 403")
+                    ):
+                        self.dead.add(
+                            label
+                        )  # model retired / no access: skip for the rest of the run
                     if "exceeded your current quota" in msg or "billing" in msg:
                         # daily quota spent (gemini free tier is 20 RPD) — it will
                         # not come back inside this run, so stop paying for it
                         self.dead.add(label)
-                        logger.warning("LLM %s is out of daily quota — parked for the rest of the run", label)
+                        logger.warning(
+                            "LLM %s is out of daily quota — parked for the rest of the run", label
+                        )
                     elif "timeout" in msg or "timed out" in msg:
                         # a hung model already cost one full timeout — never again
                         self.dead.add(label)
-                        logger.warning("LLM %s hung (timeout) — parked for the rest of the run", label)
+                        logger.warning(
+                            "LLM %s hung (timeout) — parked for the rest of the run", label
+                        )
                     elif any(c in msg for c in ("HTTP 503", "high demand", "overloaded")):
                         self.strikes[label] = self.strikes.get(label, 0) + 1
-                        if self.strikes[label] >= 2:      # twice is enough — don't stall every call
+                        if self.strikes[label] >= 2:  # twice is enough — don't stall every call
                             self.dead.add(label)
-                    transient = any(c in msg for c in ("HTTP 500", "HTTP 502", "HTTP 504", "invalid JSON"))
+                    transient = any(
+                        c in msg for c in ("HTTP 500", "HTTP 502", "HTTP 504", "invalid JSON")
+                    )
                     if transient and attempt == 0:
                         await asyncio.sleep(4)
                         continue
                     break
         if self.allow_mock:
-            logger.warning("All LLM providers failed/unavailable — using MOCK provider (dry-run only).")
+            logger.warning(
+                "All LLM providers failed/unavailable — using MOCK provider (dry-run only)."
+            )
             self.last_used = "mock"
             return await getattr(MockLLMProvider(), method)(prompt, system_prompt)
         raise LLMError("All LLM providers failed: " + " | ".join(self.errors[-6:]))
 
     async def generate_text(self, prompt, system_prompt=None, json_mode=False, tier="") -> str:
-        return await self._run("generate_text", prompt, system_prompt, tier=tier, json_mode=json_mode)
+        return await self._run(
+            "generate_text", prompt, system_prompt, tier=tier, json_mode=json_mode
+        )
 
     async def generate_json(self, prompt, system_prompt=None, tier="") -> Dict[str, Any]:
         return await self._run("generate_json", prompt, system_prompt, tier=tier)
@@ -502,8 +750,9 @@ def provider_keys(provider: str, main_key: str = "") -> List[str]:
 
 
 def _make_candidate(provider: str, ring: List[str], model: str, llm_cfg) -> BaseLLMProvider:
-    kwargs = dict(temperature=llm_cfg.temperature, max_tokens=llm_cfg.max_tokens,
-                  timeout=llm_cfg.timeout_sec)
+    kwargs = dict(
+        temperature=llm_cfg.temperature, max_tokens=llm_cfg.max_tokens, timeout=llm_cfg.timeout_sec
+    )
     if provider == "gemini":
         return GeminiProvider(list(ring), model, **kwargs)
     return OpenAICompatProvider(provider, ring, model, **kwargs)
@@ -522,17 +771,17 @@ def build_llm(llm_cfg, allow_mock: bool = False) -> FallbackLLM:
         if hasattr(llm_cfg, "key_pool"):
             pool = [k for k in (llm_cfg.key_pool().get(provider) or []) if k]
         ring = pool or provider_keys(provider, keys.get(provider, ""))
-        ring = ring[:max(1, int(getattr(llm_cfg, "max_keys_per_provider", 2) or 1))]
+        ring = ring[: max(1, int(getattr(llm_cfg, "max_keys_per_provider", 2) or 1))]
         if not ring:
             continue
         rings[provider] = ring
-        key = ring[0]
+        ring[0]
         configured = list((llm_cfg.models or {}).get(provider) or ["auto"])
         preferred = [m for m in configured if m not in ("auto", "auto-free", "auto:free")]
         models = list(preferred)
         if any(m in ("auto", "auto-free", "auto:free") for m in configured):
             discovered = []
-            for k in ring:   # a dead/limited key must not hide the provider's models
+            for k in ring:  # a dead/limited key must not hide the provider's models
                 discovered = discover_models(provider, k)
                 if discovered:
                     break
@@ -564,14 +813,16 @@ def build_llm(llm_cfg, allow_mock: bool = False) -> FallbackLLM:
             if not ring:
                 logger.warning("LLM tier %s wants %s but there is no key for it", tier, provider)
                 continue
-            for model in (models or []):
+            for model in models or []:
                 preferred_c.append(_make_candidate(provider, ring, model, llm_cfg))
         if preferred_c:
             taken = {f"{c.name}/{c.model_name}" for c in preferred_c}
             tiers[tier] = preferred_c + [
-                c for c in candidates if f"{c.name}/{c.model_name}" not in taken]
-            logger.info("LLM tier %s prefers: %s", tier,
-                        [f"{c.name}/{c.model_name}" for c in preferred_c])
+                c for c in candidates if f"{c.name}/{c.model_name}" not in taken
+            ]
+            logger.info(
+                "LLM tier %s prefers: %s", tier, [f"{c.name}/{c.model_name}" for c in preferred_c]
+            )
     return FallbackLLM(candidates, allow_mock=allow_mock or llm_cfg.allow_mock, tiers=tiers)
 
 
@@ -589,8 +840,11 @@ async def health_check(llm_cfg) -> List[Tuple[str, bool, str]]:
             continue
         done.add(label_model)
         for i, k in enumerate(getattr(cand, "keys", []) or [], 1):
-            one = type(cand)(k, cand.model_name, timeout=60) if cand.name == "gemini" else \
-                OpenAICompatProvider(cand.name, k, cand.model_name, timeout=60)
+            one = (
+                type(cand)(k, cand.model_name, timeout=60)
+                if cand.name == "gemini"
+                else OpenAICompatProvider(cand.name, k, cand.model_name, timeout=60)
+            )
             label = f"{cand.name} key#{i} (...{k[-4:]}) {cand.model_name}"
             try:
                 data = await one.generate_json('Return {"ok": true, "lang": "hi"} as JSON.')
@@ -601,8 +855,12 @@ async def health_check(llm_cfg) -> List[Tuple[str, bool, str]]:
 
 
 # Backwards-compatible factory used by older code/tests
-def get_llm_client(provider: str = "", api_key: str = "", model_name: Optional[str] = None,
-                   temperature: float = 0.7) -> BaseLLMProvider:
+def get_llm_client(
+    provider: str = "",
+    api_key: str = "",
+    model_name: Optional[str] = None,
+    temperature: float = 0.7,
+) -> BaseLLMProvider:
     p = (provider or "").lower()
     if p == "gemini" and api_key:
         return GeminiProvider(api_key, model_name or "gemini-3.8-flash", temperature)
@@ -618,17 +876,28 @@ class LLMClient:
         llm_cfg = getattr(cfg, "llm", cfg) if cfg is not None else None
         if llm_cfg is None:
             from core.configuration import load_config
+
             llm_cfg = load_config().llm
         self.underlying = build_llm(llm_cfg)
 
-    async def generate(self, prompt: str, system_prompt: Optional[str] = None, system: Optional[str] = None,
-                       temperature: float = 0.7, **kwargs: Any) -> Any:
+    async def generate(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        system: Optional[str] = None,
+        temperature: float = 0.7,
+        **kwargs: Any,
+    ) -> Any:
         sys = system_prompt or system
         text = await self.underlying.generate_text(prompt, sys)
         return type("LLMResponse", (), {"text": text, "content": text})()
 
-    async def generate_json(self, prompt: str, system_prompt: Optional[str] = None, system: Optional[str] = None,
-                            **kwargs: Any) -> Dict[str, Any]:
+    async def generate_json(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        system: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
         sys = system_prompt or system
         return await self.underlying.generate_json(prompt, sys)
-

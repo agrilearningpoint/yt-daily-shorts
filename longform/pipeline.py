@@ -3,6 +3,7 @@
 Resumable at every step: script.json, per-chapter media.json and chapter_XX.mp4
 are all cached, so a crash or a re-run only redoes the missing part.
 """
+
 from __future__ import annotations
 
 import json
@@ -39,6 +40,7 @@ class LongFormPipeline:
         )
         if llm is None:
             from core.llm_client import build_llm
+
             llm = build_llm(config.llm)
         self.llm = llm
         self.chapter_files: List[str] = []
@@ -48,10 +50,18 @@ class LongFormPipeline:
         self.run_errors: List[str] = []
 
     # ------------------------------------------------------------------ public
-    async def run(self, topic: str, angle: str = "", minutes: int = 22, chapters: int = 9,
-                  upload: bool = True, privacy: str = "unlisted",
-                  rebuild_visuals: bool = False, force_upload: bool = False,
-                  fresh: bool = False) -> Dict[str, Any]:
+    async def run(
+        self,
+        topic: str,
+        angle: str = "",
+        minutes: int = 22,
+        chapters: int = 9,
+        upload: bool = True,
+        privacy: str = "unlisted",
+        rebuild_visuals: bool = False,
+        force_upload: bool = False,
+        fresh: bool = False,
+    ) -> Dict[str, Any]:
         t0 = time.time()
         self.video_id = f"{_slug(topic)}-{time.strftime('%Y%m%d')}"
         self.out = Path("output") / "long" / self.video_id
@@ -81,15 +91,22 @@ class LongFormPipeline:
         writer = ScriptWriter(self.llm, words_per_chapter=max(280, int(minutes * 158 / chapters)))
         self.writer = writer
         # card(5s) per chapter, plus the 3s intro and 7s outro, are not narration
-        self.target_chapter_sec = max(30.0, (minutes * 60 - (CARD_SECONDS * chapters + 10)) / chapters)
+        self.target_chapter_sec = max(
+            30.0, (minutes * 60 - (CARD_SECONDS * chapters + 10)) / chapters
+        )
         script = await writer.build(topic, angle, minutes, chapters, self.out)
         title = script["title"]
         chs = script["chapters"]
         self._chapters = chs
 
         from video.tts import TTSEngine
-        tts = TTSEngine(provider_order=["edge"], voice="hi-IN-MadhurNeural", rate="+4%",
-                        fallback_voice="hi-IN-SwaraNeural")
+
+        tts = TTSEngine(
+            provider_order=["edge"],
+            voice="hi-IN-MadhurNeural",
+            rate="+4%",
+            fallback_voice="hi-IN-SwaraNeural",
+        )
 
         for i, ch in enumerate(chs):
             ch_path = await self._chapter(i, ch, len(chs), tts, title)
@@ -105,10 +122,14 @@ class LongFormPipeline:
         meta = await self._metadata(title, chs, film)
 
         result: Dict[str, Any] = {
-            "video_id": self.video_id, "title": title, "path": film,
-            "duration_sec": R.probe_duration(film), "thumbnail": thumb,
+            "video_id": self.video_id,
+            "title": title,
+            "path": film,
+            "duration_sec": R.probe_duration(film),
+            "thumbnail": thumb,
             "chapters": [{"title": c["title"], "start": c.get("_start_sec", 0)} for c in chs],
-            "elapsed_min": (time.time() - t0) / 60, "metadata": meta,
+            "elapsed_min": (time.time() - t0) / 60,
+            "metadata": meta,
         }
         logger.info("film ready: %s (%.1f min render+script)", film, result["elapsed_min"])
 
@@ -118,15 +139,27 @@ class LongFormPipeline:
         # one metrics line per film: the error analyst and data/improvements.md read this,
         # so long-form runs finally count in the self-improvement loop
         from longform import seo as lseo
-        errs = [e for e in [result.get("upload_error")] + list(getattr(self, "run_errors", [])) if e]
-        lseo.record_film("longform", result["elapsed_min"], not errs, errs,
-                         title=meta.get("title", "")[:120], seo=meta.get("seo", ""),
-                         minutes_film=round((result.get("duration_sec") or 0) / 60, 1),
-                         chapters=len(chs), video=result.get("url", ""))
+
+        errs = [
+            e for e in [result.get("upload_error")] + list(getattr(self, "run_errors", [])) if e
+        ]
+        lseo.record_film(
+            "longform",
+            result["elapsed_min"],
+            not errs,
+            errs,
+            title=meta.get("title", "")[:120],
+            seo=meta.get("seo", ""),
+            minutes_film=round((result.get("duration_sec") or 0) / 60, 1),
+            chapters=len(chs),
+            video=result.get("url", ""),
+        )
         return result
 
     # ---------------------------------------------------------------- one chapter
-    async def _chapter(self, idx: int, ch: Dict, total: int, tts, video_title: str) -> Optional[str]:
+    async def _chapter(
+        self, idx: int, ch: Dict, total: int, tts, video_title: str
+    ) -> Optional[str]:
         ch_dir = self.out / f"ch{idx + 1:02d}"
         ch_dir.mkdir(parents=True, exist_ok=True)
         final = ch_dir / f"chapter_{idx + 1:02d}.mp4"
@@ -142,6 +175,7 @@ class LongFormPipeline:
             segment = await tts.synthesize_segment(ch["narration"], str(audio))
             logger.info("ch%02d voice: %.1f s", idx + 1, segment.duration)
         from video.tts import probe_duration, distribute_words
+
         dur = probe_duration(str(audio)) or 60.0
 
         # Length control on the real audio, not on the LLM's word count. Chapters that
@@ -155,8 +189,14 @@ class LongFormPipeline:
             want_words = int(words_have * (target * 1.02) / max(dur, 1))
             if want_words <= words_have * 1.05:
                 break
-            logger.warning("ch%02d short: %.0f s of %.0f s target — rewriting longer (%d -> %d words)",
-                           idx + 1, dur, target, words_have, want_words)
+            logger.warning(
+                "ch%02d short: %.0f s of %.0f s target — rewriting longer (%d -> %d words)",
+                idx + 1,
+                dur,
+                target,
+                words_have,
+                want_words,
+            )
             try:
                 longer = await self.writer.lengthen(video_title, ch, idx, total, want_words)
             except Exception as exc:
@@ -172,10 +212,15 @@ class LongFormPipeline:
             dur = probe_duration(str(audio)) or dur
             logger.info("ch%02d re-voiced: %.1f s", idx + 1, dur)
         dur = dur or 60.0
-        words = [{"word": w.word, "start": w.start, "end": w.end} for w in (segment.words if segment else [])]
+        words = [
+            {"word": w.word, "start": w.start, "end": w.end}
+            for w in (segment.words if segment else [])
+        ]
         if not words:
-            words = [{"word": w.word, "start": w.start, "end": w.end}
-                     for w in distribute_words(ch["narration"], dur)]
+            words = [
+                {"word": w.word, "start": w.start, "end": w.end}
+                for w in distribute_words(ch["narration"], dur)
+            ]
 
         # 2. visuals
         images = self.sourcer.fetch_chapter(idx, ch["visual_queries"], want=max(12, int(dur / 9)))
@@ -187,6 +232,7 @@ class LongFormPipeline:
         pieces.append(R.render_still(card, CARD_SECONDS, str(ch_dir / "p_card.mp4"), seed=idx))
 
         from video.renderer import quantize_durations
+
         raw_spans: List[float] = []
         for j, cue in enumerate(cues):
             next_start = cues[j + 1]["start"] if j + 1 < len(cues) else max(dur, cue["end"])
@@ -195,15 +241,23 @@ class LongFormPipeline:
         for j, (cue, span) in enumerate(zip(cues, q_spans)):
             img = images[j % len(images)] if images else card
             png = R.subtitle_png(cue["text"], ch_dir / f"sub_{j:03d}.png")
-            pieces.append(R.render_still(img, span, str(ch_dir / f"c_{j:03d}.mp4"),
-                                         seed=idx + j, overlay=png))
+            pieces.append(
+                R.render_still(img, span, str(ch_dir / f"c_{j:03d}.mp4"), seed=idx + j, overlay=png)
+            )
 
         silent = R.concat(pieces, str(ch_dir / "video_silent.mp4"), ch_dir)
-        out = R.mux_chapter(silent, str(audio), None, str(final),
-                            audio_delay_ms=int(CARD_SECONDS * 1000))
+        out = R.mux_chapter(
+            silent, str(audio), None, str(final), audio_delay_ms=int(CARD_SECONDS * 1000)
+        )
         R.build_srt(cues, ch_dir / "chapter.srt", offset=CARD_SECONDS)
-        logger.info("ch%02d done in %.1f min (%.1f s film, %d cues, %d images)",
-                    idx + 1, (time.time() - t0) / 60, R.probe_duration(out), len(cues), len(images))
+        logger.info(
+            "ch%02d done in %.1f min (%.1f s film, %d cues, %d images)",
+            idx + 1,
+            (time.time() - t0) / 60,
+            R.probe_duration(out),
+            len(cues),
+            len(images),
+        )
         ch["_start_sec"] = 0.0
         return out
 
@@ -215,6 +269,7 @@ class LongFormPipeline:
         if self._CK_REPO is None:
             try:
                 from core.hf_storage import store_from_config
+
                 self._store = store_from_config(self.config)
                 self._CK_REPO = bool(getattr(self._store, "enabled", False))
             except Exception:
@@ -253,10 +308,16 @@ class LongFormPipeline:
             return
         try:
             from huggingface_hub import snapshot_download
-            local = snapshot_download(repo_id=st.repo_id, repo_type="dataset",
-                                      allow_patterns=[f"long/{self.video_id}/script.json",
-                                                      f"long/{self.video_id}/ch*.mp4"],
-                                      local_dir=str(self.work / "_ckpt"))
+
+            local = snapshot_download(
+                repo_id=st.repo_id,
+                repo_type="dataset",
+                allow_patterns=[
+                    f"long/{self.video_id}/script.json",
+                    f"long/{self.video_id}/ch*.mp4",
+                ],
+                local_dir=str(self.work / "_ckpt"),
+            )
             src = Path(local) / "long" / self.video_id
             if not src.exists():
                 logger.info("no checkpoint for %s — starting fresh", self.video_id)
@@ -284,24 +345,61 @@ class LongFormPipeline:
         head_clip = R.render_still(head, 3.0, str(self.work / "p_open.mp4"), seed=2)
         # silence for the title card so audio stays aligned per chapter
         head_av = self.work / "intro.mp4"
-        R.run([R.ff(), "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
-               "-i", head_clip, "-t", "3.0", "-c:v", "copy", "-c:a", "aac",
-               "-shortest", str(head_av)], "intro")
+        R.run(
+            [
+                R.ff(),
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "anullsrc=r=48000:cl=stereo",
+                "-i",
+                head_clip,
+                "-t",
+                "3.0",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "aac",
+                "-shortest",
+                str(head_av),
+            ],
+            "intro",
+        )
 
         parts = [str(head_av)] + list(self.chapter_files)
         channel = getattr(self.config.general, "channel_name", "") or "BHARAT KI SOCH"
-        tail = R.make_outro(self.work / "outro.jpg", channel,
-                            "धन्यवाद", "अगली कड़ी में मिलते हैं")
+        tail = R.make_outro(self.work / "outro.jpg", channel, "धन्यवाद", "अगली कड़ी में मिलते हैं")
         tail_clip = R.render_still(tail, OUTRO_SECONDS, str(self.work / "p_outro.mp4"), seed=3)
         tail_av = self.work / "outro.mp4"
-        R.run([R.ff(), "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
-               "-i", tail_clip, "-t", str(OUTRO_SECONDS), "-c:v", "copy", "-c:a", "aac",
-               "-shortest", str(tail_av)], "outro")
+        R.run(
+            [
+                R.ff(),
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "anullsrc=r=48000:cl=stereo",
+                "-i",
+                tail_clip,
+                "-t",
+                str(OUTRO_SECONDS),
+                "-c:v",
+                "copy",
+                "-c:a",
+                "aac",
+                "-shortest",
+                str(tail_av),
+            ],
+            "outro",
+        )
         parts.append(str(tail_av))
 
         joined = R.concat(parts, str(self.work / "joined.mp4"), self.work, reencode=True)
-        R.run([R.ff(), "-y", "-i", joined, "-c", "copy", "-movflags", "+faststart", str(film)],
-              "finalise film")
+        R.run(
+            [R.ff(), "-y", "-i", joined, "-c", "copy", "-movflags", "+faststart", str(film)],
+            "finalise film",
+        )
         self._fill_start_times(chs, film)
         self._merge_srt(chs)
         return str(film)
@@ -323,6 +421,7 @@ class LongFormPipeline:
                     a, b = lines[1].split(" --> ")
                 except ValueError:
                     continue
+
                 def shift(ts: str) -> str:
                     h, m, rest = ts.split(":")
                     sec = float(rest.replace(",", "."))
@@ -330,6 +429,7 @@ class LongFormPipeline:
                     hh, rem = divmod(total, 3600)
                     mm, ss = divmod(rem, 60)
                     return f"{int(hh):02d}:{int(mm):02d}:{ss:06.3f}".replace(".", ",")
+
                 blocks.append(f"{n}\n{shift(a)} --> {shift(b)}\n" + "\n".join(lines[2:]))
                 n += 1
         if blocks:
@@ -364,8 +464,11 @@ class LongFormPipeline:
                     if not d.exists():
                         continue
                     for f in d.iterdir():
-                        if f.suffix.lower() in (".jpg", ".jpeg") and f.name != "card.jpg" \
-                                and not f.name.startswith(("sub_", "thumb")):
+                        if (
+                            f.suffix.lower() in (".jpg", ".jpeg")
+                            and f.name != "card.jpg"
+                            and not f.name.startswith(("sub_", "thumb"))
+                        ):
                             photos.append((f.stat().st_size, f))
                     if photos:
                         break
@@ -380,7 +483,11 @@ class LongFormPipeline:
                     if w < 1200 or w / max(1, h) < 1.2:
                         continue
                     small = im.convert("L").resize((64, 36))
-                    px = list(small.get_flattened_data()) if hasattr(small, "get_flattened_data") else list(small.getdata())
+                    px = (
+                        list(small.get_flattened_data())
+                        if hasattr(small, "get_flattened_data")
+                        else list(small.getdata())
+                    )
                     mean = sum(px) / max(1, len(px))
                     var = sum((v - mean) ** 2 for v in px) / max(1, len(px))
                     if var < 400:  # near-flat image
@@ -407,8 +514,23 @@ class LongFormPipeline:
             out = self.out / f"thumb_frame_{i:02d}.jpg"
             try:
                 dur = R.probe_duration(str(mp4)) or 60.0
-                R.run([R.ff(), "-y", "-ss", f"{max(3.0, dur * 0.4):.2f}", "-i", str(mp4), "-frames:v", "1",
-                              "-vf", "crop=iw:ih*0.78:0:0,scale=1920:-1", "-q:v", "2", str(out)])
+                R.run(
+                    [
+                        R.ff(),
+                        "-y",
+                        "-ss",
+                        f"{max(3.0, dur * 0.4):.2f}",
+                        "-i",
+                        str(mp4),
+                        "-frames:v",
+                        "1",
+                        "-vf",
+                        "crop=iw:ih*0.78:0:0,scale=1920:-1",
+                        "-q:v",
+                        "2",
+                        str(out),
+                    ]
+                )
                 if out.exists() and out.stat().st_size > 20_000:
                     return out
             except Exception as exc:
@@ -432,6 +554,7 @@ class LongFormPipeline:
     async def _metadata(self, title: str, chs: List[Dict], film: str) -> Dict[str, Any]:
         """Title/description/tags from the SEO module: LLM-first, deterministic fallback."""
         from longform import seo as lseo
+
         total = R.probe_duration(film)
         stamps = []
         for ch in chs:
@@ -440,22 +563,33 @@ class LongFormPipeline:
         return await lseo.build_metadata(self.llm, title, chs, stamps, total)
 
     # ------------------------------------------------------------- upload
-    def _upload(self, film: str, thumb: str, meta: Dict[str, Any], privacy: str,
-                force_upload: bool = False) -> Dict[str, Any]:
+    def _upload(
+        self, film: str, thumb: str, meta: Dict[str, Any], privacy: str, force_upload: bool = False
+    ) -> Dict[str, Any]:
         try:
             from youtube.oauth import YouTubeOAuthManager
             from youtube.uploader import YouTubeUploader
+
             yt = self.config.youtube
-            oauth = YouTubeOAuthManager(getattr(yt, "client_secret_json", ""),
-                                        getattr(yt, "token_json", ""))
+            oauth = YouTubeOAuthManager(
+                getattr(yt, "client_secret_json", ""), getattr(yt, "token_json", "")
+            )
             up = YouTubeUploader(oauth, dry_run=self.config.general.dry_run, strict=False)
             res = up.upload_video(
-                video_path=film, title=meta["title"], description=meta["description"],
-                tags=meta["tags"], category_id="27", privacy_status=privacy,
-                contains_synthetic_media=True, language="hi",
+                video_path=film,
+                title=meta["title"],
+                description=meta["description"],
+                tags=meta["tags"],
+                category_id="27",
+                privacy_status=privacy,
+                contains_synthetic_media=True,
+                language="hi",
                 thumbnail_path=thumb,
-                captions_path=(str(Path(film).parent / "film.srt")
-                               if (Path(film).parent / "film.srt").exists() else None),
+                captions_path=(
+                    str(Path(film).parent / "film.srt")
+                    if (Path(film).parent / "film.srt").exists()
+                    else None
+                ),
                 publishing_key=self._publishing_key(film),
                 force=force_upload,
             )
@@ -475,5 +609,6 @@ def _slug(text: str) -> str:
     """Filesystem/HF-safe slug that survives Devanagari input."""
     import hashlib
     import re
+
     keep = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:40]
     return keep or "film-" + hashlib.sha1(text.encode()).hexdigest()[:8]

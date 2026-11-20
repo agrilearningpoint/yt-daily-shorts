@@ -1,4 +1,5 @@
 """Live free-model auto-discovery with 6-hour local cache for OpenRouter, Gemini, and Groq."""
+
 from __future__ import annotations
 
 import json
@@ -31,7 +32,9 @@ def fetch_openrouter_free_models(limit: int = 8, timeout: int = 15) -> List[str]
     for item in data:
         mid = item.get("id", "")
         pricing = item.get("pricing") or {}
-        is_zero = str(pricing.get("prompt", "1")) == "0" and str(pricing.get("completion", "1")) == "0"
+        is_zero = (
+            str(pricing.get("prompt", "1")) == "0" and str(pricing.get("completion", "1")) == "0"
+        )
         if is_zero and mid.endswith(":free"):
             if any(x in mid for x in ("embed", "rerank", "tts", "whisper", "guard")):
                 continue

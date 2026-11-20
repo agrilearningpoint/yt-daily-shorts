@@ -8,11 +8,12 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class EasingType(str, Enum):
     """Animation interpolation curves."""
+
     LINEAR = "linear"
     EASE_IN = "ease_in"
     EASE_OUT = "ease_out"
@@ -24,6 +25,7 @@ class EasingType(str, Enum):
 
 class PresetCategory(str, Enum):
     """Broad categories for motion presets."""
+
     OPENER = "opener"
     HEADLINE_REVEAL = "headline_reveal"
     PHOTO_MOTION = "photo_motion"
@@ -36,13 +38,14 @@ class PresetCategory(str, Enum):
 @dataclass
 class KeyframeAnimation:
     """Individual keyframe state within a motion preset."""
-    time_offset: float = 0.0          # Seconds from preset start
-    scale_x: float = 1.0              # Horizontal scale factor (1.0 = 100%)
-    scale_y: float = 1.0              # Vertical scale factor
-    pos_x: float = 0.0                # X offset in pixels or normalized 0..1
-    pos_y: float = 0.0                # Y offset in pixels or normalized 0..1
-    opacity: float = 1.0              # Alpha (0.0 to 1.0)
-    rotation: float = 0.0             # Rotation in degrees
+
+    time_offset: float = 0.0  # Seconds from preset start
+    scale_x: float = 1.0  # Horizontal scale factor (1.0 = 100%)
+    scale_y: float = 1.0  # Vertical scale factor
+    pos_x: float = 0.0  # X offset in pixels or normalized 0..1
+    pos_y: float = 0.0  # Y offset in pixels or normalized 0..1
+    opacity: float = 1.0  # Alpha (0.0 to 1.0)
+    rotation: float = 0.0  # Rotation in degrees
     easing: EasingType = EasingType.EASE_OUT
 
     def to_dict(self) -> Dict[str, Any]:
@@ -54,6 +57,7 @@ class KeyframeAnimation:
 @dataclass
 class MotionPresetSpec:
     """Complete specification for a single motion preset."""
+
     preset_id: str
     name: str
     category: PresetCategory

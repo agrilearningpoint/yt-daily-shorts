@@ -13,6 +13,7 @@ Two layers, because the channel's biggest complaint is "image और voice match
 The caller (``MediaCollector``) uses 2 → 1 → best-available, so every beat gets a picture
 that at least names the same thing as the narration.
 """
+
 from __future__ import annotations
 
 import base64
@@ -29,11 +30,13 @@ logger = logging.getLogger("video.vision")
 URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 # Words that carry no visual meaning: matching on them proves nothing.
-_STOP = set("""
+_STOP = set(
+    """
 के की का में से को और पर ने है हैं था थी थे होगा हुई हुआ लिए एक यह वह ये वो भी तो ही नहीं बहुत कुछ
 the a an of in on at to for from with by is are was were be been being this that these those it its
 and or but not no very much more most some any all as if then than so such also into over under
-""".split())
+""".split()
+)
 
 
 def content_words(text: str, min_len: int = 3) -> List[str]:
@@ -50,12 +53,13 @@ def keyword_match(spoken: str, picture_words: Iterable[str]) -> float:
     hay = " ".join(w for w in (str(x or "").lower() for x in picture_words))
     if not hay.strip():
         return 0.0
-    hits = sum(1 for w in spoken_words if w in hay or w[:max(3, len(w) - 2)] in hay)
+    hits = sum(1 for w in spoken_words if w in hay or w[: max(3, len(w) - 2)] in hay)
     return hits / len(spoken_words)
 
 
-def make_vision_check(api_key: str, models: Optional[List[str]] = None,
-                      max_calls: int = 150) -> Optional[Callable[[str, str], Optional[bool]]]:
+def make_vision_check(
+    api_key: str, models: Optional[List[str]] = None, max_calls: int = 150
+) -> Optional[Callable[[str, str], Optional[bool]]]:
     """Returns check(path, description) -> True / False / None (None = no opinion, key dead).
 
     None is the important change: the old version returned False when Gemini was out of
@@ -64,14 +68,19 @@ def make_vision_check(api_key: str, models: Optional[List[str]] = None,
     """
     if not api_key:
         return None
-    models = models or ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash"]
+    models = models or [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.8-flash",
+    ]
     state = {"calls": 0, "dead": set()}
     lock = threading.Lock()
 
     def check(path: str, description: str) -> Optional[bool]:
         with lock:
             if state["calls"] >= max_calls:
-                return None          # budget spent: no opinion, caller uses the word-check
+                return None  # budget spent: no opinion, caller uses the word-check
             if all(m in state["dead"] for m in models):
                 return None
             state["calls"] += 1
@@ -83,21 +92,37 @@ def make_vision_check(api_key: str, models: Optional[List[str]] = None,
         img.thumbnail((512, 512))
         buf = io.BytesIO()
         img.save(buf, "JPEG", quality=80)
-        prompt = (f"A Hindi news video shows this image while the headline says: \"{description}\".\n"
-                  "Is this image reasonably related to or suitable for this news story, person, organisation, place, or topic? "
-                  "Answer YES if it is relevant (portraits of mentioned people, buildings, events, press photos, or relevant news context are all acceptable). "
-                  "Only answer NO if it is totally unrelated, completely blank, or severely corrupt. "
-                  "Answer strictly YES or NO.")
-        body = {"contents": [{"parts": [{"text": prompt},
-                                        {"inline_data": {"mime_type": "image/jpeg",
-                                                         "data": base64.b64encode(buf.getvalue()).decode()}}]}],
-                "generationConfig": {"temperature": 0, "maxOutputTokens": 10}}
+        prompt = (
+            f'A Hindi news video shows this image while the headline says: "{description}".\n'
+            "Is this image reasonably related to or suitable for this news story, person, organisation, place, or topic? "
+            "Answer YES if it is relevant (portraits of mentioned people, buildings, events, press photos, or relevant news context are all acceptable). "
+            "Only answer NO if it is totally unrelated, completely blank, or severely corrupt. "
+            "Answer strictly YES or NO."
+        )
+        body = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": {
+                                "mime_type": "image/jpeg",
+                                "data": base64.b64encode(buf.getvalue()).decode(),
+                            }
+                        },
+                    ]
+                }
+            ],
+            "generationConfig": {"temperature": 0, "maxOutputTokens": 10},
+        }
         for m in models:
             with lock:
                 if m in state["dead"]:
                     continue
             try:
-                r = requests.post(URL.format(model=m), params={"key": api_key}, json=body, timeout=30)
+                r = requests.post(
+                    URL.format(model=m), params={"key": api_key}, json=body, timeout=30
+                )
                 if r.status_code in (404, 400, 403):
                     with lock:
                         state["dead"].add(m)
@@ -122,6 +147,6 @@ def make_vision_check(api_key: str, models: Optional[List[str]] = None,
                 return True
             except Exception as exc:
                 logger.debug("vision %s failed: %s", m, exc)
-        return None   # every model failed: no opinion, not a rejection
+        return None  # every model failed: no opinion, not a rejection
 
     return check

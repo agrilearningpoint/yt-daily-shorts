@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 import subprocess
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
@@ -33,19 +31,23 @@ class LongVideoIntakeAgent(BaseAgent):
         self.ffprobe_path = shutil.which("ffprobe") or "ffprobe"
 
     def validate_input(self, **kwargs: Any) -> bool:
-        """Ensure either file_path or source_url is provided."""
-        return bool(kwargs.get("file_path") or kwargs.get("source_url"))
+        """Ensure either file_path, source_path, or source_url is provided."""
+        return bool(
+            kwargs.get("file_path") or kwargs.get("source_path") or kwargs.get("source_url")
+        )
 
     async def execute(self, **kwargs: Any) -> AgentResult:
         """Execute intake inspection and manifest creation."""
-        file_path: Optional[str] = kwargs.get("file_path")
+        file_path: Optional[str] = kwargs.get("file_path") or kwargs.get("source_path")
         source_url: Optional[str] = kwargs.get("source_url")
         custom_id: Optional[str] = kwargs.get("video_id")
 
         if not self.validate_input(**kwargs):
             return AgentResult(
                 success=False,
-                errors=["Neither 'file_path' nor 'source_url' was provided to LongVideoIntakeAgent."],
+                errors=[
+                    "Neither 'file_path' nor 'source_url' (or 'source_path') was provided to LongVideoIntakeAgent."
+                ],
             )
 
         is_local = bool(file_path and Path(file_path).exists())
@@ -174,12 +176,17 @@ class LongVideoIntakeAgent(BaseAgent):
         try:
             cmd = [
                 self.ffprobe_path,
-                "-v", "error",
-                "-show_entries", "format=duration,size,bit_rate:stream=codec_type,codec_name,width,height,r_frame_rate,channels,sample_rate:format_tags=title,artist",
-                "-of", "json",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration,size,bit_rate:stream=codec_type,codec_name,width,height,r_frame_rate,channels,sample_rate:format_tags=title,artist",
+                "-of",
+                "json",
                 str(path),
             ]
-            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15)
+            proc = subprocess.run(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15
+            )
             if proc.returncode == 0 and proc.stdout:
                 data = json.loads(proc.stdout)
                 fmt = data.get("format", {})

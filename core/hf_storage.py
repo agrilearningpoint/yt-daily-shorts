@@ -16,6 +16,7 @@ Usage::
     if store.enabled:
         urls = store.upload_video("abc123", {"final_short.mp4": path, ...})
 """
+
 from __future__ import annotations
 
 import json
@@ -29,16 +30,28 @@ logger = logging.getLogger("core.hf_storage")
 
 # Intermediate frames / clips are huge and reproducible: never upload them.
 _SKIP_PATTERNS = [
-    "_clips/*", "*.wav", "*.pyc", "__pycache__/*", ".git/*",
-    "frames/*", "*.tmp", "*.part",
+    "_clips/*",
+    "*.wav",
+    "*.pyc",
+    "__pycache__/*",
+    ".git/*",
+    "frames/*",
+    "*.tmp",
+    "*.part",
 ]
 
 
 class HFArtifactStore:
     """Thin, fail-safe wrapper around ``huggingface_hub.HfApi``."""
 
-    def __init__(self, repo_id: str = "", token: str = "", repo_type: str = "dataset",
-                 private: bool = True, token_override: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        repo_id: str = "",
+        token: str = "",
+        repo_type: str = "dataset",
+        private: bool = True,
+        token_override: Optional[str] = None,
+    ) -> None:
         self.repo_id = (repo_id or "").strip()
         self.token = token_override or token or ""
         self.repo_type = repo_type
@@ -54,7 +67,7 @@ class HFArtifactStore:
     def _client(self):
         if self._api is not None:
             return self._api
-        from huggingface_hub import HfApi   # imported lazily: optional dependency
+        from huggingface_hub import HfApi  # imported lazily: optional dependency
 
         self._api = HfApi(token=self.token)
         return self._api
@@ -63,8 +76,9 @@ class HFArtifactStore:
         if not self.enabled:
             return False
         try:
-            self._client().create_repo(repo_id=self.repo_id, repo_type=self.repo_type,
-                                       private=self.private, exist_ok=True)
+            self._client().create_repo(
+                repo_id=self.repo_id, repo_type=self.repo_type, private=self.private, exist_ok=True
+            )
             return True
         except Exception as exc:  # noqa: BLE001
             self.last_error = str(exc)[:300]
@@ -72,8 +86,9 @@ class HFArtifactStore:
             return False
 
     # ---------------------------------------------------------------- uploads
-    def upload_file(self, local_path: str | Path, path_in_repo: str,
-                    commit_message: str = "") -> Optional[str]:
+    def upload_file(
+        self, local_path: str | Path, path_in_repo: str, commit_message: str = ""
+    ) -> Optional[str]:
         """Upload one file; returns the public/private resolve URL."""
         if not self.enabled or not Path(local_path).exists():
             return None
@@ -92,9 +107,13 @@ class HFArtifactStore:
             logger.warning("HF storage upload failed for %s: %s", path_in_repo, self.last_error)
             return None
 
-    def upload_video(self, video_id: str, files: Dict[str, str],
-                     meta: Optional[Dict[str, Any]] = None,
-                     day: Optional[str] = None) -> Dict[str, str]:
+    def upload_video(
+        self,
+        video_id: str,
+        files: Dict[str, str],
+        meta: Optional[Dict[str, Any]] = None,
+        day: Optional[str] = None,
+    ) -> Dict[str, str]:
         """Upload one video's artefacts under ``videos/<YYYY-MM-DD>/<video_id>/``.
 
         ``files`` maps a repo-relative name to a local path, e.g.
@@ -108,16 +127,25 @@ class HFArtifactStore:
         for name, path in files.items():
             if not path:
                 continue
-            url = self.upload_file(path, f"{prefix}/{Path(name).name}",
-                                   commit_message=f"video {video_id}: {Path(name).name}")
+            url = self.upload_file(
+                path,
+                f"{prefix}/{Path(name).name}",
+                commit_message=f"video {video_id}: {Path(name).name}",
+            )
             if url:
                 urls[Path(name).name] = url
         if meta is not None:
-            manifest_path = Path(files.get("__manifest_dir__", "") or ".") / f"manifest_{video_id}.json"
+            manifest_path = (
+                Path(files.get("__manifest_dir__", "") or ".") / f"manifest_{video_id}.json"
+            )
             try:
-                payload = {"video_id": video_id, "day": day,
-                           "uploaded_at": datetime.now(timezone.utc).isoformat(),
-                           "files": urls, **meta}
+                payload = {
+                    "video_id": video_id,
+                    "day": day,
+                    "uploaded_at": datetime.now(timezone.utc).isoformat(),
+                    "files": urls,
+                    **meta,
+                }
                 manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
                 url = self.upload_file(manifest_path, f"{prefix}/manifest.json", "manifest")
                 if url:
@@ -127,9 +155,13 @@ class HFArtifactStore:
                 logger.debug("HF storage manifest skipped: %s", exc)
         return urls
 
-    def upload_dir(self, local_dir: str | Path, path_in_repo: str = "",
-                   ignore: Optional[Iterable[str]] = None,
-                   commit_message: str = "sync") -> Optional[str]:
+    def upload_dir(
+        self,
+        local_dir: str | Path,
+        path_in_repo: str = "",
+        ignore: Optional[Iterable[str]] = None,
+        commit_message: str = "sync",
+    ) -> Optional[str]:
         """Upload a whole directory (chunked/resumable for long-video artefacts)."""
         local = Path(local_dir)
         if not self.enabled or not local.exists():

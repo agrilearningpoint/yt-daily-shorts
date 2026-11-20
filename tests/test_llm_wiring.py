@@ -30,8 +30,11 @@ def test_build_llm_uses_every_pooled_key(monkeypatch):
     monkeypatch.setattr("core.llm_client.discover_models", lambda *a, **k: [])
     cfg = LLMConfig(gemini_api_key="g1", groq_api_key="groq1", agnes_api_key="ag1")
     cfg.provider_order = ["gemini", "groq", "agnes"]
-    cfg.models = {"gemini": ["gemini-3.8-flash"], "groq": ["openai/gpt-oss-120b"],
-                  "agnes": ["agnes-2.5-flash"]}
+    cfg.models = {
+        "gemini": ["gemini-3.8-flash"],
+        "groq": ["openai/gpt-oss-120b"],
+        "agnes": ["agnes-2.5-flash"],
+    }
     cfg.extra_keys = {"gemini": ["g2", "g3"], "groq": ["groq2"]}
     cfg.max_keys_per_provider = 2
 
@@ -103,9 +106,9 @@ def test_provider_order_drops_ollama_and_keeps_mistral():
     from core.configuration import LLMConfig
 
     order = LLMConfig().provider_order
-    assert "ollama" not in order          # free tier is HTTP 402 — pure latency
-    assert "mistral" in order             # 2 RPM / 40K TPM free tier works
-    assert order.index("agnes") < order.index("openrouter")   # uncapped before the 50/day tier
+    assert "ollama" not in order  # free tier is HTTP 402 — pure latency
+    assert "mistral" in order  # 2 RPM / 40K TPM free tier works
+    assert order.index("agnes") < order.index("openrouter")  # uncapped before the 50/day tier
 
 
 def test_settings_models_are_the_probed_ones():
@@ -179,7 +182,7 @@ def test_a_model_that_keeps_503ing_is_dropped_for_the_run():
 
     asyncio.run(run())
     assert "gemini/gemini-3.8-flash" in chain.dead
-    assert bad.hits == 2          # hit twice, then skipped for the rest of the run
+    assert bad.hits == 2  # hit twice, then skipped for the rest of the run
     assert good.hits == 6
 
 
@@ -203,7 +206,7 @@ def test_a_stalling_key_is_parked_for_the_rest_of_the_run():
         return "OK"
 
     assert prov._rotating(later) == "OK"
-    assert "slow" not in seen and len(seen) == 1   # ring advances, but never onto the parked key
+    assert "slow" not in seen and len(seen) == 1  # ring advances, but never onto the parked key
 
 
 # --------------------------------------------------------------------------- #
@@ -220,7 +223,7 @@ def test_quality_tier_puts_the_flagship_first(monkeypatch):
 
     chain = build_llm(cfg)
     labels = [f"{c.name}/{c.model_name}" for c in chain.candidates]
-    assert labels[0] == "gemini/gemini-3.5-flash-lite"          # default chain untouched
+    assert labels[0] == "gemini/gemini-3.5-flash-lite"  # default chain untouched
     q = [f"{c.name}/{c.model_name}" for c in chain.order_for("quality")]
     assert q[:2] == ["gemini/gemini-3.8-flash", "gemini/gemini-3.5-flash-lite"]
     # a tier only reorders — nothing may be dropped from the fallback path
@@ -242,12 +245,16 @@ def test_quality_tier_still_falls_back_when_the_flagship_dies(monkeypatch):
     # the flagship is congested; the lite tier must still answer (no real calls)
     for cand in chain.candidates:
         if cand.model_name == "gemini-3.8-flash":
+
             async def boom(*a, **k):
                 raise LLMError("gemini/gemini-3.8-flash HTTP 503: high demand")
+
             cand.generate_json = boom
         else:
+
             async def fine(*a, **k):
                 return {"ok": True}
+
             cand.generate_json = fine
 
     used = []
@@ -268,8 +275,8 @@ def test_script_and_seo_ask_for_the_quality_tier():
 
     script = Path("agents/script_manager/agent.py").read_text()
     seo = Path("agents/seo_manager/agent.py").read_text()
-    assert 'tier="quality"' in script          # narration the viewer hears
-    assert 'tier="quality"' in seo             # title/tags that decide the click
+    assert 'tier="quality"' in script  # narration the viewer hears
+    assert 'tier="quality"' in seo  # title/tags that decide the click
     # cheap stages stay on the default chain so they never eat the quota
     assert 'tier="quality"' not in Path("agents/research_manager/agent.py").read_text()
     assert 'tier="quality"' not in Path("agents/fact_verifier/agent.py").read_text()
@@ -307,7 +314,7 @@ def test_a_hung_model_is_retired_after_one_timeout():
             assert await chain.generate_text("x") == "ok"
 
     asyncio.run(run())
-    assert hung.hits == 1                      # one timeout, never a second
+    assert hung.hits == 1  # one timeout, never a second
     assert "gemini/gemini-3.8-flash" in chain.dead
 
 
@@ -323,8 +330,10 @@ def test_a_spent_daily_quota_parks_the_model_for_the_run():
 
         async def generate_text(self, prompt, system_prompt=None, json_mode=False):
             self.hits += 1
-            raise LLMError('gemini/gemini-3.8-flash HTTP 429: {"message": '
-                           '"You exceeded your current quota, please check your plan"}')
+            raise LLMError(
+                'gemini/gemini-3.8-flash HTTP 429: {"message": '
+                '"You exceeded your current quota, please check your plan"}'
+            )
 
     class Lite:
         name, model_name = "gemini", "gemini-3.5-flash-lite"
@@ -344,5 +353,5 @@ def test_a_spent_daily_quota_parks_the_model_for_the_run():
             assert await chain.generate_text("x") == "ok"
 
     asyncio.run(run())
-    assert spent.hits == 1                    # quota won't refill mid-run
+    assert spent.hits == 1  # quota won't refill mid-run
     assert lite.hits == 5

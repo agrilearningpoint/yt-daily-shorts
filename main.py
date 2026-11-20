@@ -94,6 +94,7 @@ async def main_async() -> int:
 
     if args.healthcheck:
         from core.healthcheck import check
+
         healthy, findings = check(config.database.sqlite_path)
         for line in findings:
             print(line)
@@ -101,6 +102,7 @@ async def main_async() -> int:
 
     if args.llm_check:
         from core.llm_client import health_check
+
         results = await health_check(config.llm)
         if not results:
             print("No LLM provider keys configured.")
@@ -123,7 +125,9 @@ async def main_async() -> int:
         if not today_videos:
             print("No video production runs recorded for today.")
         for v in today_videos:
-            print(f"[{v.state.value.upper()}] ID: {v.video_id} | Type: {v.video_type} | Title: {v.title}")
+            print(
+                f"[{v.state.value.upper()}] ID: {v.video_id} | Type: {v.video_type} | Title: {v.title}"
+            )
             if v.youtube_url:
                 print(f"   URL: {v.youtube_url}")
             if v.error_message:
@@ -144,6 +148,7 @@ async def main_async() -> int:
     if video_type == "auto":
         import pytz
         from datetime import datetime
+
         hour = datetime.now(pytz.timezone(config.general.timezone)).hour
         video_type = "news" if hour < 11 else "knowledge"
         logger.info("Auto-selected video type: %s", video_type)

@@ -13,6 +13,7 @@ Flow (the only manual step is Google's own consent screen):
 Why the localhost hop: desktop OAuth clients only accept http://localhost redirects, so the
 code has to come back from your browser. Everything after that is handled here.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -22,7 +23,6 @@ import html
 import json
 import os
 import secrets
-import threading
 import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -67,7 +67,9 @@ def redirect_uri() -> str:
 def auth_url(port: int) -> str:
     c = client()
     verifier = verifier_for(c["client_secret"])
-    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+    )
     q = {
         "client_id": c["client_id"],
         "redirect_uri": redirect_uri(),
@@ -96,10 +98,13 @@ def exchange(code: str, port: int):
     from google_auth_oauthlib.flow import Flow
 
     c = client()
-    flow = Flow.from_client_config({"installed": c}, SCOPES,
-                                   redirect_uri=redirect_uri(),
-                                   code_verifier=verifier_for(c["client_secret"]),
-                                   autogenerate_code_verifier=False)
+    flow = Flow.from_client_config(
+        {"installed": c},
+        SCOPES,
+        redirect_uri=redirect_uri(),
+        code_verifier=verifier_for(c["client_secret"]),
+        autogenerate_code_verifier=False,
+    )
     flow.fetch_token(code=code)
     return flow.credentials
 
@@ -108,13 +113,19 @@ def verify(creds) -> dict:
     from googleapiclient.discovery import build
 
     api = build("youtube", "v3", credentials=creds, cache_discovery=False)
-    items = (api.channels().list(part="snippet,statistics", mine=True).execute().get("items") or [])
+    items = api.channels().list(part="snippet,statistics", mine=True).execute().get("items") or []
     if not items:
-        raise RuntimeError("इस account का कोई YouTube channel नहीं मिला — channel वाले account से sign in करें")
+        raise RuntimeError(
+            "इस account का कोई YouTube channel नहीं मिला — channel वाले account से sign in करें"
+        )
     ch = items[0]
     stats = ch.get("statistics", {})
-    return {"channel": ch["snippet"]["title"], "id": ch["id"],
-            "subs": stats.get("subscriberCount", "0"), "videos": stats.get("videoCount", "0")}
+    return {
+        "channel": ch["snippet"]["title"],
+        "id": ch["id"],
+        "subs": stats.get("subscriberCount", "0"),
+        "videos": stats.get("videoCount", "0"),
+    }
 
 
 def set_github_secret(name: str, value: str) -> None:
@@ -125,12 +136,18 @@ def set_github_secret(name: str, value: str) -> None:
     if not token:
         raise RuntimeError("GH_TOKEN environment variable not set")
     h = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
-    r = requests.get(f"https://api.github.com/repos/{REPO}/actions/secrets/public-key", headers=h, timeout=30)
+    r = requests.get(
+        f"https://api.github.com/repos/{REPO}/actions/secrets/public-key", headers=h, timeout=30
+    )
     r.raise_for_status()
     sealed = public.SealedBox(public.PublicKey(r.json()["key"].encode(), encoding.Base64Encoder()))
     enc = base64.b64encode(sealed.encrypt(value.encode())).decode()
-    r = requests.put(f"https://api.github.com/repos/{REPO}/actions/secrets/{name}", headers=h,
-                     json={"encrypted_value": enc, "key_id": r.json()["key_id"]}, timeout=30)
+    r = requests.put(
+        f"https://api.github.com/repos/{REPO}/actions/secrets/{name}",
+        headers=h,
+        json={"encrypted_value": enc, "key_id": r.json()["key_id"]},
+        timeout=30,
+    )
     r.raise_for_status()
 
 
@@ -207,15 +224,26 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             if STATE["result"]:
                 r = STATE["result"]
-                self._send(200, render(DONE.format(channel=html.escape(r["channel"]), cid=r["id"],
-                                                   subs=r["subs"], videos=r["videos"],
-                                                   secret=r.get("secret", "—"), run=r.get("run", ""))))
+                self._send(
+                    200,
+                    render(
+                        DONE.format(
+                            channel=html.escape(r["channel"]),
+                            cid=r["id"],
+                            subs=r["subs"],
+                            videos=r["videos"],
+                            secret=r.get("secret", "—"),
+                            run=r.get("run", ""),
+                        )
+                    ),
+                )
             else:
                 STATE["state"] = STATE["state"] or secrets.token_urlsafe(16)
                 link = auth_url(self.port)
                 body = STEP1.format(port=self.port) + (
                     '<div class="step"><span class="n">2</span><b>या यह link Chrome में paste करें</b>'
-                    f'<p><code style="word-break:break-all">{html.escape(link)}</code></p></div>')
+                    f'<p><code style="word-break:break-all">{html.escape(link)}</code></p></div>'
+                )
                 if STATE["error"]:
                     body += f'<p class="bad">{html.escape(STATE["error"])}</p>'
                 self._send(200, render(body))
@@ -239,8 +267,10 @@ class Handler(BaseHTTPRequestHandler):
             creds = exchange(code, self.port)
             token_json = creds.to_json()
             if not json.loads(token_json).get("refresh_token"):
-                raise RuntimeError("Google ने refresh_token नहीं दिया — myaccount.google.com/permissions से "
-                                   "पुराना access हटाकर दोबारा try करें")
+                raise RuntimeError(
+                    "Google ने refresh_token नहीं दिया — myaccount.google.com/permissions से "
+                    "पुराना access हटाकर दोबारा try करें"
+                )
             info = verify(creds)
             note(f"verified: {info['channel']} ({info['id']})")
             Path("token.json").write_text(token_json, encoding="utf-8")

@@ -74,8 +74,12 @@ VIDEO_REFRAME_PRESETS: List[MotionPresetSpec] = [
         duration_max=10.0,
         ffmpeg_filter_template="scale=920:-1[pip];[0:v][pip]overlay=80:400",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=0.8, scale_y=0.8, opacity=0.0, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=0.3, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=0.8, scale_y=0.8, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.3, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT
+            ),
         ],
         parameters={"pip_width": 920, "pip_x": 80, "pip_y": 400, "border_radius": 18},
         tags=["pip", "overlay", "boxed_video", "studio"],
@@ -107,8 +111,12 @@ VIDEO_REFRAME_PRESETS: List[MotionPresetSpec] = [
         duration_max=6.0,
         ffmpeg_filter_template="eq=saturation=1.2:contrast=1.1,fade=t=in:st=0:d=0.1:color=white",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=1.05, scale_y=1.05, easing=EasingType.LINEAR),
-            KeyframeAnimation(time_offset=3.0, scale_x=1.12, scale_y=1.12, easing=EasingType.LINEAR),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=1.05, scale_y=1.05, easing=EasingType.LINEAR
+            ),
+            KeyframeAnimation(
+                time_offset=3.0, scale_x=1.12, scale_y=1.12, easing=EasingType.LINEAR
+            ),
         ],
         parameters={"cut_interval": 0.8, "flash_on_cut": True},
         tags=["montage", "fast_cut", "broll", "rhythm"],
@@ -124,8 +132,12 @@ VIDEO_REFRAME_PRESETS: List[MotionPresetSpec] = [
         duration_max=5.0,
         ffmpeg_filter_template="",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=1.0, scale_y=1.0, pos_y=0.0, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=0.5, scale_x=0.9, scale_y=0.9, pos_y=-240.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=1.0, scale_y=1.0, pos_y=0.0, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.5, scale_x=0.9, scale_y=0.9, pos_y=-240.0, easing=EasingType.EASE_OUT
+            ),
         ],
         parameters={"target_y": -240, "shrink_scale": 0.9},
         tags=["video_transition", "shrink", "facts", "explain"],

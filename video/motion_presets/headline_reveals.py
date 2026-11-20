@@ -25,8 +25,12 @@ HEADLINE_REVEAL_PRESETS: List[MotionPresetSpec] = [
         duration_max=2.0,
         ffmpeg_filter_template="overlay=x=0:y='if(lte(t,0.4),H-(H-1230)*(t/0.4),1230)':eval=frame",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, pos_y=180.0, opacity=0.0, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=0.35, pos_y=-10.0, opacity=1.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, pos_y=180.0, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.35, pos_y=-10.0, opacity=1.0, easing=EasingType.EASE_OUT
+            ),
             KeyframeAnimation(time_offset=0.5, pos_y=0.0, opacity=1.0, easing=EasingType.LINEAR),
         ],
         parameters={"resting_y": 1230, "overshoot_px": 10, "slide_time": 0.35},
@@ -43,7 +47,9 @@ HEADLINE_REVEAL_PRESETS: List[MotionPresetSpec] = [
         duration_max=2.0,
         ffmpeg_filter_template="overlay=x='if(lte(t,0.3),-W+W*(t/0.3),0)':y=1230:eval=frame",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, pos_x=-1080.0, opacity=0.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, pos_x=-1080.0, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
             KeyframeAnimation(time_offset=0.3, pos_x=0.0, opacity=1.0, easing=EasingType.EASE_OUT),
         ],
         parameters={"accent_bar_width": 16, "bar_color": "0xFF9933"},
@@ -60,9 +66,15 @@ HEADLINE_REVEAL_PRESETS: List[MotionPresetSpec] = [
         duration_max=3.0,
         ffmpeg_filter_template="",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=0.8, scale_y=0.8, opacity=0.0, easing=EasingType.SPRING),
-            KeyframeAnimation(time_offset=0.15, scale_x=1.1, scale_y=1.1, opacity=1.0, easing=EasingType.SPRING),
-            KeyframeAnimation(time_offset=0.25, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.LINEAR),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=0.8, scale_y=0.8, opacity=0.0, easing=EasingType.SPRING
+            ),
+            KeyframeAnimation(
+                time_offset=0.15, scale_x=1.1, scale_y=1.1, opacity=1.0, easing=EasingType.SPRING
+            ),
+            KeyframeAnimation(
+                time_offset=0.25, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.LINEAR
+            ),
         ],
         parameters={"word_stagger": 0.12, "pop_scale": 1.15},
         tags=["kinetic", "typography", "words", "speech_sync"],
@@ -78,8 +90,12 @@ HEADLINE_REVEAL_PRESETS: List[MotionPresetSpec] = [
         duration_max=1.8,
         ffmpeg_filter_template="",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, pos_x=400.0, opacity=0.0, easing=EasingType.EASE_IN_OUT),
-            KeyframeAnimation(time_offset=0.4, pos_x=0.0, opacity=1.0, easing=EasingType.EASE_IN_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, pos_x=400.0, opacity=0.0, easing=EasingType.EASE_IN_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.4, pos_x=0.0, opacity=1.0, easing=EasingType.EASE_IN_OUT
+            ),
         ],
         parameters={"angle_deg": 45, "chevron_width": 80},
         tags=["masked", "wipe", "geometric", "chyron"],
@@ -95,7 +111,9 @@ HEADLINE_REVEAL_PRESETS: List[MotionPresetSpec] = [
         duration_max=2.2,
         ffmpeg_filter_template="",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, pos_y=120.0, opacity=0.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, pos_y=120.0, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
             KeyframeAnimation(time_offset=0.3, pos_y=0.0, opacity=1.0, easing=EasingType.EASE_OUT),
         ],
         parameters={"tier1_height": 50, "tier2_height": 130, "resting_y": 1200},
@@ -128,9 +146,30 @@ HEADLINE_REVEAL_PRESETS: List[MotionPresetSpec] = [
         duration_max=1.5,
         ffmpeg_filter_template="",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=0.0, scale_y=0.0, rotation=-45.0, opacity=0.0, easing=EasingType.SPRING),
-            KeyframeAnimation(time_offset=0.25, scale_x=1.1, scale_y=1.1, rotation=5.0, opacity=1.0, easing=EasingType.SPRING),
-            KeyframeAnimation(time_offset=0.35, scale_x=1.0, scale_y=1.0, rotation=0.0, opacity=1.0, easing=EasingType.LINEAR),
+            KeyframeAnimation(
+                time_offset=0.0,
+                scale_x=0.0,
+                scale_y=0.0,
+                rotation=-45.0,
+                opacity=0.0,
+                easing=EasingType.SPRING,
+            ),
+            KeyframeAnimation(
+                time_offset=0.25,
+                scale_x=1.1,
+                scale_y=1.1,
+                rotation=5.0,
+                opacity=1.0,
+                easing=EasingType.SPRING,
+            ),
+            KeyframeAnimation(
+                time_offset=0.35,
+                scale_x=1.0,
+                scale_y=1.0,
+                rotation=0.0,
+                opacity=1.0,
+                easing=EasingType.LINEAR,
+            ),
         ],
         parameters={"badge_height": 48, "corner_radius": 24, "resting_pos": [72, 280]},
         tags=["category", "badge", "pill", "tag"],
@@ -146,8 +185,12 @@ HEADLINE_REVEAL_PRESETS: List[MotionPresetSpec] = [
         duration_max=1.2,
         ffmpeg_filter_template="",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=1.3, scale_y=1.3, opacity=0.5, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=0.2, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.LINEAR),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=1.3, scale_y=1.3, opacity=0.5, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.2, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.LINEAR
+            ),
         ],
         parameters={"counter_format": "{current:02d} / {total:02d}", "resting_pos": [920, 280]},
         tags=["counter", "index", "story_number", "bulletin"],

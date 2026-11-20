@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from agents.base_agent import AgentResult, BaseAgent
 from core.agent_contracts import ApprovedHook, HookCandidate
@@ -62,7 +62,10 @@ class HookDirectorAgent(BaseAgent):
         else:
             impact_score -= 15.0
 
-        if any(w in text for w in ["बड़ा", "फैसला", "ऐलान", "हैरान", "सीधा", "असर", "नया", "पहला", "इतिहास"]):
+        if any(
+            w in text
+            for w in ["बड़ा", "फैसला", "ऐलान", "हैरान", "सीधा", "असर", "नया", "पहला", "इतिहास"]
+        ):
             impact_score += 10.0
         impact_score = min(100.0, max(0.0, impact_score))
 
@@ -119,11 +122,6 @@ class HookDirectorAgent(BaseAgent):
             + 0.10 * visual_score
         )
 
-        feedback = (
-            f"Impact: {impact_score:.0f}, Curiosity: {curiosity_score:.0f}, "
-            f"Factual: {factual_score:.0f}, Visual: {visual_score:.0f}"
-        )
-
         return HookCandidate(
             archetype=archetype,
             text=text,
@@ -175,23 +173,37 @@ class HookDirectorAgent(BaseAgent):
         generated: List[Dict[str, str]] = []
         try:
             from core.llm_client import LLMClient
+
             llm = LLMClient(self.config)
-            res = await llm.generate(prompt=prompt, system="You write high-CTR viral Hindi hooks for YouTube Shorts.")
+            res = await llm.generate(
+                prompt=prompt, system="You write high-CTR viral Hindi hooks for YouTube Shorts."
+            )
             raw_text = res.content.strip()
             # Parse json array
             match = re.search(r"\[.*\]", raw_text, re.DOTALL)
             if match:
                 generated = json.loads(match.group(0))
         except Exception as exc:
-            logger.info("Hook LLM generation skipped or failed, using heuristic candidates: %s", exc)
+            logger.info(
+                "Hook LLM generation skipped or failed, using heuristic candidates: %s", exc
+            )
 
         # Fallback heuristic candidates if LLM not available or returned empty
         if not generated:
             entity_label = lead_entity.split()[0] if lead_entity else "आज"
             generated = [
-                {"text": f"{entity_label} पर आई सबसे बड़ी खबर, बदल गया पूरा नियम!", "archetype": "breaking_news"},
-                {"text": f"क्या आप जानते हैं कि {entity_label} को लेकर क्या हुआ?", "archetype": "curiosity_gap"},
-                {"text": f"{entity_label} के इस बड़े फैसले से आपकी जेब पर सीधा असर!", "archetype": "direct_impact"},
+                {
+                    "text": f"{entity_label} पर आई सबसे बड़ी खबर, बदल गया पूरा नियम!",
+                    "archetype": "breaking_news",
+                },
+                {
+                    "text": f"क्या आप जानते हैं कि {entity_label} को लेकर क्या हुआ?",
+                    "archetype": "curiosity_gap",
+                },
+                {
+                    "text": f"{entity_label} के इस बड़े फैसले से आपकी जेब पर सीधा असर!",
+                    "archetype": "direct_impact",
+                },
             ]
             if existing_hook:
                 generated.append({"text": existing_hook, "archetype": "strong_factual_statement"})
@@ -224,7 +236,7 @@ class HookDirectorAgent(BaseAgent):
             best.composite_score = max(best.composite_score, 80.0)
 
         # Build ApprovedHook contract
-        lead_image = lead_story.get("image_url", "")
+        lead_story.get("image_url", "")
         approved_hook = ApprovedHook(
             text=best.text,
             archetype=str(best.archetype),

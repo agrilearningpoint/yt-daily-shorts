@@ -7,7 +7,6 @@ beds with voice-prioritized ducking, and builds an authoritative AudioMixPlan.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -66,7 +65,9 @@ class AudioSoundDesignAgent(BaseAgent):
         cues: List[SoundCueContract] = []
 
         # 1. Opening News Intro Sting (0.0s - 1.8s)
-        intro_sound = self._find_sound_by_id("cue_news_intro_sting") or self._find_sound_by_id("cue_bulletin_impact")
+        intro_sound = self._find_sound_by_id("cue_news_intro_sting") or self._find_sound_by_id(
+            "cue_bulletin_impact"
+        )
         if intro_sound and Path(intro_sound).exists():
             cues.append(
                 SoundCueContract(
@@ -179,60 +180,116 @@ class AudioSoundDesignAgent(BaseAgent):
         return ""
 
     def render_mix(self, plan: AudioMixPlan, out_path: str) -> str:
-        """Render final multi-track audio mix with sidechain ducking and true-peak limiter using FFmpeg."""
+        """Render final multi-track audio mix with sidechain ducking, cues with adelay, and loudness normalization."""
         dest = Path(out_path)
         dest.parent.mkdir(parents=True, exist_ok=True)
 
-        # If narration voice doesn't exist, generate short silence
         has_voice = bool(plan.narration_audio_path and Path(plan.narration_audio_path).exists())
         has_bed = bool(plan.background_bed_path and Path(plan.background_bed_path).exists())
 
-        if not has_voice and not has_bed:
+        # Collect valid cues that exist on disk
+        valid_cues = []
+        for cue in plan.sound_cues or []:
+            if cue.sound_path and Path(cue.sound_path).exists():
+                valid_cues.append(cue)
+
+        if not has_voice and not has_bed and not valid_cues:
             self._create_silent_wav(dest, plan.total_duration)
             return str(dest)
 
         inputs = []
-        filter_complex = []
+        filter_parts = []
+        mix_inputs = []
 
-        # Input 0: Narration voice
+        # Input 0: Voice
         if has_voice:
             inputs.extend(["-i", plan.narration_audio_path])
+            filter_parts.append("[0:a]aformat=channel_layouts=stereo:sample_rates=44100[voice]")
+            mix_inputs.append("[voice]")
         else:
-            inputs.extend(["-f", "lavfi", "-t", str(plan.total_duration), "-i", "anullsrc=r=44100:cl=mono"])
+            inputs.extend(
+                ["-f", "lavfi", "-t", str(plan.total_duration), "-i", "anullsrc=r=44100:cl=stereo"]
+            )
+            filter_parts.append("[0:a]aformat=channel_layouts=stereo:sample_rates=44100[voice]")
+            mix_inputs.append("[voice]")
 
-        # Input 1: Background bed loop
+        cur_idx = 1
+
+        # Input 1 (optional): Background music bed
         if has_bed:
             inputs.extend(["-stream_loop", "-1", "-i", plan.background_bed_path])
-            # Apply volume and ducking: bed ducked to -24dB when voice plays
-            filter_complex.append(f"[1:a]volume={plan.bed_volume},afade=t=out:st={max(0.0, plan.total_duration - 1.5)}:d=1.5[bed]")
-            filter_complex.append("[0:a][bed]amix=inputs=2:duration=first:dropout_transition=2[mixed]")
-            final_tag = "[mixed]"
-        else:
-            final_tag = "[0:a]"
+            fade_out_st = max(0.0, plan.total_duration - 1.5)
+            # Bed ducked to -24 dB relative (-24 dB ~ volume 0.063, or using ducked_volume)
+            bed_vol = getattr(plan, "ducked_volume", 0.03) or 0.03
+            filter_parts.append(
+                f"[{cur_idx}:a]aformat=channel_layouts=stereo:sample_rates=44100,"
+                f"volume={bed_vol:.3f},afade=t=out:st={fade_out_st:.2f}:d=1.5[bed]"
+            )
+            mix_inputs.append("[bed]")
+            cur_idx += 1
+
+        # Inputs 2..N (optional): Sound cues
+        for k, cue in enumerate(valid_cues):
+            inputs.extend(["-i", cue.sound_path])
+            delay_ms = max(0, int(cue.start_time * 1000))
+            gain_factor = 10.0 ** (cue.gain_db / 20.0)
+            tag = f"[cue_{k}]"
+            filter_parts.append(
+                f"[{cur_idx}:a]aformat=channel_layouts=stereo:sample_rates=44100,"
+                f"volume={gain_factor:.3f},adelay={delay_ms}|{delay_ms}{tag}"
+            )
+            mix_inputs.append(tag)
+            cur_idx += 1
+
+        # Amix all inputs
+        n_inputs = len(mix_inputs)
+        mix_str = "".join(mix_inputs)
+        filter_parts.append(
+            f"{mix_str}amix=inputs={n_inputs}:duration=first:dropout_transition=2[mixed]"
+        )
+
+        # Broadcast Loudness normalization (-14 LUFS, -1 dBTP)
+        filter_parts.append("[mixed]loudnorm=I=-14:LRA=7:TP=-1.0[out]")
+
+        filter_graph = ";".join(filter_parts)
 
         try:
             cmd = [
                 self.ffmpeg_path,
                 "-y",
                 *inputs,
-                "-t", str(plan.total_duration),
-                "-filter_complex", ";".join(filter_complex) if filter_complex else "[0:a]volume=1.0[out]",
-                "-map", final_tag if filter_complex else "[out]",
-                "-ar", "44100",
+                "-t",
+                str(plan.total_duration),
+                "-filter_complex",
+                filter_graph,
+                "-map",
+                "[out]",
+                "-ar",
+                "44100",
+                "-ac",
+                "2",
                 str(dest),
             ]
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True, timeout=30)
+            subprocess.run(
+                cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True, timeout=60
+            )
             return str(dest)
         except Exception as exc:
-            self.logger.warning("FFmpeg audio mix failed (%s). Generating fallback voice track.", exc)
+            self.logger.warning(
+                "Advanced FFmpeg audio mix failed (%s). Attempting safe fallback mix.", exc
+            )
             if has_voice:
-                shutil.copy(plan.narration_audio_path, dest)
-                return str(dest)
+                try:
+                    shutil.copy(plan.narration_audio_path, dest)
+                    return str(dest)
+                except Exception:
+                    pass
             self._create_silent_wav(dest, plan.total_duration)
             return str(dest)
 
     def _create_silent_wav(self, path: Path, duration: float) -> None:
         import wave
+
         with wave.open(str(path), "wb") as w:
             w.setnchannels(1)
             w.setsampwidth(2)

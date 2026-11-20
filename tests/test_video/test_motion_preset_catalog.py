@@ -1,12 +1,9 @@
 """Unit tests for the 56 Motion Preset Library and Catalog."""
 
-import pytest
 from video.motion_presets import (
     MotionPresetCatalog,
     PresetCategory,
     count_presets,
-    get_preset,
-    list_all_presets,
 )
 
 
@@ -20,7 +17,9 @@ def test_each_category_has_eight_presets():
     catalog = MotionPresetCatalog.get_instance()
     for cat in PresetCategory:
         cat_presets = catalog.list_presets(cat)
-        assert len(cat_presets) == 8, f"Category {cat.value} should have exactly 8 presets, got {len(cat_presets)}"
+        assert (
+            len(cat_presets) == 8
+        ), f"Category {cat.value} should have exactly 8 presets, got {len(cat_presets)}"
 
 
 def test_all_preset_ids_unique():

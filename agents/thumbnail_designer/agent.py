@@ -20,6 +20,7 @@ class ThumbnailDesignerAgent(BaseAgent):
         out_path = Path("output") / video_id / "thumbnail.jpg"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         comp = SceneComposer(theme, channel_name=self.config.general.channel_name)
-        path = comp.compose_thumbnail(production.get("first_image"), str(out_path),
-                                      script.get("title", "आज की बड़ी खबर"))
+        path = comp.compose_thumbnail(
+            production.get("first_image"), str(out_path), script.get("title", "आज की बड़ी खबर")
+        )
         return AgentResult(success=Path(path).exists(), data={"thumbnail_path": path})

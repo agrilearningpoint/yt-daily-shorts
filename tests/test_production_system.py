@@ -1,21 +1,14 @@
 """Unit tests for the upgraded multi-agent architecture and synchronization engine."""
 
-import pytest
-from core.agent_contracts import (
-    ApprovedHook,
-    CreativeBrief,
-    MasterEditingTimeline,
-    TimelineSegmentContract,
-)
 from core.production_context import STAGE_DEPENDENCY_GRAPH, ProductionContext
 from core.state_manager import StateManager
 from video.qa_inspector import VideoQAInspector
-from video.synchronization_engine import SynchronizationEngine, SyncValidationResult
+from video.synchronization_engine import SynchronizationEngine
 
 
 def test_production_context_dependency_graph():
     """Verify production context tracks downstream dependencies."""
-    ctx = ProductionContext(video_id="test_001", run_id="test_001", video_type="news")
+    ProductionContext(video_id="test_001", run_id="test_001", video_type="news")
     assert "script_generation" in STAGE_DEPENDENCY_GRAPH
     downstream = STAGE_DEPENDENCY_GRAPH["script_generation"]
     assert "video_production" in downstream
@@ -47,8 +40,16 @@ def test_synchronization_engine_zero_drift():
     beats = [
         {"kind": "hook", "text": "Hook text", "parts": [{"say": "Hook text", "entity": "India"}]},
         {"kind": "item", "text": "Story 1", "parts": [{"say": "Story 1", "entity": "ISRO"}]},
-        {"kind": "item", "text": "Story 2", "parts": [{"say": "Story 2", "entity": "Supreme Court"}]},
-        {"kind": "outro", "text": "Subscribe text", "parts": [{"say": "Subscribe text", "entity": ""}]},
+        {
+            "kind": "item",
+            "text": "Story 2",
+            "parts": [{"say": "Story 2", "entity": "Supreme Court"}],
+        },
+        {
+            "kind": "outro",
+            "text": "Subscribe text",
+            "parts": [{"say": "Subscribe text", "entity": ""}],
+        },
     ]
     # Arbitrary non-integer frame durations
     raw_durs = [2.633, 2.417, 2.891, 3.123]
@@ -109,6 +110,9 @@ def test_video_qa_inspector_duration_bounds():
 
     # Fake stream info check
     from video.qa_inspector import MediaStreamInfo
-    info = MediaStreamInfo(has_video=True, has_audio=True, width=1080, height=1920, fps=30.0, duration=55.0)
+
+    info = MediaStreamInfo(
+        has_video=True, has_audio=True, width=1080, height=1920, fps=30.0, duration=55.0
+    )
     assert info.duration <= inspector.max_duration
     assert info.duration >= inspector.min_duration

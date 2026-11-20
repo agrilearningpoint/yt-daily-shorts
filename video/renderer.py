@@ -51,23 +51,34 @@ def quantize_durations(raw_durs: List[float], fps: int = 30, tail: float = 0.0) 
 @dataclass
 class SceneClip:
     background: str
-    overlay: str                 # full-frame static PNG
-    duration: float              # seconds of voice for this beat
-    chip: Optional[str] = None   # sliding headline chip PNG
+    overlay: str  # full-frame static PNG
+    duration: float  # seconds of voice for this beat
+    chip: Optional[str] = None  # sliding headline chip PNG
     chip_y: int = 1230
-    story_start: bool = True     # whoosh/pop only when a new story/scene begins (not on every small cut)
-    fx: str = "flash"            # cut effect chosen by the Editor Director
-    ticker: bool = False         # show the scrolling headline ticker on this clip
-    video: str = ""              # real-motion clip used instead of the still background
-    depth: bool = False          # real photo: play it with 3D depth motion (video/parallax.py)
+    story_start: bool = (
+        True  # whoosh/pop only when a new story/scene begins (not on every small cut)
+    )
+    fx: str = "flash"  # cut effect chosen by the Editor Director
+    ticker: bool = False  # show the scrolling headline ticker on this clip
+    video: str = ""  # real-motion clip used instead of the still background
+    depth: bool = False  # real photo: play it with 3D depth motion (video/parallax.py)
+    motion_preset_id: Optional[str] = None
+    camera_motion: Optional[str] = None
+    transition_effect: Optional[str] = None
+    video_trim_start: float = 0.0
+    video_trim_end: float = 0.0
+    sfx_cue: Optional[str] = None
 
 
 def _run(cmd: List[str], timeout: int = 600) -> None:
     res = subprocess.run(cmd, capture_output=True, timeout=timeout)
     if res.returncode != 0:
         err = res.stderr.decode(errors="ignore")
-        lines = [ln for ln in err.replace("\r", "\n").splitlines()
-                 if ln.strip() and not ln.lstrip().startswith(("frame=", "size=")) and "time=" not in ln]
+        lines = [
+            ln
+            for ln in err.replace("\r", "\n").splitlines()
+            if ln.strip() and not ln.lstrip().startswith(("frame=", "size=")) and "time=" not in ln
+        ]
         raise RenderError("\n".join(lines[-25:])[-2000:])
 
 
@@ -76,8 +87,10 @@ def ensure_sfx() -> dict:
     SFX_DIR.mkdir(parents=True, exist_ok=True)
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     specs = {
-        "whoosh": ("anoisesrc=d=0.42:c=pink:a=0.9,highpass=f=500,lowpass=f=7000,"
-                   "afade=t=in:d=0.16:curve=exp,afade=t=out:st=0.16:d=0.26:curve=log,volume=0.55"),
+        "whoosh": (
+            "anoisesrc=d=0.42:c=pink:a=0.9,highpass=f=500,lowpass=f=7000,"
+            "afade=t=in:d=0.16:curve=exp,afade=t=out:st=0.16:d=0.26:curve=log,volume=0.55"
+        ),
         "pop": "sine=f=880:d=0.09,afade=t=out:st=0:d=0.09:curve=exp,volume=0.35",
         "hit": ("sine=f=70:d=0.35,afade=t=out:st=0:d=0.35:curve=exp,volume=0.9"),
     }
@@ -85,7 +98,9 @@ def ensure_sfx() -> dict:
     for name, flt in specs.items():
         path = SFX_DIR / f"{name}.wav"
         if not path.exists():
-            _run([ffmpeg, "-y", "-f", "lavfi", "-i", flt, "-ar", "44100", "-ac", "2", str(path)], 60)
+            _run(
+                [ffmpeg, "-y", "-f", "lavfi", "-i", flt, "-ar", "44100", "-ac", "2", str(path)], 60
+            )
         out[name] = str(path)
     return out
 
@@ -123,6 +138,7 @@ class VideoRenderer:
             return
         import time
         from concurrent.futures import ThreadPoolExecutor
+
         t0 = time.time()
 
         def one(job):
@@ -130,11 +146,17 @@ class VideoRenderer:
             if Path(out).exists() and Path(out).stat().st_size > 1000:
                 return i, out
             return i, make_clip(bg, out, d + 0.1, self.width, self.height, self.fps, style=i % 6)
+
         with ThreadPoolExecutor(max_workers=3) as ex:
             for i, out in ex.map(one, jobs):
                 if out:
                     self._depth_clips[i] = out
-        logger.info("3D photo motion: %d/%d real photos in %.0fs", len(self._depth_clips), len(jobs), time.time() - t0)
+        logger.info(
+            "3D photo motion: %d/%d real photos in %.0fs",
+            len(self._depth_clips),
+            len(jobs),
+            time.time() - t0,
+        )
 
     def _motion(self, idx: int, frames: int) -> tuple:
         zmax = float(self.recipe.get("zoom", 1.12))
@@ -169,14 +191,18 @@ class VideoRenderer:
             "cut": "",
         }.get(fx, ",fade=t=in:st=0:d=0.12:color=white")
 
-    def _beat_clip(self, clip: SceneClip, length: float, idx: int, out: str, t0: float = 0.0) -> str:
+    def _beat_clip(
+        self, clip: SceneClip, length: float, idx: int, out: str, t0: float = 0.0
+    ) -> str:
         frames = max(int(round(length * self.fps)), 2)
         z, x, y = self._motion(idx, frames)
-        if clip.fx == "punch":  # quick zoom-punch into the new picture
+        cut_fx = clip.transition_effect or clip.fx
+        if cut_fx == "punch":  # quick zoom-punch into the new picture
             z = f"({z})+0.22*max(0,1-on/7)"
         grade = ""
         try:
             from video.editor_director import GRADES
+
             g = GRADES.get(self.recipe.get("grade", ""), "")
             grade = f",{g}" if g else ""
         except Exception:
@@ -185,50 +211,137 @@ class VideoRenderer:
         depth_clip = self._depth_clips.get(idx)
         if depth_clip and not clip.video:
             inputs = ["-i", depth_clip, "-i", clip.overlay]
-            fc = f"[0:v]fps={self.fps},setsar=1{grade}{vig}{self._fx(clip.fx)}[bg]"
+            fc = f"[0:v]fps={self.fps},setsar=1{grade}{vig}{self._fx(cut_fx)}[bg]"
         elif clip.video and Path(clip.video).exists():
             W, H = self.width, self.height
-            inputs = ["-stream_loop", "-1", "-ss", "0.5", "-i", clip.video, "-i", clip.overlay]
-            fc = (f"[0:v]fps={self.fps},split[va][vb];"
-                  f"[va]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},boxblur=24:2[vbg];"
-                  f"[vb]scale={W}:{H}:force_original_aspect_ratio=decrease[vfg];"
-                  f"[vbg][vfg]overlay=(W-w)/2:(H-h)/2,setsar=1{grade}{vig}{self._fx(clip.fx)}[bg]")
+            trim_ss = clip.video_trim_start if clip.video_trim_start > 0 else 0.5
+            inputs = [
+                "-stream_loop",
+                "-1",
+                "-ss",
+                f"{trim_ss:.2f}",
+                "-i",
+                clip.video,
+                "-i",
+                clip.overlay,
+            ]
+            fc = (
+                f"[0:v]fps={self.fps},split[va][vb];"
+                f"[va]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},boxblur=24:2[vbg];"
+                f"[vb]scale={W}:{H}:force_original_aspect_ratio=decrease[vfg];"
+                f"[vbg][vfg]overlay=(W-w)/2:(H-h)/2,setsar=1{grade}{vig}{self._fx(cut_fx)}[bg]"
+            )
         else:
             inputs = ["-i", clip.background, "-i", clip.overlay]
-            fc = (f"[0:v]scale={int(self.width * 1.5)}:-2,zoompan=z='{z}':x='{x}':y='{y}':d={frames}:"
-                  f"s={self.width}x{self.height}:fps={self.fps},setsar=1{grade}{vig}{self._fx(clip.fx)}[bg]")
+            preset_filter = None
+            if clip.motion_preset_id:
+                try:
+                    from video.motion_presets.catalog import get_preset
+
+                    spec = get_preset(clip.motion_preset_id)
+                    if spec and spec.ffmpeg_filter_template:
+                        preset_filter = spec.ffmpeg_filter_template.format(
+                            frames=frames,
+                            duration=length,
+                            fps=self.fps,
+                            width=self.width,
+                            height=self.height,
+                        )
+                except Exception as exc:
+                    logger.debug(
+                        "Preset application skipped for %s: %s", clip.motion_preset_id, exc
+                    )
+
+            if preset_filter:
+                if preset_filter.startswith("overlay="):
+                    fc = (
+                        f"[0:v]scale={int(self.width * 1.5)}:-2,zoompan=z='{z}':x='{x}':y='{y}':d={frames}:"
+                        f"s={self.width}x{self.height}:fps={self.fps},setsar=1{grade}{vig}{self._fx(cut_fx)}[bg]"
+                    )
+                elif preset_filter.startswith("zoompan="):
+                    fc = f"[0:v]{preset_filter},setsar=1{grade}{vig}{self._fx(cut_fx)}[bg]"
+                else:
+                    fc = (
+                        f"[0:v]scale={int(self.width * 1.5)}:-2,zoompan=z='{z}':x='{x}':y='{y}':d={frames}:"
+                        f"s={self.width}x{self.height}:fps={self.fps},{preset_filter},setsar=1{grade}{vig}{self._fx(cut_fx)}[bg]"
+                    )
+            else:
+                fc = (
+                    f"[0:v]scale={int(self.width * 1.5)}:-2,zoompan=z='{z}':x='{x}':y='{y}':d={frames}:"
+                    f"s={self.width}x{self.height}:fps={self.fps},setsar=1{grade}{vig}{self._fx(cut_fx)}[bg]"
+                )
         last = "[bg]"
         n = 2
         if clip.ticker and self.ticker and Path(self.ticker).exists():
             inputs += ["-loop", "1", "-i", self.ticker]
             speed = 170
-            fc += (f";{last}drawbox=x=0:y={self.ticker_y}:w=iw:h=84:color=0x0C0C12@0.88:t=fill[tb]")
+            fc += f";{last}drawbox=x=0:y={self.ticker_y}:w=iw:h=84:color=0x0C0C12@0.88:t=fill[tb]"
             last = "[tb]"
-            fc += (f";[{n}:v]format=rgba[tk];{last}[tk]overlay="
-                   f"x='W-mod((t+{t0:.3f})*{speed},w+W)':y={self.ticker_y}:shortest=1[t1]")
+            fc += (
+                f";[{n}:v]format=rgba[tk];{last}[tk]overlay="
+                f"x='W-mod((t+{t0:.3f})*{speed},w+W)':y={self.ticker_y}:shortest=1[t1]"
+            )
             last, n = "[t1]", n + 1
-        fc += f";{last}[1:v]overlay=0:0[f]"
+        if preset_filter and preset_filter.startswith("overlay="):
+            fc += f";{last}[1:v]{preset_filter}[f]"
+        else:
+            fc += f";{last}[1:v]overlay=0:0[f]"
         last = "[f]"
         if clip.chip and Path(clip.chip).exists():
             inputs += ["-loop", "1", "-i", clip.chip]
-            fc += (f";[{n}:v]format=rgba[chip];{last}[chip]overlay="
-                   f"x='if(lt(t,0.28),-w+(w+60)*(t/0.28),60)':y={clip.chip_y}:shortest=1[c]")
+            fc += (
+                f";[{n}:v]format=rgba[chip];{last}[chip]overlay="
+                f"x='if(lt(t,0.28),-w+(w+60)*(t/0.28),60)':y={clip.chip_y}:shortest=1[c]"
+            )
             last = "[c]"
         fc += f";{last}format=yuv420p[v]"
-        _run([self._ffmpeg, "-y", *inputs, "-filter_complex", fc, "-map", "[v]", "-t", f"{length:.3f}",
-              "-r", str(self.fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-              "-pix_fmt", "yuv420p", "-an", out])
+        _run(
+            [
+                self._ffmpeg,
+                "-y",
+                *inputs,
+                "-filter_complex",
+                fc,
+                "-map",
+                "[v]",
+                "-t",
+                f"{length:.3f}",
+                "-r",
+                str(self.fps),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "20",
+                "-pix_fmt",
+                "yuv420p",
+                "-an",
+                out,
+            ]
+        )
         return out
 
     def _pick_music(self) -> Optional[str]:
         if not MUSIC_DIR.exists():
             return None
-        tracks = [p for p in MUSIC_DIR.iterdir() if p.suffix.lower() in (".mp3", ".m4a", ".wav", ".ogg")]
+        tracks = [
+            p for p in MUSIC_DIR.iterdir() if p.suffix.lower() in (".mp3", ".m4a", ".wav", ".ogg")
+        ]
         return str(random.choice(tracks)) if tracks else None
 
-    def render(self, clips: List[SceneClip], voice_audio: str, output_path: str, music: bool = True,
-               music_volume: float = 0.10, tempo: float = 1.0, sfx: bool = True,
-               captions: Optional[str] = None, **_ignored) -> str:
+    def render(
+        self,
+        clips: List[SceneClip],
+        voice_audio: str,
+        output_path: str,
+        music: bool = True,
+        music_volume: float = 0.10,
+        tempo: float = 1.0,
+        sfx: bool = True,
+        captions: Optional[str] = None,
+        **_ignored,
+    ) -> str:
         if not self._ffmpeg:
             raise RenderError("ffmpeg not installed")
         if not clips:
@@ -259,7 +372,21 @@ class VideoRenderer:
         concat_list = work / "list.txt"
         concat_list.write_text("".join(f"file '{Path(p).resolve().as_posix()}'\n" for p in paths))
         video_only = work / "video.mp4"
-        _run([self._ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list), "-c", "copy", str(video_only)])
+        _run(
+            [
+                self._ffmpeg,
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_list),
+                "-c",
+                "copy",
+                str(video_only),
+            ]
+        )
         total = sum(durs)
 
         inputs = ["-i", str(video_only), "-i", voice_audio]
@@ -271,10 +398,14 @@ class VideoRenderer:
         music_path = self._pick_music() if music else None
         if music_path:
             inputs += ["-stream_loop", "-1", "-i", music_path]
-            fc.append(f"[{idx}:a]aresample=44100,volume={music_volume},"
-                      f"afade=t=out:st={max(total - 1.5, 0):.2f}:d=1.5[bgm]")
+            fc.append(
+                f"[{idx}:a]aresample=44100,volume={music_volume},"
+                f"afade=t=out:st={max(total - 1.5, 0):.2f}:d=1.5[bgm]"
+            )
             fc.append("[voice]asplit=2[vsc][vmix]")
-            fc.append("[bgm][vsc]sidechaincompress=threshold=0.03:ratio=6:attack=20:release=400[duck]")
+            fc.append(
+                "[bgm][vsc]sidechaincompress=threshold=0.03:ratio=6:attack=20:release=400[duck]"
+            )
             mix = ["[vmix]", "[duck]"]
             idx += 1
         if sfx:
@@ -295,16 +426,22 @@ class VideoRenderer:
                     pd = int((ct + 0.22) * 1000)
                     fc.append(f"[w{k}]adelay={wd}|{wd},volume=0.22[wd{k}]")
                     fc.append(f"[p{k}]adelay={pd}|{pd},volume=0.16[pd{k}]")
-                fc.append("".join(f"[wd{k}][pd{k}]" for k in range(n))
-                          + f"amix=inputs={2 * n}:normalize=0:duration=longest[fxcuts]")
+                fc.append(
+                    "".join(f"[wd{k}][pd{k}]" for k in range(n))
+                    + f"amix=inputs={2 * n}:normalize=0:duration=longest[fxcuts]"
+                )
                 mix.append("[fxcuts]")
             fc.append(f"[{h_i}:a]volume=0.35[hit]")
             mix.append("[hit]")
         if len(mix) == 1:
-            fc.append(f"[voice]loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=in:st=0:d=0.25,afade=t=out:st={max(total - 0.6, 0):.2f}:d=0.6[aout]")
+            fc.append(
+                f"[voice]loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=in:st=0:d=0.25,afade=t=out:st={max(total - 0.6, 0):.2f}:d=0.6[aout]"
+            )
         else:
-            fc.append("".join(mix) + f"amix=inputs={len(mix)}:normalize=0:duration=first,"
-                      f"loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=in:st=0:d=0.25,afade=t=out:st={max(total - 0.6, 0):.2f}:d=0.6[aout]")
+            fc.append(
+                "".join(mix) + f"amix=inputs={len(mix)}:normalize=0:duration=first,"
+                f"loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=in:st=0:d=0.25,afade=t=out:st={max(total - 0.6, 0):.2f}:d=0.6[aout]"
+            )
 
         vmap, vcodec = ["-map", "0:v"], ["-c:v", "copy"]
         if captions and Path(captions).exists():
@@ -313,9 +450,28 @@ class VideoRenderer:
             fc.append(f"[0:v]ass='{cap}':fontsdir='{fonts}'[vcap]")
             vmap = ["-map", "[vcap]"]
             vcodec = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
-        cmd = [self._ffmpeg, "-y", *inputs, "-filter_complex", ";".join(fc), *vmap, "-map", "[aout]",
-               "-t", f"{total:.3f}", *vcodec, "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
-               "-movflags", "+faststart", str(out)]
+        cmd = [
+            self._ffmpeg,
+            "-y",
+            *inputs,
+            "-filter_complex",
+            ";".join(fc),
+            *vmap,
+            "-map",
+            "[aout]",
+            "-t",
+            f"{total:.3f}",
+            *vcodec,
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-ar",
+            "44100",
+            "-movflags",
+            "+faststart",
+            str(out),
+        ]
         logger.info("Rendering final video (%d beats, %.1fs)…", len(clips), total)
         _run(cmd, timeout=900)
         shutil.rmtree(work, ignore_errors=True)

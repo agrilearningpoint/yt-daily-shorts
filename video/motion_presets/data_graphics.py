@@ -25,8 +25,12 @@ DATA_GRAPHICS_PRESETS: List[MotionPresetSpec] = [
         duration_max=6.0,
         ffmpeg_filter_template="zoompan=z='min(1.0+0.0025*on,1.35)':x='iw*0.48-(iw/zoom*0.48)':y='ih*0.35-(ih/zoom*0.35)':d={frames}:s=1080x1920:fps=30",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=1.0, scale_y=1.0, easing=EasingType.EASE_IN_OUT),
-            KeyframeAnimation(time_offset=2.5, scale_x=1.35, scale_y=1.35, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=1.0, scale_y=1.0, easing=EasingType.EASE_IN_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=2.5, scale_x=1.35, scale_y=1.35, easing=EasingType.EASE_OUT
+            ),
         ],
         parameters={"target_lat_norm": 0.35, "target_lon_norm": 0.48, "final_zoom": 1.35},
         tags=["map", "zoom", "geography", "state", "border"],
@@ -42,7 +46,9 @@ DATA_GRAPHICS_PRESETS: List[MotionPresetSpec] = [
         duration_max=2.5,
         ffmpeg_filter_template="",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, pos_y=-150.0, opacity=0.0, easing=EasingType.EXPONENTIAL_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, pos_y=-150.0, opacity=0.0, easing=EasingType.EXPONENTIAL_OUT
+            ),
             KeyframeAnimation(time_offset=0.35, pos_y=0.0, opacity=1.0, easing=EasingType.SPRING),
             KeyframeAnimation(time_offset=0.5, pos_y=-15.0, opacity=1.0, easing=EasingType.SPRING),
             KeyframeAnimation(time_offset=0.65, pos_y=0.0, opacity=1.0, easing=EasingType.LINEAR),
@@ -77,8 +83,12 @@ DATA_GRAPHICS_PRESETS: List[MotionPresetSpec] = [
         duration_max=3.5,
         ffmpeg_filter_template="",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=0.9, scale_y=0.9, opacity=0.0, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=0.2, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=0.9, scale_y=0.9, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.2, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT
+            ),
         ],
         parameters={"count_duration": 1.4, "suffix": " लाख करोड़", "prefix": "₹"},
         tags=["metric", "count_up", "economy", "gdp", "numbers"],
@@ -94,8 +104,12 @@ DATA_GRAPHICS_PRESETS: List[MotionPresetSpec] = [
         duration_max=4.0,
         ffmpeg_filter_template="",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=0.0, opacity=0.0, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=0.8, scale_x=1.0, opacity=1.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=0.0, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.8, scale_x=1.0, opacity=1.0, easing=EasingType.EASE_OUT
+            ),
         ],
         parameters={"bar_height": 38, "bar_spacing": 24, "accent_color": "0x10B981"},
         tags=["bar_chart", "statistics", "comparison", "growth"],
@@ -128,10 +142,18 @@ DATA_GRAPHICS_PRESETS: List[MotionPresetSpec] = [
         duration_max=7.0,
         ffmpeg_filter_template="fade=t=in:st=0:d=0.3:color=black",
         keyframes=[
-            KeyframeAnimation(time_offset=0.0, scale_x=0.92, scale_y=0.92, opacity=0.0, easing=EasingType.EASE_OUT),
-            KeyframeAnimation(time_offset=0.4, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT),
+            KeyframeAnimation(
+                time_offset=0.0, scale_x=0.92, scale_y=0.92, opacity=0.0, easing=EasingType.EASE_OUT
+            ),
+            KeyframeAnimation(
+                time_offset=0.4, scale_x=1.0, scale_y=1.0, opacity=1.0, easing=EasingType.EASE_OUT
+            ),
         ],
-        parameters={"quote_mark_color": "0xF59E0B", "card_bg": "0x1E293B", "highlight_color": "0xFDE047"},
+        parameters={
+            "quote_mark_color": "0xF59E0B",
+            "card_bg": "0x1E293B",
+            "highlight_color": "0xFDE047",
+        },
         tags=["quote", "statement", "attribution", "speaker"],
         render_type="pil_overlay",
     ),

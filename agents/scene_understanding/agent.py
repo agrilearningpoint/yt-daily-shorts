@@ -7,11 +7,10 @@ classifies visual layout types, analyzes on-screen chyron graphics, and evaluate
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from PIL import Image, ImageDraw
 
@@ -44,7 +43,11 @@ class SceneUnderstandingAgent(BaseAgent):
 
         manifest: Optional[SourceVideoManifest] = kwargs.get("manifest")
         video_id = manifest.video_id if manifest else kwargs.get("video_id", "lv_scene_unk")
-        total_duration = manifest.duration if manifest and manifest.duration > 0 else float(kwargs.get("duration", 0.0))
+        total_duration = (
+            manifest.duration
+            if manifest and manifest.duration > 0
+            else float(kwargs.get("duration", 0.0))
+        )
 
         keyframe_dir = Path("output") / "repurposing" / video_id / "keyframes"
         keyframe_dir.mkdir(parents=True, exist_ok=True)
@@ -76,7 +79,9 @@ class SceneUnderstandingAgent(BaseAgent):
 
         # 2. Local physical video file available -> perform ffmpeg keyframe extraction
         elif manifest and manifest.is_local_file and Path(manifest.local_path).exists():
-            scenes = self._extract_ffmpeg_scenes(Path(manifest.local_path), keyframe_dir, total_duration)
+            scenes = self._extract_ffmpeg_scenes(
+                Path(manifest.local_path), keyframe_dir, total_duration
+            )
             analysis_status = "ffmpeg_analyzed" if scenes else "analysis_failed"
 
         # 3. Explicit fallback requested in kwargs
@@ -88,7 +93,9 @@ class SceneUnderstandingAgent(BaseAgent):
         else:
             return AgentResult(
                 success=False,
-                errors=[f"Physical video file is inaccessible for video_id={video_id}. Cannot perform genuine scene analysis."],
+                errors=[
+                    f"Physical video file is inaccessible for video_id={video_id}. Cannot perform genuine scene analysis."
+                ],
                 data={"scene_analysis_status": "video_inaccessible"},
             )
 
@@ -96,7 +103,9 @@ class SceneUnderstandingAgent(BaseAgent):
             "scenes": scenes,
             "total_scenes": len(scenes),
             "keyframe_dir": str(keyframe_dir),
-            "average_scene_duration": round(total_duration / max(1, len(scenes)), 2) if total_duration > 0 else 0.0,
+            "average_scene_duration": round(total_duration / max(1, len(scenes)), 2)
+            if total_duration > 0
+            else 0.0,
             "scene_analysis_status": analysis_status,
         }
 
@@ -108,7 +117,9 @@ class SceneUnderstandingAgent(BaseAgent):
         self.save_result(video_id, agent_res)
         return agent_res
 
-    def _extract_ffmpeg_scenes(self, video_path: Path, out_dir: Path, total_duration: float) -> List[VisualScene]:
+    def _extract_ffmpeg_scenes(
+        self, video_path: Path, out_dir: Path, total_duration: float
+    ) -> List[VisualScene]:
         """Detect scene changes and extract representative keyframes using FFmpeg."""
         scenes: List[VisualScene] = []
         try:
@@ -116,22 +127,36 @@ class SceneUnderstandingAgent(BaseAgent):
             num_samples = max(2, int(total_duration // interval)) if total_duration > 0 else 3
             for i in range(num_samples):
                 t_sec = i * interval
-                t_end = min(total_duration, t_sec + interval) if total_duration > 0 else t_sec + interval
+                t_end = (
+                    min(total_duration, t_sec + interval)
+                    if total_duration > 0
+                    else t_sec + interval
+                )
                 kf_path = out_dir / f"keyframe_{i:03d}.jpg"
 
                 if not kf_path.exists():
                     cmd = [
                         self.ffmpeg_path,
                         "-y",
-                        "-ss", f"{t_sec:.2f}",
-                        "-i", str(video_path),
-                        "-vframes", "1",
-                        "-q:v", "3",
+                        "-ss",
+                        f"{t_sec:.2f}",
+                        "-i",
+                        str(video_path),
+                        "-vframes",
+                        "1",
+                        "-q:v",
+                        "3",
                         str(kf_path),
                     ]
-                    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+                    subprocess.run(
+                        cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10
+                    )
 
-                scene_type = "studio_anchor" if i % 3 == 0 else ("field_reporting" if i % 3 == 1 else "broll_footage")
+                scene_type = (
+                    "studio_anchor"
+                    if i % 3 == 0
+                    else ("field_reporting" if i % 3 == 1 else "broll_footage")
+                )
                 scenes.append(
                     VisualScene(
                         scene_index=i,
@@ -162,7 +187,11 @@ class SceneUnderstandingAgent(BaseAgent):
             if not kf_path.exists():
                 self._create_placeholder_keyframe(kf_path, f"Scene {idx}")
 
-            stype = "studio_anchor" if idx == 0 else ("field_reporting" if idx % 2 == 1 else "graphic_infographic")
+            stype = (
+                "studio_anchor"
+                if idx == 0
+                else ("field_reporting" if idx % 2 == 1 else "graphic_infographic")
+            )
             scenes.append(
                 VisualScene(
                     scene_index=idx,

@@ -1,12 +1,9 @@
 """Tests for Motion Graphics, VFX Engine & Semantic Visual Matcher."""
 
-import os
 from pathlib import Path
-import pytest
 from PIL import Image
 
 from video.semantic_matcher import (
-    SemanticVisualMatcher,
     extract_entity_from_hindi,
     detect_topic_theme,
 )
@@ -17,7 +14,9 @@ from video.vfx_engine import VFXEngine
 def test_extract_entity_from_hindi():
     assert extract_entity_from_hindi("बांकेबिहारी मंदिर में दर्शन के नए नियम लागू") == "Banke Bihari Temple"
     assert extract_entity_from_hindi("शेयर बाजार में सेंसेक्स 500 अंक लुढ़का") == "BSE SENSEX"
-    assert extract_entity_from_hindi("पीएम मोदी ने नई वंदे भारत ट्रेन को हरी झंडी दिखाई") == "Narendra Modi"
+    assert (
+        extract_entity_from_hindi("पीएम मोदी ने नई वंदे भारत ट्रेन को हरी झंडी दिखाई") == "Narendra Modi"
+    )
     assert extract_entity_from_hindi("इसरो ने नया उपग्रह सफलतापूर्वक लॉन्च किया") == "ISRO"
     assert extract_entity_from_hindi("सुप्रीम कोर्ट ने बड़ा फैसला सुनाया") == "Supreme Court of India"
     assert extract_entity_from_hindi("सामान्य दिन की शुरुआत हुई") is None

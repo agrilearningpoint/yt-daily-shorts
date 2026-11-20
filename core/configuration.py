@@ -36,10 +36,17 @@ class GeneralConfig:
 @dataclass
 class LLMConfig:
     # Providers are tried in this order; any provider without a key is skipped.
-    provider_order: List[str] = field(default_factory=lambda: [
-        # Ollama dropped: free tier needs paid credits (HTTP 402).
-        "gemini", "mistral", "groq", "agnes", "nvidia", "openrouter",
-    ])
+    provider_order: List[str] = field(
+        default_factory=lambda: [
+            # Ollama dropped: free tier needs paid credits (HTTP 402).
+            "gemini",
+            "mistral",
+            "groq",
+            "agnes",
+            "nvidia",
+            "openrouter",
+        ]
+    )
     models: Dict[str, List[str]] = field(default_factory=dict)
     # Stage routing: {"quality": {"gemini": ["gemini-3.8-flash"]}} — the
     # listed (provider, model) pairs go first for calls made with tier="quality".
@@ -54,7 +61,7 @@ class LLMConfig:
     agnes_api_key: str = ""
     # Failover pools: provider -> extra keys from YT_<PROVIDER>_API_KEY_2..9
     extra_keys: Dict[str, List[str]] = field(default_factory=dict)
-    max_keys_per_provider: int = 2   # caps chain length per provider
+    max_keys_per_provider: int = 2  # caps chain length per provider
     temperature: float = 0.7
     max_tokens: int = 4096
     timeout_sec: int = 90
@@ -95,14 +102,19 @@ class LLMConfig:
 class TTSConfig:
     provider: str = "edge-tts"
     voice: str = "hi-IN-SwaraNeural"
-    fallback_voice: str = "hi-IN-MadhurNeural"
+    fallback_voice: str = "hi-IN-KavyaNeural"
     news_voice: str = "hi-IN-SwaraNeural"
     knowledge_voice: str = "hi-IN-MadhurNeural"
     rate: str = "+5%"
     pitch: str = "+0Hz"
     provider_order: List[str] = field(default_factory=lambda: ["gemini", "edge"])
-    gemini_models: List[str] = field(default_factory=lambda: [
-        "gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-2.5-flash-preview-tts"])
+    gemini_models: List[str] = field(
+        default_factory=lambda: [
+            "gemini-3.8-flash-tts",
+            "gemini-3.8-flash-lite-tts",
+            "gemini-2.5-flash-preview-tts",
+        ]
+    )
     gemini_voice: str = "auto"
     gemini_fallback_voice: str = "Charon"
     news_style: str = "clear, confident Hindi TV news anchor, natural conversational pace"
@@ -114,21 +126,21 @@ class VideoConfig:
     width: int = 1080
     height: int = 1920
     fps: int = 30
-    target_duration: int = 52
-    min_duration: int = 25
-    max_duration: int = 59
-    news_max_duration: int = 140
-    news_target_duration: int = 120
-    news_national_count: int = 16
-    news_international_count: int = 4
+    target_duration: int = 56
+    min_duration: int = 15
+    max_duration: float = 59.5
+    news_max_duration: float = 59.5
+    news_target_duration: float = 56.0
+    news_national_count: int = 6
+    news_international_count: int = 2
     output_format: str = "mp4"
     quality: str = "high"
     background_music: bool = True
     music_volume: float = 0.10
-    news_headline_count: int = 20
+    news_headline_count: int = 8
     show_headline_chips: bool = True
-    burn_captions: bool = True        # word-synced Hindi captions (audit 2026-11-08)
-    depth_motion: bool = True         # real news photos play with 3D depth motion (2026-11-10)
+    burn_captions: bool = True  # word-synced Hindi captions (audit 2026-11-08)
+    depth_motion: bool = True  # real news photos play with 3D depth motion (2026-11-10)
     sound_effects: bool = True
 
 
@@ -165,15 +177,19 @@ class MediaConfig:
     pexels_api_key: str = ""
     pixabay_api_key: str = ""
     hf_token: str = ""
-    hf_repo_id: str = ""            # HF dataset repo for artefact storage (free)
+    hf_repo_id: str = ""  # HF dataset repo for artefact storage (free)
     hf_storage_private: bool = True
     agnes_api_key: str = ""
     agnes_model: str = "agnes-image-2.5-flash"
-    use_publisher_images: bool = True    # story's own RSS photo (owner chose real news photos, 2026-11-08)
-    use_news_photos: bool = True         # real photo of the same event from the latest news articles (Bing News)
-    cf_api_token: str = ""               # Cloudflare Workers AI (free FLUX images) - backup AI artist
+    use_publisher_images: bool = (
+        True  # story's own RSS photo (owner chose real news photos, 2026-11-08)
+    )
+    use_news_photos: bool = (
+        True  # real photo of the same event from the latest news articles (Bing News)
+    )
+    cf_api_token: str = ""  # Cloudflare Workers AI (free FLUX images) - backup AI artist
     cf_account_id: str = ""
-    vision_check: bool = True            # Gemini looks at stock/commons photos and rejects unrelated ones
+    vision_check: bool = True  # Gemini looks at stock/commons photos and rejects unrelated ones
     use_openverse: bool = True
     use_wikimedia: bool = True
     cache_dir: str = "data/media_cache"
@@ -185,9 +201,15 @@ class MediaConfig:
 class SEOConfig:
     max_title_length: int = 100
     max_description_length: int = 5000
-    default_hashtags: List[str] = field(default_factory=lambda: [
-        "#shorts", "#hindi", "#facts", "#india", "#knowledge",
-    ])
+    default_hashtags: List[str] = field(
+        default_factory=lambda: [
+            "#shorts",
+            "#hindi",
+            "#facts",
+            "#india",
+            "#knowledge",
+        ]
+    )
 
 
 @dataclass
@@ -274,15 +296,26 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
 
 def _sections(cfg: AppConfig) -> Dict[str, Any]:
     return {
-        "general": cfg.general, "llm": cfg.llm, "tts": cfg.tts, "video": cfg.video,
-        "youtube": cfg.youtube, "telegram": cfg.telegram, "database": cfg.database,
-        "media": cfg.media, "seo": cfg.seo, "editorial_calendar": cfg.editorial_calendar,
+        "general": cfg.general,
+        "llm": cfg.llm,
+        "tts": cfg.tts,
+        "video": cfg.video,
+        "youtube": cfg.youtube,
+        "telegram": cfg.telegram,
+        "database": cfg.database,
+        "media": cfg.media,
+        "seo": cfg.seo,
+        "editorial_calendar": cfg.editorial_calendar,
     }
 
 
 def _coerce(current: Any, value: Any) -> Any:
     if isinstance(current, bool):
-        return value if isinstance(value, bool) else str(value).strip().lower() in ("true", "1", "yes", "on")
+        return (
+            value
+            if isinstance(value, bool)
+            else str(value).strip().lower() in ("true", "1", "yes", "on")
+        )
     if isinstance(current, int) and not isinstance(current, bool):
         try:
             return int(value)
@@ -323,7 +356,7 @@ def _apply_env(cfg: AppConfig) -> None:
     for env_key, raw in os.environ.items():
         if not env_key.startswith("YT_") or "_API_KEY_" not in env_key:
             continue
-        head, _, tail = env_key[len("YT_"):].partition("_API_KEY_")
+        head, _, tail = env_key[len("YT_") :].partition("_API_KEY_")
         if not tail.isdigit() or not raw.strip():
             continue
         provider = head.lower()
@@ -334,7 +367,7 @@ def _apply_env(cfg: AppConfig) -> None:
     for env_key, raw in os.environ.items():
         if not env_key.startswith("YT_") or not env_key.endswith("_API_KEYS_EXTRA"):
             continue
-        provider = env_key[len("YT_"):-len("_API_KEYS_EXTRA")].lower()
+        provider = env_key[len("YT_") : -len("_API_KEYS_EXTRA")].lower()
         for value in (v.strip() for v in raw.split(",") if v.strip()):
             pools.setdefault(provider, []).append(value)
 
@@ -363,9 +396,13 @@ def validate_config(cfg: AppConfig) -> List[str]:
     if not cfg.telegram.bot_token:
         warnings.append("Telegram bot token not set. Notifications disabled.")
     if not cfg.general.dry_run and not cfg.youtube.token_json:
-        warnings.append("YOUTUBE_TOKEN_JSON missing: uploads cannot happen. Run scripts/get_youtube_token.py once.")
+        warnings.append(
+            "YOUTUBE_TOKEN_JSON missing: uploads cannot happen. Run scripts/get_youtube_token.py once."
+        )
     if not cfg.media.pexels_api_key and not cfg.media.pixabay_api_key:
-        warnings.append("No Pexels/Pixabay key: using Wikimedia/Openverse + designed cards for visuals.")
+        warnings.append(
+            "No Pexels/Pixabay key: using Wikimedia/Openverse + designed cards for visuals."
+        )
     return warnings
 
 

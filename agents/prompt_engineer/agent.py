@@ -18,11 +18,11 @@ class PromptEngineerAgent(BaseAgent):
     def word_bounds(self, video_type: str = "knowledge") -> tuple:
         v = self.config.video
         if video_type == "news":
-            secs = self.config.video.news_target_duration
+            secs = min(float(getattr(v, "news_target_duration", 56.0)), 56.0)
             wps = WORDS_PER_SEC["news"]
-            return int(secs * wps * 1.02), int(secs * wps * 1.20)
+            return int(secs * wps * 0.85), int(min(secs * wps * 1.02, 58.0 * wps))
         wps = WORDS_PER_SEC["knowledge"]
-        return int(v.target_duration * 0.95 * wps), int(v.max_duration * 1.15 * wps)
+        return int(v.target_duration * 0.85 * wps), int(min(float(v.max_duration), 58.0) * wps)
 
     async def execute(self, **kwargs: Any) -> AgentResult:
         video_type = kwargs.get("video_type", "news")
@@ -34,24 +34,47 @@ class PromptEngineerAgent(BaseAgent):
         if video_type == "news":
             t = news_targets(self.config.video, items)
             if t["total"] < MIN_STORIES:
-                return AgentResult(success=False, errors=[
-                    f"only {t['total']} fresh (<24h, dated) stories available, need {MIN_STORIES}; not using old news"])
+                return AgentResult(
+                    success=False,
+                    errors=[
+                        f"only {t['total']} fresh (<24h, dated) stories available, need {MIN_STORIES}; not using old news"
+                    ],
+                )
             wps = WORDS_PER_SEC["news"]
-            min_w, max_w = int(t["seconds"] * wps * 1.02), int(t["seconds"] * wps * 1.20)
+            min_w = int(t["seconds"] * wps * 0.85)
+            max_w = int(min(t["seconds"] * wps * 1.02, 58.0 * wps))
             daily = research_data.get("daily") or {}
-            prompt = render_prompt("scripting/news_script.j2", {
-                "items": items, "count": t["total"], "seconds": t["seconds"],
-                "national": t["national"], "international": t["international"],
-                "min_words": min_w, "max_words": max_w,
-                "facts": daily.get("facts") or {}, "rashifal": daily.get("rashifal") or [],
-                "trading": daily.get("trading") or [], "has_today": bool(daily.get("facts"))})
-            return AgentResult(success=True, data={"prompt": prompt, "min_words": min_w, "max_words": max_w,
-                                                   "targets": t}, metadata={"video_type": video_type})
+            prompt = render_prompt(
+                "scripting/news_script.j2",
+                {
+                    "items": items,
+                    "count": t["total"],
+                    "seconds": t["seconds"],
+                    "national": t["national"],
+                    "international": t["international"],
+                    "min_words": min_w,
+                    "max_words": max_w,
+                    "facts": daily.get("facts") or {},
+                    "rashifal": daily.get("rashifal") or [],
+                    "trading": daily.get("trading") or [],
+                    "has_today": bool(daily.get("facts")),
+                },
+            )
+            return AgentResult(
+                success=True,
+                data={"prompt": prompt, "min_words": min_w, "max_words": max_w, "targets": t},
+                metadata={"video_type": video_type},
+            )
         else:
             if not items:
                 return AgentResult(success=False, errors=["No research topic available"])
-            prompt = render_prompt("scripting/knowledge_script.j2", {
-                "topic": items[0], "category": category, "min_words": min_w, "max_words": max_w})
+            prompt = render_prompt(
+                "scripting/knowledge_script.j2",
+                {"topic": items[0], "category": category, "min_words": min_w, "max_words": max_w},
+            )
 
-        return AgentResult(success=True, data={"prompt": prompt, "min_words": min_w, "max_words": max_w},
-                           metadata={"video_type": video_type})
+        return AgentResult(
+            success=True,
+            data={"prompt": prompt, "min_words": min_w, "max_words": max_w},
+            metadata={"video_type": video_type},
+        )

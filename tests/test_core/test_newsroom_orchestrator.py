@@ -1,10 +1,9 @@
 """Unit tests for NewsroomOrchestrator."""
 
 import pytest
-from pathlib import Path
 from core.configuration import load_config
 from core.history import HistoryStore
-from core.newsroom_orchestrator import NewsroomOrchestrator, ProductionRunSummary
+from core.newsroom_orchestrator import NewsroomOrchestrator
 from core.state_manager import StateManager
 
 
@@ -42,15 +41,17 @@ async def test_newsroom_stage_error_handling(newsroom):
     # Test stage error handling
     with pytest.raises(Exception):
         await newsroom._run_stage(
-            "test_vid", "failing_stage",
+            "test_vid",
+            "failing_stage",
             lambda: (_ for _ in ()).throw(RuntimeError("Forced stage error")),
-            required=True
+            required=True,
         )
 
     # Test non-required failure returns None without raising
     res = await newsroom._run_stage(
-        "test_vid", "optional_stage",
+        "test_vid",
+        "optional_stage",
         lambda: (_ for _ in ()).throw(RuntimeError("Optional error")),
-        required=False
+        required=False,
     )
     assert res is None

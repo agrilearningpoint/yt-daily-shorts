@@ -1,4 +1,5 @@
 """CLI: python -m longform --topic "हिंदू धर्म" --minutes 22 --chapters 9 --upload"""
+
 from __future__ import annotations
 
 import argparse
@@ -19,12 +20,21 @@ def parse() -> argparse.Namespace:
     p.add_argument("--upload", action="store_true", help="upload to YouTube")
     p.add_argument("--privacy", default="unlisted", choices=["unlisted", "private", "public"])
     p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--rebuild-visuals", action="store_true",
-                   help="re-fetch visuals and re-render chapters (keeps the script)")
-    p.add_argument("--fresh", action="store_true",
-                   help="discard script and chapter checkpoints, rebuild everything")
-    p.add_argument("--force-upload", action="store_true",
-                   help="upload even if an identical film was already published")
+    p.add_argument(
+        "--rebuild-visuals",
+        action="store_true",
+        help="re-fetch visuals and re-render chapters (keeps the script)",
+    )
+    p.add_argument(
+        "--fresh",
+        action="store_true",
+        help="discard script and chapter checkpoints, rebuild everything",
+    )
+    p.add_argument(
+        "--force-upload",
+        action="store_true",
+        help="upload even if an identical film was already published",
+    )
     return p.parse_args()
 
 
@@ -38,11 +48,17 @@ async def main() -> int:
     from longform.pipeline import LongFormPipeline
 
     pipe = LongFormPipeline(cfg)
-    res = await pipe.run(topic=args.topic, angle=args.angle, minutes=args.minutes,
-                         chapters=args.chapters, upload=args.upload, privacy=args.privacy,
-                         rebuild_visuals=args.rebuild_visuals,
-                         force_upload=args.force_upload,
-                         fresh=args.fresh)
+    res = await pipe.run(
+        topic=args.topic,
+        angle=args.angle,
+        minutes=args.minutes,
+        chapters=args.chapters,
+        upload=args.upload,
+        privacy=args.privacy,
+        rebuild_visuals=args.rebuild_visuals,
+        force_upload=args.force_upload,
+        fresh=args.fresh,
+    )
     log.info("=== DONE ===")
     print(f"\nfile      : {res['path']}")
     print(f"duration  : {res['duration_sec'] / 60:.1f} min")

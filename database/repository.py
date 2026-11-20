@@ -89,9 +89,7 @@ class ResearchRepository(_BaseRepository):
 
     def get_for_video(self, video_id: str) -> List[Dict[str, Any]]:
         conn = self._conn()
-        rows = conn.execute(
-            "SELECT * FROM research WHERE video_id = ?", (video_id,)
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM research WHERE video_id = ?", (video_id,)).fetchall()
         conn.close()
         return [dict(r) for r in rows]
 
@@ -99,9 +97,7 @@ class ResearchRepository(_BaseRepository):
 class AnalyticsRepository(_BaseRepository):
     """CRUD for the ``analytics`` table."""
 
-    def insert(
-        self, video_id: str, views: int = 0, likes: int = 0, comments: int = 0
-    ) -> None:
+    def insert(self, video_id: str, views: int = 0, likes: int = 0, comments: int = 0) -> None:
         conn = self._conn()
         conn.execute(
             "INSERT INTO analytics (video_id, views, likes, comments, collected_at) "
