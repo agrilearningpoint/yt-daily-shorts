@@ -685,6 +685,26 @@
     "flash_color": "white"
    },
    "score": 6.0
+  },
+  {
+   "at": "2026-11-20T04:16+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "punch"
+    ],
+    "motion": "parallax_pan",
+    "grade": "neutral",
+    "zoom": 1.14,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 3.0
   }
  ],
  "option_scores": {
@@ -701,8 +721,8 @@
    "n": 10
   },
   "grade=\"neutral\"": {
-   "sum": 48.0,
-   "n": 8
+   "sum": 51.0,
+   "n": 9
   },
   "zoom=1.1": {
    "sum": 62.0,
@@ -713,36 +733,36 @@
    "n": 16
   },
   "ticker=true": {
-   "sum": 167.0,
-   "n": 31
+   "sum": 170.0,
+   "n": 32
   },
   "flash_color=\"white\"": {
-   "sum": 149.0,
-   "n": 28
+   "sum": 152.0,
+   "n": 29
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 128.0,
-   "n": 25
+   "sum": 131.0,
+   "n": 26
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
    "n": 1
   },
   "motion=\"parallax_pan\"": {
-   "sum": 40.0,
-   "n": 8
+   "sum": 43.0,
+   "n": 9
   },
   "grade=\"warm_film\"": {
    "sum": 24.0,
    "n": 5
   },
   "zoom=1.14": {
-   "sum": 62.0,
-   "n": 12
+   "sum": 65.0,
+   "n": 13
   },
   "vignette=false": {
-   "sum": 78.0,
-   "n": 15
+   "sum": 81.0,
+   "n": 16
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -801,8 +821,8 @@
    "n": 6
   },
   "cut_fx=[\"punch\"]": {
-   "sum": 15.0,
-   "n": 3
+   "sum": 18.0,
+   "n": 4
   },
   "cut_fx=[\"flash\"]": {
    "sum": 39.0,
@@ -814,9 +834,6 @@
   }
  },
  "notes": [
-  "The first frame (Tile 0) must be a strong, instantly hooking headline with a relevant, dynamic image, not a generic channel intro graphic.",
-  "Significantly increase visual variety; avoid static repetition of images across neighboring tiles. Aim for a distinct visual change every 2-3 seconds using diverse footage or dynamic graphics.",
-  "Replace all generic/stock images (e.g., astrological wheels, random buildings, generic trains, flags) with specific, high-quality visuals directly illustrating the news story.",
   "Avoid repeating the same national emblem graphic and static studio background across multiple consecutive tiles to maintain visual engagement.",
   "Ensure the opening tile (tile 0) immediately features a dynamic news subject and strong headline instead of an empty logo or placeholder.",
   "Eliminate duplicate images appearing side-by-side to ensure every frame offers a distinct visual change.",
@@ -825,6 +842,9 @@
   "Ensure the final tiles loop seamlessly back to the news content instead of ending with static subscribe cards.",
   "Replace generic stock calendar, weather, and building graphics with contextual news visuals.",
   "Ensure strict adherence to the 2-3 second visual change rule without repeating similar subject frames consecutively.",
-  "Fix the opening tile (0) to feature a cleaner hook headline and avoid cluttered text placement."
+  "Fix the opening tile (0) to feature a cleaner hook headline and avoid cluttered text placement.",
+  "Revamp the opening and closing: Tile 0 needs an instant hook with a strong, relevant visual and a concise headline (no logos). The final tile must loop seamlessly back to the start, not be an outro.",
+  "Improve visual variety and relevance: Eliminate generic stock photos, repeated images, and pictures that don't directly match the headline. Every 2-3 seconds needs a distinct, high-quality, and relevant visual change.",
+  "Enhance motion graphics and storytelling: Incorporate subtle animations, zooms, pans, or short video clips to make the visuals more dynamic and engaging, ensuring each tile clearly advances the news story."
  ]
 }
