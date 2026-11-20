@@ -609,3 +609,26 @@ def get_llm_client(provider: str = "", api_key: str = "", model_name: Optional[s
     if p in OpenAICompatProvider.BASE_URLS and api_key:
         return OpenAICompatProvider(p, api_key, model_name or "openai/gpt-oss-120b", temperature)
     return MockLLMProvider()
+
+
+class LLMClient:
+    """Convenience wrapper around build_llm for modern agent usage."""
+
+    def __init__(self, cfg: Any = None) -> None:
+        llm_cfg = getattr(cfg, "llm", cfg) if cfg is not None else None
+        if llm_cfg is None:
+            from core.configuration import load_config
+            llm_cfg = load_config().llm
+        self.underlying = build_llm(llm_cfg)
+
+    async def generate(self, prompt: str, system_prompt: Optional[str] = None, system: Optional[str] = None,
+                       temperature: float = 0.7, **kwargs: Any) -> Any:
+        sys = system_prompt or system
+        text = await self.underlying.generate_text(prompt, sys)
+        return type("LLMResponse", (), {"text": text, "content": text})()
+
+    async def generate_json(self, prompt: str, system_prompt: Optional[str] = None, system: Optional[str] = None,
+                            **kwargs: Any) -> Dict[str, Any]:
+        sys = system_prompt or system
+        return await self.underlying.generate_json(prompt, sys)
+

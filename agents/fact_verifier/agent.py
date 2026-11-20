@@ -17,6 +17,19 @@ class FactVerifierAgent(BaseAgent):
         self.llm = llm
 
     async def execute(self, **kwargs: Any) -> AgentResult:
+        if kwargs.get("evidence_claims"):
+            claims = kwargs["evidence_claims"]
+            verified = [c for c in claims if getattr(c, "status", "") == "verified"]
+            return AgentResult(
+                success=True,
+                data={
+                    "verdict": "pass" if len(verified) == len(claims) else "warning",
+                    "verified_count": len(verified),
+                    "total_count": len(claims),
+                },
+                metadata={"mode": "evidence_claims"},
+            )
+
         script = copy.deepcopy(kwargs.get("script", {}) or {})
         research = kwargs.get("research_data", {}) or {}
         items = research.get("items", [])

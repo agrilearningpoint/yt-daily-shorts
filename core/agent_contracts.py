@@ -267,3 +267,197 @@ class ProductionArtifacts:
     youtube_url: str = ""
     telegram_delivered: bool = False
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ---------------------------------------------------------------------------
+# Long Video Intelligence & Shorts Repurposing Contracts
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SourceVideoManifest:
+    video_id: str
+    source_uri: str
+    is_local_file: bool
+    local_path: str
+    sha256: str
+    duration: float
+    width: int
+    height: int
+    fps: float
+    video_codec: str
+    audio_codec: str
+    audio_channels: int
+    audio_sample_rate: int
+    has_audio: bool
+    detected_language: str = "hi"
+    title: str = ""
+    author: str = ""
+    license: str = ""
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class WordTiming:
+    word: str
+    start: float
+    end: float
+    confidence: float = 1.0
+
+
+@dataclass
+class SpeakerProfile:
+    speaker_id: str
+    display_name: str
+    role: str = "speaker"  # anchor, guest, official, reporter, narrator
+    speaking_duration: float = 0.0
+    gender: str = "unknown"
+
+
+@dataclass
+class TranscriptSegment:
+    segment_id: str
+    speaker_id: str
+    start: float
+    end: float
+    text: str
+    confidence: float = 1.0
+    words: List[WordTiming] = field(default_factory=list)
+    language: str = "hi"
+
+
+@dataclass
+class VisualScene:
+    scene_index: int
+    start: float
+    end: float
+    keyframe_path: str
+    scene_type: str = "studio_anchor"  # studio_anchor, split_interview, field_reporting, graphic_infographic, broll_footage
+    chyron_text: str = ""
+    has_person: bool = True
+    vertical_crop_safe: bool = True
+    speaker_position: str = "center"  # center, left, right, multi
+
+
+@dataclass
+class ExtractedStory:
+    story_id: str
+    title: str
+    category: str  # politics, economy, science, national, international, sports
+    start_time: float
+    end_time: float
+    key_facts: List[str] = field(default_factory=list)
+    entities: List[str] = field(default_factory=list)
+    transcript_excerpt: str = ""
+    completeness_score: float = 1.0
+    lead_speaker: str = ""
+    recommended_angle: str = ""
+
+
+@dataclass
+class EvidenceSource:
+    name: str
+    url: str
+    reliability_score: float = 0.9
+    is_government: bool = False
+    published_date: str = ""
+
+
+@dataclass
+class EvidenceClaim:
+    claim_id: str
+    story_id: str
+    claim_text: str
+    status: str = "verified"  # verified, unverified, disputed, context_required
+    confidence: float = 1.0
+    explanation: str = ""
+    sources: List[EvidenceSource] = field(default_factory=list)
+    updated_context: str = ""
+
+
+@dataclass
+class StoryRanking:
+    story_id: str
+    composite_score: float  # 0-100
+    factors: Dict[str, float] = field(default_factory=dict)
+    recommended_duration: int = 60  # 30, 45, 60
+    priority_flag: str = "top_pick"  # top_pick, viable, backlog, rejected
+    selection_rationale: str = ""
+    hook_angle: str = ""
+
+
+@dataclass
+class SelectedClip:
+    clip_id: str
+    story_id: str
+    start_time: float
+    end_time: float
+    duration: float
+    quote_text: str
+    speaker_id: str
+    audio_quality: str = "clean"  # clean, background_noise, overlap
+    visual_quality: str = "high"  # high, medium, low
+    crop_focus: str = "center"  # center, left, right
+    is_hook_candidate: bool = False
+    purpose: str = "soundbite"  # hook, core_statement, reaction, broll
+
+
+@dataclass
+class AdaptedShortScene:
+    scene_index: int
+    scene_type: str  # source_clip, photo_context, graphic_card, broll
+    duration: float
+    narration_hi: str
+    source_clip_id: Optional[str] = None
+    clip_start: Optional[float] = None
+    clip_end: Optional[float] = None
+    visual_query: str = ""
+    on_screen_text: str = ""
+    headline_chip: str = ""
+    camera_motion: str = "subtle_drift"
+    transition: str = "clean_cut"
+
+
+@dataclass
+class AdaptedShortScript:
+    short_id: str
+    story_id: str
+    title_hi: str
+    hook_text_hi: str
+    hook_archetype: str
+    target_duration: int  # 30, 45, 60
+    estimated_duration: float
+    scenes: List[AdaptedShortScene] = field(default_factory=list)
+    outro_hi: str = ""
+    source_attributions: List[str] = field(default_factory=list)
+    evidence_citations: List[str] = field(default_factory=list)
+    category_badge: str = ""
+
+
+@dataclass
+class MediaRightsRecord:
+    source_uri: str
+    source_owner: str
+    license_type: str = "fair_use_commentary"
+    risk_level: str = "low"  # low, medium, high
+    fair_use_score: float = 0.85
+    max_clip_duration_seconds: float = 8.0
+    mandatory_on_screen_credit: str = ""
+    description_attribution_text: str = ""
+    warnings: List[str] = field(default_factory=list)
+    replacement_recommended: bool = False
+
+
+@dataclass
+class RepurposingJobResult:
+    job_id: str
+    source_manifest: SourceVideoManifest
+    total_stories_extracted: int
+    ranked_stories: List[StoryRanking] = field(default_factory=list)
+    generated_shorts: List[AdaptedShortScript] = field(default_factory=list)
+    rights_records: Dict[str, MediaRightsRecord] = field(default_factory=dict)
+    status: str = "completed"
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+

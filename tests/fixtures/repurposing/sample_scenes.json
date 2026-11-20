@@ -1,0 +1,57 @@
+[
+  {
+    "scene_index": 0,
+    "start": 0.0,
+    "end": 4.5,
+    "keyframe_path": "output/test/kf_0.jpg",
+    "scene_type": "studio_anchor",
+    "chyron_text": "विशेष समाचार बुलेटिन",
+    "has_person": true,
+    "vertical_crop_safe": true,
+    "speaker_position": "center"
+  },
+  {
+    "scene_index": 1,
+    "start": 4.6,
+    "end": 11.2,
+    "keyframe_path": "output/test/kf_1.jpg",
+    "scene_type": "studio_anchor",
+    "chyron_text": "सुप्रीम कोर्ट: ऐतिहासिक फैसला",
+    "has_person": true,
+    "vertical_crop_safe": true,
+    "speaker_position": "center"
+  },
+  {
+    "scene_index": 2,
+    "start": 11.5,
+    "end": 17.8,
+    "keyframe_path": "output/test/kf_2.jpg",
+    "scene_type": "split_interview",
+    "chyron_text": "कानूनी विशेषज्ञ की राय",
+    "has_person": true,
+    "vertical_crop_safe": true,
+    "speaker_position": "left"
+  },
+  {
+    "scene_index": 3,
+    "start": 20.0,
+    "end": 26.5,
+    "keyframe_path": "output/test/kf_3.jpg",
+    "scene_type": "graphic_infographic",
+    "chyron_text": "इसरो गगनयान परीक्षण सफल",
+    "has_person": false,
+    "vertical_crop_safe": true,
+    "speaker_position": "center"
+  },
+  {
+    "scene_index": 4,
+    "start": 27.0,
+    "end": 33.2,
+    "keyframe_path": "output/test/kf_4.jpg",
+    "scene_type": "broll_footage",
+    "chyron_text": "श्रीहरिकोटा लॉन्च पैड लाइव",
+    "has_person": false,
+    "vertical_crop_safe": true,
+    "speaker_position": "center"
+  }
+]

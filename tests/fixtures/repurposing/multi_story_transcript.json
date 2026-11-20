@@ -1,0 +1,132 @@
+{
+  "manifest": {
+    "video_id": "lv_sansad_bulletin_2026",
+    "source_uri": "https://www.youtube.com/watch?v=sample_sansad_news",
+    "is_local_file": false,
+    "local_path": "",
+    "sha256": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    "duration": 600.0,
+    "width": 1920,
+    "height": 1080,
+    "fps": 30.0,
+    "video_codec": "h264",
+    "audio_codec": "aac",
+    "audio_channels": 2,
+    "audio_sample_rate": 44100,
+    "has_audio": true,
+    "detected_language": "hi",
+    "title": "विशेष समाचार बुलेटिन: सर्वोच्च न्यायालय का ऐतिहासिक फैसला और गगनयान परीक्षण",
+    "author": "Sansad TV Official",
+    "license": "public_domain"
+  },
+  "segments": [
+    {
+      "segment_id": "seg_001",
+      "speaker_id": "SPEAKER_ANCHOR",
+      "start": 0.0,
+      "end": 4.5,
+      "text": "नमस्कार, संसद टीवी के विशेष बुलेटिन में आपका स्वागत है।",
+      "confidence": 0.99,
+      "words": [
+        {"word": "नमस्कार", "start": 0.0, "end": 0.8},
+        {"word": "संसद", "start": 0.9, "end": 1.4},
+        {"word": "टीवी", "start": 1.5, "end": 1.9},
+        {"word": "के", "start": 2.0, "end": 2.2},
+        {"word": "विशेष", "start": 2.3, "end": 2.8},
+        {"word": "बुलेटिन", "start": 2.9, "end": 3.4},
+        {"word": "में", "start": 3.5, "end": 3.7},
+        {"word": "स्वागत", "start": 3.8, "end": 4.2},
+        {"word": "है", "start": 4.3, "end": 4.5}
+      ]
+    },
+    {
+      "segment_id": "seg_002",
+      "speaker_id": "SPEAKER_ANCHOR",
+      "start": 4.6,
+      "end": 11.2,
+      "text": "आज की पहली बड़ी खबर सर्वोच्च न्यायालय से है जहां संविधान पीठ ने चुनाव प्रक्रिया में पारदर्शिता को लेकर ऐतिहासिक फैसला सुनाया है।",
+      "confidence": 0.98,
+      "words": [
+        {"word": "आज", "start": 4.6, "end": 4.9},
+        {"word": "की", "start": 5.0, "end": 5.2},
+        {"word": "पहली", "start": 5.3, "end": 5.7},
+        {"word": "बड़ी", "start": 5.8, "end": 6.2},
+        {"word": "खबर", "start": 6.3, "end": 6.7},
+        {"word": "सर्वोच्च", "start": 6.8, "end": 7.4},
+        {"word": "न्यायालय", "start": 7.5, "end": 8.1},
+        {"word": "से", "start": 8.2, "end": 8.4},
+        {"word": "है", "start": 8.5, "end": 8.7},
+        {"word": "ऐतिहासिक", "start": 9.5, "end": 10.2},
+        {"word": "फैसला", "start": 10.3, "end": 10.8},
+        {"word": "सुनाया", "start": 10.9, "end": 11.2}
+      ]
+    },
+    {
+      "segment_id": "seg_003",
+      "speaker_id": "SPEAKER_LEGAL_EXPERT",
+      "start": 11.5,
+      "end": 17.8,
+      "text": "अदालत ने स्पष्ट कहा है कि नागरिकों को मतदान के समय पूरी और पारदर्शी जानकारी पाने का संवैधानिक अधिकार है।",
+      "confidence": 0.96,
+      "words": [
+        {"word": "अदालत", "start": 11.5, "end": 12.0},
+        {"word": "ने", "start": 12.1, "end": 12.3},
+        {"word": "स्पष्ट", "start": 12.4, "end": 12.8},
+        {"word": "कहा", "start": 12.9, "end": 13.3},
+        {"word": "है", "start": 13.4, "end": 13.6},
+        {"word": "संवैधानिक", "start": 16.0, "end": 16.8},
+        {"word": "अधिकार", "start": 16.9, "end": 17.5},
+        {"word": "है", "start": 17.6, "end": 17.8}
+      ]
+    },
+    {
+      "segment_id": "seg_004",
+      "speaker_id": "SPEAKER_ANCHOR",
+      "start": 20.0,
+      "end": 26.5,
+      "text": "अब बात करते हैं अंतरिक्ष विज्ञान की। इसरो ने गगनयान मिशन के लिए महत्वपूर्ण क्रू एस्केप सिस्टम का सफल परीक्षण पूरा कर लिया है।",
+      "confidence": 0.99,
+      "words": [
+        {"word": "अब", "start": 20.0, "end": 20.3},
+        {"word": "बात", "start": 20.4, "end": 20.7},
+        {"word": "करते", "start": 20.8, "end": 21.2},
+        {"word": "हैं", "start": 21.3, "end": 21.5},
+        {"word": "इसरो", "start": 22.0, "end": 22.6},
+        {"word": "ने", "start": 22.7, "end": 22.9},
+        {"word": "गगनयान", "start": 23.0, "end": 23.7},
+        {"word": "मिशन", "start": 23.8, "end": 24.3},
+        {"word": "सफल", "start": 25.0, "end": 25.5},
+        {"word": "परीक्षण", "start": 25.6, "end": 26.1}
+      ]
+    },
+    {
+      "segment_id": "seg_005",
+      "speaker_id": "SPEAKER_SCIENTIST",
+      "start": 27.0,
+      "end": 33.2,
+      "text": "श्रीहरिकोटा से यह प्रक्षेपण पूरी तरह योजना के अनुसार रहा और सभी पैरामीटर्स शत-प्रतिशत सामान्य पाए गए।",
+      "confidence": 0.97,
+      "words": [
+        {"word": "श्रीहरिकोटा", "start": 27.0, "end": 27.8},
+        {"word": "प्रक्षेपण", "start": 28.5, "end": 29.2},
+        {"word": "योजना", "start": 29.5, "end": 30.0},
+        {"word": "सफल", "start": 31.0, "end": 31.5}
+      ]
+    },
+    {
+      "segment_id": "seg_006",
+      "speaker_id": "SPEAKER_ANCHOR",
+      "start": 35.0,
+      "end": 42.0,
+      "text": "आर्थिक जगत में आज रिज़र्व बैंक ऑफ इंडिया ने मौद्रिक नीति समिति की बैठक के बाद रेपो रेट को 6.5 प्रतिशत पर यथावत रखने का निर्णय लिया है।",
+      "confidence": 0.98,
+      "words": [
+        {"word": "आर्थिक", "start": 35.0, "end": 35.5},
+        {"word": "जगत", "start": 35.6, "end": 36.0},
+        {"word": "आरबीआई", "start": 36.5, "end": 37.2},
+        {"word": "रेपो", "start": 38.0, "end": 38.5},
+        {"word": "रेट", "start": 38.6, "end": 39.0}
+      ]
+    }
+  ]
+}

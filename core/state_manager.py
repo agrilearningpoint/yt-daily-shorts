@@ -11,11 +11,24 @@ import json
 import sqlite3
 import threading
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+
+def _safe_json_dumps(obj: Any) -> str:
+    def _default(o: Any) -> Any:
+        if is_dataclass(o):
+            return asdict(o)
+        if hasattr(o, "to_dict"):
+            return o.to_dict()
+        if hasattr(o, "__dict__"):
+            return o.__dict__
+        return str(o)
+    return json.dumps(obj or {}, ensure_ascii=False, default=_default)
+
 
 
 class PipelineState(str, Enum):
@@ -145,7 +158,7 @@ class StateManager:
                     vs.video_id, vs.video_type, vs.state.value,
                     vs.topic_category, vs.title,
                     vs.created_at, vs.updated_at,
-                    json.dumps(vs.checkpoint_data), vs.error_message,
+                    _safe_json_dumps(vs.checkpoint_data), vs.error_message,
                     vs.youtube_id, vs.youtube_url,
                 ),
             )
@@ -272,7 +285,7 @@ class StateManager:
                    ON CONFLICT(video_id, stage) DO UPDATE SET
                        data_json = excluded.data_json,
                        created_at = excluded.created_at""",
-                (video_id, stage, json.dumps(data, ensure_ascii=False), now),
+                (video_id, stage, _safe_json_dumps(data), now),
             )
             conn.commit()
             conn.close()
@@ -346,7 +359,7 @@ class StateManager:
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 (
                     agent_name, video_id, action,
-                    json.dumps(result or {}, ensure_ascii=False),
+                    _safe_json_dumps(result),
                     error, now,
                 ),
             )

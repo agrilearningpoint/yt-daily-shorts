@@ -48,6 +48,18 @@ class ResearchManagerAgent(BaseAgent):
         day_name = normalize_day(kwargs.get("day_name", "")) or self._today()
         self.logger.info("Researching %s — %s (%s)", video_type, topic_category, day_name)
 
+        if video_type == "repurposing":
+            story = kwargs.get("story")
+            topic = kwargs.get("topic") or (getattr(story, "title", "") if story else "")
+            items = self.collector.collect_and_rank_news(target_count=20)
+            data_items = [vars(i) for i in items]
+            sources = [i.source_url for i in items if getattr(i, "source_url", "")]
+            return AgentResult(
+                success=bool(data_items),
+                data={"items": data_items, "sources": sources, "day_name": day_name, "topic": topic},
+                metadata={"video_type": "repurposing", "topic": topic},
+            )
+
         if video_type == "news":
             exclude = self.history.recent_news() if self.history else []
             n = self.config.video.news_headline_count
