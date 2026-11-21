@@ -61,14 +61,34 @@ class VisualAudioMatchQAAgent(BaseAgent):
         total_visual_dur = 0.0
 
         if timeline:
-            segments = getattr(timeline, "segments", [])
+            segments = (
+                timeline.get("segments", [])
+                if isinstance(timeline, dict)
+                else getattr(timeline, "segments", [])
+            )
             checks["segment_count"] = len(segments)
 
             for idx, seg in enumerate(segments):
-                seg_id = getattr(seg, "segment_id", f"seg_{idx}")
-                text = getattr(seg, "text", "")
-                v_path = getattr(seg, "visual_path", "")
-                dur = getattr(seg, "measured_duration", 0.0)
+                seg_id = (
+                    seg.get("segment_id", f"seg_{idx}")
+                    if isinstance(seg, dict)
+                    else getattr(seg, "segment_id", f"seg_{idx}")
+                )
+                text = (
+                    seg.get("text", "")
+                    if isinstance(seg, dict)
+                    else getattr(seg, "text", "")
+                )
+                v_path = (
+                    seg.get("visual_path", "")
+                    if isinstance(seg, dict)
+                    else getattr(seg, "visual_path", "")
+                )
+                dur = (
+                    float(seg.get("measured_duration", 0.0))
+                    if isinstance(seg, dict)
+                    else getattr(seg, "measured_duration", 0.0)
+                )
                 total_visual_dur += dur
 
                 # Check file existence
@@ -85,13 +105,21 @@ class VisualAudioMatchQAAgent(BaseAgent):
                     )
 
                 # Verify source provenance & metadata
-                meta = getattr(seg, "metadata", {}) if hasattr(seg, "metadata") else {}
-                entity = getattr(seg, "entity", "") or (
-                    meta.get("entity", "") if isinstance(meta, dict) else ""
+                meta = (
+                    seg.get("metadata", {})
+                    if isinstance(seg, dict)
+                    else (getattr(seg, "metadata", {}) or {})
                 )
-                provenance = getattr(seg, "source", "") or (
-                    meta.get("source", "") if isinstance(meta, dict) else ""
-                )
+                entity = (
+                    seg.get("entity", "")
+                    if isinstance(seg, dict)
+                    else getattr(seg, "entity", "")
+                ) or (meta.get("entity", "") if isinstance(meta, dict) else "")
+                provenance = (
+                    seg.get("source", "")
+                    if isinstance(seg, dict)
+                    else getattr(seg, "source", "")
+                ) or (meta.get("source", "") if isinstance(meta, dict) else "")
                 if provenance and provenance.lower() in ("unknown", "corrupt", "fake"):
                     warnings.append(
                         f"Segment {seg_id}: Questionable asset provenance '{provenance}'"
@@ -114,11 +142,16 @@ class VisualAudioMatchQAAgent(BaseAgent):
                     semantic_scores.append(0.5)
 
             # Master audio duration check
-            if timeline.master_audio_path and Path(timeline.master_audio_path).exists():
+            master_audio = (
+                timeline.get("master_audio_path")
+                if isinstance(timeline, dict)
+                else getattr(timeline, "master_audio_path", "")
+            )
+            if master_audio and Path(master_audio).exists():
                 try:
                     import wave
 
-                    with wave.open(timeline.master_audio_path, "rb") as w:
+                    with wave.open(master_audio, "rb") as w:
                         frames = w.getnframes()
                         rate = w.getframerate()
                         total_audio_dur = frames / float(rate)
