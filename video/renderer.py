@@ -208,6 +208,7 @@ class VideoRenderer:
         except Exception:
             pass
         vig = ",vignette=PI/5" if self.recipe.get("vignette") else ""
+        preset_filter: Optional[str] = None
         depth_clip = self._depth_clips.get(idx)
         if depth_clip and not clip.video:
             inputs = ["-i", depth_clip, "-i", clip.overlay]
