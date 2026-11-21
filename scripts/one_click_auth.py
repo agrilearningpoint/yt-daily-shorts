@@ -21,6 +21,10 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 ROOT = Path(__file__).resolve().parents[1]
 os.chdir(ROOT)
 sys.path.insert(0, str(ROOT))
@@ -34,20 +38,31 @@ SCOPES = [
 REPO = "agrilearningpoint/yt-daily-shorts"
 
 
+class _UrlCapturer:
+    def format(self, url: str = "") -> str:
+        Path("data").mkdir(exist_ok=True)
+        Path("data/oauth_url.txt").write_text(url, encoding="utf-8")
+        print(f"\n=======================================================\nAUTH_URL: {url}\n=======================================================\n", flush=True)
+        return f"\nOpen this link if browser did not open:\n{url}\n"
+
+
 def authorize(secret_path: Path, port: int):
     from google_auth_oauthlib.flow import InstalledAppFlow
 
     flow = InstalledAppFlow.from_client_secrets_file(str(secret_path), SCOPES)
-    print("\nA browser window will open. Sign in with the Google account that OWNS the channel,")
+    print("\nA browser window will open. Sign in with the Google account that OWNS the channel,", flush=True)
     print(
-        "then click Allow. (If Google says the app is unverified: Advanced -> Go to ... (unsafe).)\n"
+        "then click Allow. (If Google says the app is unverified: Advanced -> Go to ... (unsafe).)\n",
+        flush=True,
     )
+
     return flow.run_local_server(
-        port=port,
+        port=port or 8080,
         prompt="consent",
         access_type="offline",
-        authorization_prompt_message="Open this link if the browser did not open:\n{url}\n",
-        success_message="Done — you can close this tab and return to the terminal.",
+        state="bks_oauth_2026",
+        authorization_prompt_message=_UrlCapturer(),
+        success_message="Done — YouTube channel connect ho chuka hai! Aap is window ko band kar sakte hain.",
     )
 
 
@@ -147,17 +162,20 @@ def main() -> int:
     )
     print(f"✓ written to {out.resolve()}  (git-ignored — never commit it)")
 
-    if a.set_github_secret:
-        gh = os.environ.get("GH_TOKEN", "").strip()
-        if not gh:
-            print("! GH_TOKEN not set — skipping the GitHub update, use the JSON below.")
-        else:
-            try:
-                set_github_secret("YOUTUBE_TOKEN_JSON", token_json, gh)
-            except SystemExit as exc:
-                print(f"! {exc}")
+    gh = (os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or "").strip()
+    if gh:
+        try:
+            set_github_secret("YOUTUBE_TOKEN_JSON", token_json, gh)
+            # Also ensure client secret is present
+            if Path("client_secret.json").exists():
+                set_github_secret("YOUTUBE_CLIENT_SECRET_JSON", Path("client_secret.json").read_text(encoding="utf-8"), gh)
+            print("✓ GitHub Secrets updated automatically!")
+        except Exception as exc:
+            print(f"! GitHub secret update error: {exc}")
+    else:
+        print("! GITHUB_TOKEN not found in .env — skipping the GitHub update.")
 
-    print("\n===== YOUTUBE_TOKEN_JSON (paste only if the GitHub update was skipped) =====\n")
+    print("\n===== YOUTUBE_TOKEN_JSON =====\n")
     print(token_json)
     print("\n" + "=" * 78)
     return 0
