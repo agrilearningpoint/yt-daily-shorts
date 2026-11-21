@@ -111,24 +111,33 @@ class EditorDirector:
         return recipe
 
     @staticmethod
-    def theme(recipe: Dict[str, Any], base: Optional[dict] = None) -> dict:
-        t = dict(base or {})
+    def theme(recipe: Dict[str, Any], base: Any = None) -> dict:
+        if isinstance(base, dict):
+            t = dict(base)
+        else:
+            t = {"theme_name": str(base)} if base else {}
         # If base already provides a clear brand/creative palette, preserve it
-        if base and base.get("primary_color"):
+        if isinstance(base, dict) and base.get("primary_color"):
             acc = base.get("primary_color")
             dark = base.get("background_color", "#0B0F1A")
             hi = base.get("caption_highlight", "#FFD60A")
         else:
-            acc, dark, hi = recipe.get("palette", ["#E50914", "#0B0F1A", "#FFD60A"])
+            palette = recipe.get("palette", ["#E50914", "#0B0F1A", "#FFD60A"])
+            if isinstance(palette, (list, tuple)) and len(palette) >= 3:
+                acc, dark, hi = palette[0], palette[1], palette[2]
+            elif isinstance(palette, (list, tuple)) and len(palette) > 0:
+                acc = palette[0]
+                dark = palette[1] if len(palette) > 1 else "#0B0F1A"
+                hi = "#FFD60A"
+            else:
+                acc, dark, hi = "#E50914", "#0B0F1A", "#FFD60A"
         t.update(
             {
                 "primary_color": acc,
                 "background_color": dark,
                 "secondary_color": dark,
                 "caption_highlight": hi,
-                "theme_name": base.get("theme_name")
-                if base and base.get("theme_name")
-                else f"editor-{acc}",
+                "theme_name": t.get("theme_name") or f"editor-{acc}",
             }
         )
         return t
