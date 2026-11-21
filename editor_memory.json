@@ -705,6 +705,46 @@
     "flash_color": "white"
    },
    "score": 3.0
+  },
+  {
+   "at": "2026-11-21T04:15+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "flash"
+    ],
+    "motion": "kenburns_in",
+    "grade": "eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4",
+    "zoom": 1.18,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 4.0
+  },
+  {
+   "at": "2026-11-21T04:31+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "whip"
+    ],
+    "motion": "kenburns_mix",
+    "grade": "eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4",
+    "zoom": 1.14,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 4.0
   }
  ],
  "option_scores": {
@@ -717,8 +757,8 @@
    "n": 4
   },
   "motion=\"kenburns_mix\"": {
-   "sum": 58.0,
-   "n": 10
+   "sum": 62.0,
+   "n": 11
   },
   "grade=\"neutral\"": {
    "sum": 51.0,
@@ -729,20 +769,20 @@
    "n": 11
   },
   "vignette=true": {
-   "sum": 89.0,
-   "n": 16
+   "sum": 93.0,
+   "n": 17
   },
   "ticker=true": {
-   "sum": 170.0,
-   "n": 32
+   "sum": 178.0,
+   "n": 34
   },
   "flash_color=\"white\"": {
-   "sum": 152.0,
-   "n": 29
+   "sum": 160.0,
+   "n": 31
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 131.0,
-   "n": 26
+   "sum": 139.0,
+   "n": 28
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -757,12 +797,12 @@
    "n": 5
   },
   "zoom=1.14": {
-   "sum": 65.0,
-   "n": 13
+   "sum": 69.0,
+   "n": 14
   },
   "vignette=false": {
-   "sum": 81.0,
-   "n": 16
+   "sum": 85.0,
+   "n": 17
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -773,16 +813,16 @@
    "n": 1
   },
   "zoom=1.18": {
-   "sum": 43.0,
-   "n": 8
+   "sum": 47.0,
+   "n": 9
   },
   "cut_fx=[\"flash\", \"punch\", \"glitch\"]": {
    "sum": 7.0,
    "n": 1
   },
   "motion=\"kenburns_in\"": {
-   "sum": 20.0,
-   "n": 4
+   "sum": 24.0,
+   "n": 5
   },
   "grade=\"cool_studio\"": {
    "sum": 48.0,
@@ -817,34 +857,38 @@
    "n": 6
   },
   "cut_fx=[\"whip\"]": {
-   "sum": 31.0,
-   "n": 6
+   "sum": 35.0,
+   "n": 7
   },
   "cut_fx=[\"punch\"]": {
    "sum": 18.0,
    "n": 4
   },
   "cut_fx=[\"flash\"]": {
-   "sum": 39.0,
-   "n": 8
+   "sum": 43.0,
+   "n": 9
   },
   "grade=\"news_crisp\"": {
    "sum": 5.0,
    "n": 1
+  },
+  "grade=\"eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4\"": {
+   "sum": 8.0,
+   "n": 2
   }
  },
  "notes": [
-  "Avoid repeating the same national emblem graphic and static studio background across multiple consecutive tiles to maintain visual engagement.",
-  "Ensure the opening tile (tile 0) immediately features a dynamic news subject and strong headline instead of an empty logo or placeholder.",
-  "Eliminate duplicate images appearing side-by-side to ensure every frame offers a distinct visual change.",
-  "Remove generic stock market logos and plain brand graphics like Nifty50 and TOI which add no visual storytelling value.",
-  "Eliminate duplicate or consecutive repetitive logo screens (like multiple NIA seal placeholders) to maintain high visual pacing.",
-  "Ensure the final tiles loop seamlessly back to the news content instead of ending with static subscribe cards.",
   "Replace generic stock calendar, weather, and building graphics with contextual news visuals.",
   "Ensure strict adherence to the 2-3 second visual change rule without repeating similar subject frames consecutively.",
   "Fix the opening tile (0) to feature a cleaner hook headline and avoid cluttered text placement.",
   "Revamp the opening and closing: Tile 0 needs an instant hook with a strong, relevant visual and a concise headline (no logos). The final tile must loop seamlessly back to the start, not be an outro.",
   "Improve visual variety and relevance: Eliminate generic stock photos, repeated images, and pictures that don't directly match the headline. Every 2-3 seconds needs a distinct, high-quality, and relevant visual change.",
-  "Enhance motion graphics and storytelling: Incorporate subtle animations, zooms, pans, or short video clips to make the visuals more dynamic and engaging, ensuring each tile clearly advances the news story."
+  "Enhance motion graphics and storytelling: Incorporate subtle animations, zooms, pans, or short video clips to make the visuals more dynamic and engaging, ensuring each tile clearly advances the news story.",
+  "Eliminate consecutive identical images: Ensure every tile presents a new visual, even if it's a different angle, zoom, or a related graphic, to maintain viewer engagement.",
+  "Prioritize relevant and varied visuals: Replace generic stock images, illustrations, and promotional screenshots with actual news footage, relevant graphics, or specific photos that directly illustrate the headline.",
+  "Review image selection for accuracy: Double-check that the visual content directly corresponds to the headline and news story, avoiding misleading or broadly generic imagery.",
+  "Significantly increase visual variety: Avoid using the exact same or extremely similar images in consecutive or near-consecutive tiles. For recurring topics, use different angles, relevant B-roll, or distinct graphic treatments.",
+  "Replace generic imagery: Swap generic stock photos (e.g., lab scenes, random buildings, laptops) with more specific, impactful, or custom-designed visuals that directly illustrate the news story.",
+  "Refine the ending for a seamless loop: The final tile (46) should either be a concise news summary or a subtle, integrated branding element that transitions smoothly back to the first tile's news content, rather than a direct call to action."
  ]
 }
