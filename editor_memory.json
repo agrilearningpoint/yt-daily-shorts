@@ -745,6 +745,26 @@
     "flash_color": "white"
    },
    "score": 4.0
+  },
+  {
+   "at": "2026-11-22T03:18+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "flash"
+    ],
+    "motion": "slow_push",
+    "grade": "eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4",
+    "zoom": 1.1,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 2.0
   }
  ],
  "option_scores": {
@@ -765,24 +785,24 @@
    "n": 9
   },
   "zoom=1.1": {
-   "sum": 62.0,
-   "n": 11
+   "sum": 64.0,
+   "n": 12
   },
   "vignette=true": {
-   "sum": 93.0,
-   "n": 17
+   "sum": 95.0,
+   "n": 18
   },
   "ticker=true": {
-   "sum": 178.0,
-   "n": 34
+   "sum": 180.0,
+   "n": 35
   },
   "flash_color=\"white\"": {
-   "sum": 160.0,
-   "n": 31
+   "sum": 162.0,
+   "n": 32
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 139.0,
-   "n": 28
+   "sum": 141.0,
+   "n": 29
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -841,8 +861,8 @@
    "n": 1
   },
   "motion=\"slow_push\"": {
-   "sum": 49.0,
-   "n": 9
+   "sum": 51.0,
+   "n": 10
   },
   "palette=[\"#FF7A00\", \"#101828\", \"#FFFFFF\"]": {
    "sum": 5.0,
@@ -865,22 +885,19 @@
    "n": 4
   },
   "cut_fx=[\"flash\"]": {
-   "sum": 43.0,
-   "n": 9
+   "sum": 45.0,
+   "n": 10
   },
   "grade=\"news_crisp\"": {
    "sum": 5.0,
    "n": 1
   },
   "grade=\"eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4\"": {
-   "sum": 8.0,
-   "n": 2
+   "sum": 10.0,
+   "n": 3
   }
  },
  "notes": [
-  "Replace generic stock calendar, weather, and building graphics with contextual news visuals.",
-  "Ensure strict adherence to the 2-3 second visual change rule without repeating similar subject frames consecutively.",
-  "Fix the opening tile (0) to feature a cleaner hook headline and avoid cluttered text placement.",
   "Revamp the opening and closing: Tile 0 needs an instant hook with a strong, relevant visual and a concise headline (no logos). The final tile must loop seamlessly back to the start, not be an outro.",
   "Improve visual variety and relevance: Eliminate generic stock photos, repeated images, and pictures that don't directly match the headline. Every 2-3 seconds needs a distinct, high-quality, and relevant visual change.",
   "Enhance motion graphics and storytelling: Incorporate subtle animations, zooms, pans, or short video clips to make the visuals more dynamic and engaging, ensuring each tile clearly advances the news story.",
@@ -889,6 +906,9 @@
   "Review image selection for accuracy: Double-check that the visual content directly corresponds to the headline and news story, avoiding misleading or broadly generic imagery.",
   "Significantly increase visual variety: Avoid using the exact same or extremely similar images in consecutive or near-consecutive tiles. For recurring topics, use different angles, relevant B-roll, or distinct graphic treatments.",
   "Replace generic imagery: Swap generic stock photos (e.g., lab scenes, random buildings, laptops) with more specific, impactful, or custom-designed visuals that directly illustrate the news story.",
-  "Refine the ending for a seamless loop: The final tile (46) should either be a concise news summary or a subtle, integrated branding element that transitions smoothly back to the first tile's news content, rather than a direct call to action."
+  "Refine the ending for a seamless loop: The final tile (46) should either be a concise news summary or a subtle, integrated branding element that transitions smoothly back to the first tile's news content, rather than a direct call to action.",
+  "Ensure every tile has a distinct, relevant visual; eliminate all repetition (visual changes needed every 2-3 seconds).",
+  "Strictly match each visual to its on-screen headline/topic; avoid generic or mismatched images (e.g., Amit Shah for 'Test Cricket').",
+  "Revamp the opening (Tile 0) with an immediate, strong visual hook and ensure the final tile provides a seamless visual loop, not a black screen."
  ]
 }
