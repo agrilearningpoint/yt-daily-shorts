@@ -13,7 +13,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from core.agent_contracts import QualityVerificationVerdict
 from core.duration import SHORTS_HARD_LIMIT, SHORTS_MIN_DURATION
@@ -304,3 +304,12 @@ class VideoQAInspector:
             logger.warning("Auto-repair failed: %s", exc)
 
         return None
+
+    def verify_word_cuts(
+        self, plan: Any, video_path: Optional[str] = None, auto_repair: bool = True
+    ) -> Any:
+        """Validate smart word-level visual cuts for coverage, monotonicity, and drift."""
+        from video.word_cut_qa import validate_word_cuts
+
+        return validate_word_cuts(plan, video_path, auto_repair=auto_repair)
+

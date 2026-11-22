@@ -56,6 +56,13 @@ video:
   depth_motion: true
   show_headline_chips: true
   sound_effects: true
+  word_level_cuts: false          # enable after validation
+  word_cut_max_group_seconds: 1.2
+  word_cut_max_words_per_group: 3
+  word_cut_min_group_ms: 66       # 2 frames @30fps
+  word_cut_min_confidence: 0.5
+  word_cut_glue_policy: "auto"    # auto | attach_next | attach_prev
+  word_cut_longform_phrase_mode: true
 
 editorial_calendar:
   monday: "Indian Politics and Political Leaders"

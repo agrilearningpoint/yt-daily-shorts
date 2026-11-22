@@ -615,3 +615,39 @@ class NewsVisualAsset:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+
+# ---------------------------------------------------------------------------
+# Word-Level Visual Cuts Contracts
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class WordCut:
+    group_id: str
+    start: float
+    end: float
+    text: str
+    words: List[Any] = field(default_factory=list)
+    visual_asset: str = ""
+    motion_preset_id: str = "ken_burns_zoom_in"
+    transition_effect: str = "none"
+    vfx_cue: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class WordCutPlan:
+    video_id: str
+    fps: int
+    audio_path: str
+    duration: float
+    cuts: List[WordCut] = field(default_factory=list)
+    captions: List[Dict[str, Any]] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+

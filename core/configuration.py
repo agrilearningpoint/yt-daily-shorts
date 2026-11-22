@@ -142,6 +142,13 @@ class VideoConfig:
     burn_captions: bool = True  # word-synced Hindi captions (audit 2026-11-08)
     depth_motion: bool = True  # real news photos play with 3D depth motion (2026-11-10)
     sound_effects: bool = True
+    word_level_cuts: bool = False
+    word_cut_max_group_seconds: float = 1.2
+    word_cut_max_words_per_group: int = 3
+    word_cut_min_group_ms: float = 66.0
+    word_cut_min_confidence: float = 0.5
+    word_cut_glue_policy: str = "auto"
+    word_cut_longform_phrase_mode: bool = True
 
 
 @dataclass

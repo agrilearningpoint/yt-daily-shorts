@@ -190,6 +190,16 @@ class VisualAudioMatchQAAgent(BaseAgent):
         else:
             checks["post_render_evaluated"] = False
 
+        # Word-Cut QA verification (if word_cut_plan is present)
+        word_cut_plan = kwargs.get("word_cut_plan")
+        if word_cut_plan:
+            w_res = self.qa_inspector.verify_word_cuts(word_cut_plan, video_path)
+            checks["word_cut_qa"] = w_res.to_dict()
+            if not w_res.passed:
+                errors.extend(w_res.errors)
+            if w_res.warnings:
+                warnings.extend(w_res.warnings)
+
         # 3. Overall Verdict
         overall_approved = (
             pre_render_passed and (post_render_passed or not video_path) and len(errors) == 0

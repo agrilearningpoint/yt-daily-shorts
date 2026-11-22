@@ -24,6 +24,9 @@ news Short is perfect.
 
 ## Architecture & Documentation
 
+- [Smart Word-Level Visual Cuts Spec](docs/WORD_LEVEL_CUTS.md)
+- [Agentic Editing Workflow](docs/AGENTIC_EDITING.md)
+- [Agent Operations Manual](AGENTS.md)
 - [Complete Architecture Audit](docs/COMPLETE_ARCHITECTURE_AUDIT.md)
 - [New Multi-Agent Architecture](docs/NEW_AGENT_ARCHITECTURE.md)
 - [Voice & Video Synchronization Design](docs/VOICE_VIDEO_SYNC_DESIGN.md)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import hashlib
 import json
 import os
@@ -11,15 +10,15 @@ import sys
 import urllib.parse
 from pathlib import Path
 
-from dotenv import load_dotenv
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from dotenv import load_dotenv  # noqa: E402
+from scripts.one_click_auth import set_github_secret, verify  # noqa: E402
 
 load_dotenv()
-
-ROOT = Path(__file__).resolve().parents[1]
 os.chdir(ROOT)
-sys.path.insert(0, str(ROOT))
-
-from scripts.one_click_auth import verify, set_github_secret
 
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",

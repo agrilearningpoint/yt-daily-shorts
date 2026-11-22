@@ -45,6 +45,12 @@ class WordTiming:
     word: str
     start: float
     end: float
+    confidence: float = 1.0
+    source: str = "edge-tts"
+
+    @property
+    def text(self) -> str:
+        return self.word
 
 
 @dataclass
@@ -112,7 +118,9 @@ def probe_duration(path: str) -> float:
     return 0.0
 
 
-def distribute_words(text: str, duration: float, offset: float = 0.0) -> List[WordTiming]:
+def distribute_words(
+    text: str, duration: float, offset: float = 0.0, source: str = "proportional", confidence: float = 0.5
+) -> List[WordTiming]:
     words = text.split()
     if not words or duration <= 0:
         return []
@@ -121,9 +129,38 @@ def distribute_words(text: str, duration: float, offset: float = 0.0) -> List[Wo
     t, out = offset, []
     for w, wt in zip(words, weights):
         d = duration * wt / total
-        out.append(WordTiming(w, round(t, 3), round(t + d, 3)))
+        out.append(WordTiming(w, round(t, 3), round(t + d, 3), confidence=confidence, source=source))
         t += d
     return out
+
+
+def align_with_whisper(
+    audio_path: str, expected_text: str, language: str = "hi"
+) -> Optional[List[WordTiming]]:
+    """Align Gemini or external audio with faster-whisper word-level timestamps if available."""
+    try:
+        from faster_whisper import WhisperModel  # type: ignore
+
+        model = WhisperModel("tiny", device="cpu", compute_type="int8")
+        segments, _ = model.transcribe(audio_path, language=language, word_timestamps=True)
+        results: List[WordTiming] = []
+        for segment in segments:
+            for w in getattr(segment, "words", []):
+                clean_word = (getattr(w, "word", "") or "").strip()
+                if clean_word:
+                    results.append(
+                        WordTiming(
+                            word=clean_word,
+                            start=round(float(getattr(w, "start", 0.0)), 3),
+                            end=round(float(getattr(w, "end", 0.0)), 3),
+                            confidence=round(float(getattr(w, "probability", 0.9)), 2),
+                            source="whisper",
+                        )
+                    )
+        return results if results else None
+    except Exception as exc:
+        logger.debug("faster-whisper alignment unavailable or failed: %s", exc)
+        return None
 
 
 def detect_silences(
@@ -453,7 +490,15 @@ class TTSEngine:
                     fh.write(chunk["data"])
                 elif chunk["type"] == "WordBoundary":
                     start = chunk["offset"] / 1e7
-                    words.append(WordTiming(chunk["text"], start, start + chunk["duration"] / 1e7))
+                    words.append(
+                        WordTiming(
+                            word=chunk["text"],
+                            start=round(start, 3),
+                            end=round(start + chunk["duration"] / 1e7, 3),
+                            confidence=1.0,
+                            source="edge-tts",
+                        )
+                    )
         if not out_file.exists() or out_file.stat().st_size < 1000:
             raise TTSError("edge-tts returned no audio")
         return words
@@ -571,12 +616,23 @@ class TTSEngine:
                     if total <= 0:
                         raise TTSError("gemini normalised audio has zero duration")
                     durs = split_by_pauses(texts, total, detect_silences(final))
+                    whisper_words = await asyncio.to_thread(align_with_whisper, final, joined)
                     beat_words: List[List[WordTiming]] = []
                     cursor = 0.0
                     for t, d in zip(texts, durs):
-                        beat_words.append(
-                            distribute_words(re.sub(r"<[^>]+>", " ", t), d, offset=cursor)
-                        )
+                        clean_t = re.sub(r"<[^>]+>", " ", t).strip()
+                        if whisper_words:
+                            matching = [w for w in whisper_words if cursor - 0.1 <= w.start <= cursor + d + 0.1]
+                            if matching:
+                                beat_words.append(matching)
+                            else:
+                                beat_words.append(
+                                    distribute_words(clean_t, d, offset=cursor, source="proportional", confidence=0.5)
+                                )
+                        else:
+                            beat_words.append(
+                                distribute_words(clean_t, d, offset=cursor, source="proportional", confidence=0.5)
+                            )
                         cursor += d
                     return VoiceResult(final, durs, f"gemini:{model}", beat_words=beat_words)
                 except Exception as exc:

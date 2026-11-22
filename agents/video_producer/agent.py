@@ -765,16 +765,87 @@ class VideoProducerAgent(BaseAgent):
             except Exception as exc:
                 self.logger.warning("captions skipped: %s", exc)
         self._captions_ass = captions
-        self.renderer.render(
-            clips,
-            audio_to_render,
-            final_path,
-            music=vcfg.background_music,
-            music_volume=vcfg.music_volume,
-            tempo=tempo,
-            sfx=vcfg.sound_effects,
-            captions=captions,
-        )
+
+        rendered_via_word_cuts = False
+        if getattr(vcfg, "word_level_cuts", False):
+            try:
+                self.logger.info("Attempting smart word-level cuts rendering...")
+                from core.agent_contracts import WordCut, WordCutPlan
+                from video.renderer import render_word_cuts
+                from video.word_timeline import WordTimelineBuilder
+
+                wt_builder = WordTimelineBuilder(fps=vcfg.fps)
+                full_script = " ".join(b.get("say", "") for b in beats if b.get("say"))
+                word_timeline = wt_builder.build(
+                    full_script,
+                    voice,
+                    config={
+                        "fps": vcfg.fps,
+                        "word_cut_max_group_seconds": getattr(vcfg, "word_cut_max_group_seconds", 1.2),
+                        "word_cut_max_words_per_group": getattr(vcfg, "word_cut_max_words_per_group", 3),
+                        "word_cut_min_group_ms": getattr(vcfg, "word_cut_min_group_ms", 66.0),
+                        "word_cut_glue_policy": getattr(vcfg, "word_cut_glue_policy", "auto"),
+                    },
+                )
+
+                cuts = []
+                for idx, g in enumerate(word_timeline.groups):
+                    c_idx = min(idx, len(clips) - 1) if clips else 0
+                    asset_path = (
+                        getattr(clips[c_idx], "background", "")
+                        or getattr(clips[c_idx], "video", "")
+                        if clips
+                        else ""
+                    )
+                    motion = (
+                        getattr(clips[c_idx], "motion_preset_id", "ken_burns_zoom_in")
+                        or "ken_burns_zoom_in"
+                    )
+                    fx = getattr(clips[c_idx], "transition_effect", "none") or "none"
+                    cuts.append(
+                        WordCut(
+                            group_id=g.group_id,
+                            start=g.start,
+                            end=g.end,
+                            text=g.text,
+                            words=g.words,
+                            visual_asset=asset_path,
+                            motion_preset_id=motion,
+                            transition_effect=fx,
+                        )
+                    )
+
+                word_plan = WordCutPlan(
+                    video_id=video_id,
+                    fps=vcfg.fps,
+                    audio_path=audio_to_render,
+                    duration=word_timeline.audio_duration,
+                    cuts=cuts,
+                    captions=[
+                        {"word": w.text, "start": w.start, "end": w.end}
+                        for w in word_timeline.words
+                        if w.token_type.value != "punct"
+                    ],
+                )
+
+                render_word_cuts(word_plan, final_path, captions_ass_path=captions)
+                rendered_via_word_cuts = True
+                self.logger.info("Successfully rendered video with smart word-level cuts: %s", final_path)
+            except Exception as w_exc:
+                self.logger.warning("Word-level cuts failed (%s), falling back to beat-level renderer", w_exc)
+                rendered_via_word_cuts = False
+
+        if not rendered_via_word_cuts:
+            self.renderer.render(
+                clips,
+                audio_to_render,
+                final_path,
+                music=vcfg.background_music,
+                music_volume=vcfg.music_volume,
+                tempo=tempo,
+                sfx=vcfg.sound_effects,
+                captions=captions,
+            )
 
         try:
             review = editor.review(final_path, recipe, str(out_dir), learn=False)

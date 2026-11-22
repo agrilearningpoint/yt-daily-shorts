@@ -41,3 +41,5 @@ This matrix documents all 25+ specialized agents across **BHARAT KI SOCH**, demo
 | `PublisherAgent` | Distribution | MP4, Metadata, Thumb | YouTube ID / HF URL | `TelegramNotifier`, `HistoryStore` | **Live** |
 | `AnalyticsManagerAgent` | Feedback | YouTube API Data | Performance Metrics | `SelfLearningAgent` | **Loop** |
 | `SelfLearningAgent` | Learning | History, Analytics | Style Notes & Memory | `PromptEngineer`, `CreativeDirector` | **Memory** |
+| `WordTimelineBuilder` | Smart Cuts | Script, TTS WordTimings | `WordCutPlan` | `VideoProducerAgent`, `Renderer` | **YES** |
+| `WordCutQA` | QA Gate | WordCutPlan, Rendered MP4 | `WordCutQAResult` | `VisualAudioMatchQAAgent`, `VideoQAInspector`| **YES** |

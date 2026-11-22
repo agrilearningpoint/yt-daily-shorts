@@ -8,6 +8,7 @@ Word-synced Hindi captions (ASS) are burned in during the final pass.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import random
@@ -16,7 +17,10 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
+
+if TYPE_CHECKING:
+    from core.agent_contracts import WordCutPlan
 
 logger = logging.getLogger("video.renderer")
 
@@ -477,3 +481,241 @@ class VideoRenderer:
         _run(cmd, timeout=900)
         shutil.rmtree(work, ignore_errors=True)
         return str(out)
+
+    def render_word_cuts(
+        self,
+        plan: WordCutPlan,
+        out_path: str,
+        captions_ass_path: Optional[str] = None,
+    ) -> str:
+        return render_word_cuts(
+            plan=plan,
+            out_path=out_path,
+            captions_ass_path=captions_ass_path,
+            width=self.width,
+            height=self.height,
+        )
+
+
+def render_word_cuts(
+    plan: WordCutPlan,
+    out_path: str,
+    captions_ass_path: Optional[str] = None,
+    width: int = 1080,
+    height: int = 1920,
+) -> str:
+    """Render smart word-level visual cuts with continuous master audio.
+
+    - Visual timeline cuts at word/group boundaries (contiguous: cut[i].end == cut[i+1].start).
+    - Audio is never sliced: voiceover plays continuously from a single master track.
+    - Captions are generated per word with current word highlighted.
+    """
+    if not plan.cuts:
+        raise RenderError("WordCutPlan has no cuts to render.")
+
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    work = out.parent / f"_wcuts_{plan.video_id or 'run'}"
+    work.mkdir(parents=True, exist_ok=True)
+    cache_dir = ROOT / "output" / "_wcut_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    fps = plan.fps or 30
+    ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    cuts = plan.cuts
+
+    # 1. Enforce contiguous boundaries
+    cuts[0].start = 0.0
+    for i in range(1, len(cuts)):
+        cuts[i].start = cuts[i - 1].end
+        if cuts[i].end <= cuts[i].start:
+            cuts[i].end = round(cuts[i].start + (2.0 / fps), 3)
+
+    if plan.duration > 0 and cuts[-1].end < plan.duration:
+        cuts[-1].end = round(plan.duration, 3)
+
+    # 2. Render individual video-only segments (cached by parameters hash)
+    def _render_segment(idx: int) -> tuple[int, str]:
+        c = cuts[idx]
+        dur = max(c.end - c.start, 2.0 / fps)
+        frames = max(int(round(dur * fps)), 2)
+
+        cache_key = (
+            f"{c.visual_asset}:{dur:.3f}:{c.motion_preset_id}:"
+            f"{c.transition_effect}:{c.vfx_cue}:{width}x{height}@{fps}"
+        )
+        h = hashlib.sha256(cache_key.encode()).hexdigest()[:16]
+        seg_cache = cache_dir / f"wcut_{h}.mp4"
+
+        if seg_cache.exists() and seg_cache.stat().st_size > 1000:
+            return idx, str(seg_cache)
+
+        # Asset input setup
+        inputs: List[str] = []
+        filter_parts: List[str] = []
+        asset_path = Path(c.visual_asset) if c.visual_asset else None
+
+        if asset_path and asset_path.exists():
+            ext = asset_path.suffix.lower()
+            if ext in (".mp4", ".mov", ".mkv", ".webm", ".avi"):
+                inputs = ["-stream_loop", "-1", "-t", f"{dur:.3f}", "-i", str(asset_path)]
+                filter_parts.append(
+                    f"[0:v]fps={fps},scale={width}:{height}:force_original_aspect_ratio=increase,"
+                    f"crop={width}:{height},setsar=1"
+                )
+            else:
+                inputs = ["-loop", "1", "-t", f"{dur:.3f}", "-i", str(asset_path)]
+                filter_parts.append(
+                    f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
+                    f"crop={width}:{height},setsar=1,fps={fps}"
+                )
+        else:
+            # Fallback high-contrast solid background
+            inputs = ["-f", "lavfi", "-t", f"{dur:.3f}", "-i", f"color=c=0x141A24:s={width}x{height}:r={fps}"]
+            filter_parts.append(f"[0:v]fps={fps},setsar=1")
+
+        # Apply motion preset if available
+        preset_filter = None
+        if c.motion_preset_id:
+            try:
+                from video.motion_presets.catalog import get_preset
+
+                spec = get_preset(c.motion_preset_id)
+                if spec and spec.ffmpeg_filter_template:
+                    preset_filter = spec.ffmpeg_filter_template.format(
+                        frames=frames,
+                        duration=dur,
+                        fps=fps,
+                        width=width,
+                        height=height,
+                    )
+            except Exception:
+                pass
+
+        if preset_filter and not preset_filter.startswith("overlay="):
+            filter_parts.append(preset_filter)
+
+        # Apply transition / cut effect
+        fx = c.transition_effect or "cut"
+        if fx == "flash":
+            filter_parts.append("fade=t=in:st=0:d=0.08:color=white")
+        elif fx == "dip":
+            filter_parts.append("fade=t=in:st=0:d=0.10:color=black")
+        elif fx == "glitch":
+            filter_parts.append("rgbashift=rh=-20:bh=20:gv=6:enable='lt(t,0.1)'")
+
+        vf = ",".join(filter_parts).replace("[0:v]", "")
+        cmd = [
+            ffmpeg,
+            "-y",
+            *inputs,
+            "-vf",
+            vf,
+            "-t",
+            f"{dur:.3f}",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",
+            str(seg_cache),
+        ]
+        _run(cmd, timeout=120)
+        return idx, str(seg_cache)
+
+    seg_paths = [None] * len(cuts)
+    with ThreadPoolExecutor(max_workers=min(2, os.cpu_count() or 2)) as pool:
+        for idx, sp in pool.map(lambda i: _render_segment(i), range(len(cuts))):
+            seg_paths[idx] = sp
+
+    # 3. Concatenate video-only segments
+    concat_list = work / "concat_list.txt"
+    concat_list.write_text("".join(f"file '{Path(p).resolve().as_posix()}'\n" for p in seg_paths))
+    video_only = work / "video_only.mp4"
+    _run(
+        [
+            ffmpeg,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_list),
+            "-c",
+            "copy",
+            str(video_only),
+        ]
+    )
+
+    # 4. Handle ASS Captions
+    final_cap_path = captions_ass_path
+    if not final_cap_path and plan.captions:
+        from video.subtitle_generator import SubtitleGenerator
+
+        sub_gen = SubtitleGenerator()
+        final_cap_path = str(work / "word_captions.ass")
+        sub_gen.generate_ass(plan.captions, final_cap_path, width=width, height=height)
+
+    # 5. Mux master audio track ONCE
+    audio_input = ["-i", plan.audio_path] if plan.audio_path and Path(plan.audio_path).exists() else []
+
+    if audio_input:
+        if final_cap_path and Path(final_cap_path).exists():
+            fonts = (ROOT / "assets" / "fonts").resolve().as_posix().replace(":", "\\:")
+            cap = Path(final_cap_path).resolve().as_posix().replace(":", "\\:")
+            cmd = [
+                ffmpeg,
+                "-y",
+                "-i",
+                str(video_only),
+                *audio_input,
+                "-vf",
+                f"ass='{cap}':fontsdir='{fonts}'",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "20",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-shortest",
+                "-movflags",
+                "+faststart",
+                str(out),
+            ]
+        else:
+            cmd = [
+                ffmpeg,
+                "-y",
+                "-i",
+                str(video_only),
+                *audio_input,
+                "-c:v",
+                "copy",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-shortest",
+                "-movflags",
+                "+faststart",
+                str(out),
+            ]
+    else:
+        # Video only output
+        cmd = [ffmpeg, "-y", "-i", str(video_only), "-c:v", "copy", str(out)]
+
+    _run(cmd, timeout=300)
+    shutil.rmtree(work, ignore_errors=True)
+    return str(out)
+
