@@ -785,6 +785,26 @@
     "flash_color": "white"
    },
    "score": 2.0
+  },
+  {
+   "at": "2026-11-24T07:08+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "punch"
+    ],
+    "motion": "kenburns_mix",
+    "grade": "eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4",
+    "zoom": 1.18,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 3.0
   }
  ],
  "option_scores": {
@@ -797,8 +817,8 @@
    "n": 4
   },
   "motion=\"kenburns_mix\"": {
-   "sum": 62.0,
-   "n": 11
+   "sum": 65.0,
+   "n": 12
   },
   "grade=\"neutral\"": {
    "sum": 51.0,
@@ -809,20 +829,20 @@
    "n": 12
   },
   "vignette=true": {
-   "sum": 95.0,
-   "n": 18
+   "sum": 98.0,
+   "n": 19
   },
   "ticker=true": {
-   "sum": 182.0,
-   "n": 36
+   "sum": 185.0,
+   "n": 37
   },
   "flash_color=\"white\"": {
-   "sum": 164.0,
-   "n": 33
+   "sum": 167.0,
+   "n": 34
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 143.0,
-   "n": 30
+   "sum": 146.0,
+   "n": 31
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -853,8 +873,8 @@
    "n": 1
   },
   "zoom=1.18": {
-   "sum": 47.0,
-   "n": 9
+   "sum": 50.0,
+   "n": 10
   },
   "cut_fx=[\"flash\", \"punch\", \"glitch\"]": {
    "sum": 7.0,
@@ -901,8 +921,8 @@
    "n": 8
   },
   "cut_fx=[\"punch\"]": {
-   "sum": 18.0,
-   "n": 4
+   "sum": 21.0,
+   "n": 5
   },
   "cut_fx=[\"flash\"]": {
    "sum": 45.0,
@@ -913,14 +933,11 @@
    "n": 1
   },
   "grade=\"eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4\"": {
-   "sum": 12.0,
-   "n": 4
+   "sum": 15.0,
+   "n": 5
   }
  },
  "notes": [
-  "Eliminate consecutive identical images: Ensure every tile presents a new visual, even if it's a different angle, zoom, or a related graphic, to maintain viewer engagement.",
-  "Prioritize relevant and varied visuals: Replace generic stock images, illustrations, and promotional screenshots with actual news footage, relevant graphics, or specific photos that directly illustrate the headline.",
-  "Review image selection for accuracy: Double-check that the visual content directly corresponds to the headline and news story, avoiding misleading or broadly generic imagery.",
   "Significantly increase visual variety: Avoid using the exact same or extremely similar images in consecutive or near-consecutive tiles. For recurring topics, use different angles, relevant B-roll, or distinct graphic treatments.",
   "Replace generic imagery: Swap generic stock photos (e.g., lab scenes, random buildings, laptops) with more specific, impactful, or custom-designed visuals that directly illustrate the news story.",
   "Refine the ending for a seamless loop: The final tile (46) should either be a concise news summary or a subtle, integrated branding element that transitions smoothly back to the first tile's news content, rather than a direct call to action.",
@@ -929,6 +946,9 @@
   "Revamp the opening (Tile 0) with an immediate, strong visual hook and ensure the final tile provides a seamless visual loop, not a black screen.",
   "Ensure every tile features a distinct, high-quality, and relevant visual. Avoid repeating the same image for more than 3 seconds (one tile) and eliminate all black screens with text.",
   "The first frame (tile 0) must be an instant visual hook with a strong, engaging picture, not just text. The last tile needs to visually and thematically loop back to the start.",
-  "Strictly match visuals to on-screen text. Do not use generic landmarks or stock images unless they are directly the subject of the news, and avoid text-picture mismatches."
+  "Strictly match visuals to on-screen text. Do not use generic landmarks or stock images unless they are directly the subject of the news, and avoid text-picture mismatches.",
+  "Prioritize Visual Relevance & Uniqueness: Every frame (tile) must feature a distinct, high-quality visual directly relevant to its headline. Avoid generic stock images and never repeat a visual in adjacent frames.",
+  "Craft a Powerful Opening & Seamless Loop: Tile 0 needs an immediate, strong visual hook, not just text. The final tile must be visually identical to Tile 0 to ensure a smooth, engaging loop for viewers.",
+  "Enhance Motion Graphics & Pacing: Incorporate professional motion graphics and dynamic transitions to ensure a visual change occurs every 2-3 seconds, keeping the short engaging and preventing static, repetitive frames."
  ]
 }
