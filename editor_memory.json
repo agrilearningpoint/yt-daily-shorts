@@ -805,6 +805,26 @@
     "flash_color": "white"
    },
    "score": 3.0
+  },
+  {
+   "at": "2026-11-25T05:35+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "flash"
+    ],
+    "motion": "parallax_pan",
+    "grade": "eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4",
+    "zoom": 1.1,
+    "vignette": false,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 2.0
   }
  ],
  "option_scores": {
@@ -825,32 +845,32 @@
    "n": 9
   },
   "zoom=1.1": {
-   "sum": 64.0,
-   "n": 12
+   "sum": 66.0,
+   "n": 13
   },
   "vignette=true": {
    "sum": 98.0,
    "n": 19
   },
   "ticker=true": {
-   "sum": 185.0,
-   "n": 37
+   "sum": 187.0,
+   "n": 38
   },
   "flash_color=\"white\"": {
-   "sum": 167.0,
-   "n": 34
+   "sum": 169.0,
+   "n": 35
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 146.0,
-   "n": 31
+   "sum": 148.0,
+   "n": 32
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
    "n": 1
   },
   "motion=\"parallax_pan\"": {
-   "sum": 43.0,
-   "n": 9
+   "sum": 45.0,
+   "n": 10
   },
   "grade=\"warm_film\"": {
    "sum": 24.0,
@@ -861,8 +881,8 @@
    "n": 15
   },
   "vignette=false": {
-   "sum": 87.0,
-   "n": 18
+   "sum": 89.0,
+   "n": 19
   },
   "flash_color=\"#FFD60A\"": {
    "sum": 18.0,
@@ -925,22 +945,19 @@
    "n": 5
   },
   "cut_fx=[\"flash\"]": {
-   "sum": 45.0,
-   "n": 10
+   "sum": 47.0,
+   "n": 11
   },
   "grade=\"news_crisp\"": {
    "sum": 5.0,
    "n": 1
   },
   "grade=\"eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4\"": {
-   "sum": 15.0,
-   "n": 5
+   "sum": 17.0,
+   "n": 6
   }
  },
  "notes": [
-  "Significantly increase visual variety: Avoid using the exact same or extremely similar images in consecutive or near-consecutive tiles. For recurring topics, use different angles, relevant B-roll, or distinct graphic treatments.",
-  "Replace generic imagery: Swap generic stock photos (e.g., lab scenes, random buildings, laptops) with more specific, impactful, or custom-designed visuals that directly illustrate the news story.",
-  "Refine the ending for a seamless loop: The final tile (46) should either be a concise news summary or a subtle, integrated branding element that transitions smoothly back to the first tile's news content, rather than a direct call to action.",
   "Ensure every tile has a distinct, relevant visual; eliminate all repetition (visual changes needed every 2-3 seconds).",
   "Strictly match each visual to its on-screen headline/topic; avoid generic or mismatched images (e.g., Amit Shah for 'Test Cricket').",
   "Revamp the opening (Tile 0) with an immediate, strong visual hook and ensure the final tile provides a seamless visual loop, not a black screen.",
@@ -949,6 +966,9 @@
   "Strictly match visuals to on-screen text. Do not use generic landmarks or stock images unless they are directly the subject of the news, and avoid text-picture mismatches.",
   "Prioritize Visual Relevance & Uniqueness: Every frame (tile) must feature a distinct, high-quality visual directly relevant to its headline. Avoid generic stock images and never repeat a visual in adjacent frames.",
   "Craft a Powerful Opening & Seamless Loop: Tile 0 needs an immediate, strong visual hook, not just text. The final tile must be visually identical to Tile 0 to ensure a smooth, engaging loop for viewers.",
-  "Enhance Motion Graphics & Pacing: Incorporate professional motion graphics and dynamic transitions to ensure a visual change occurs every 2-3 seconds, keeping the short engaging and preventing static, repetitive frames."
+  "Enhance Motion Graphics & Pacing: Incorporate professional motion graphics and dynamic transitions to ensure a visual change occurs every 2-3 seconds, keeping the short engaging and preventing static, repetitive frames.",
+  "Every tile must feature a strong, relevant visual. Eliminate all text-only screens (0, 1, 11, 14, 15) and ensure the first tile (0) provides an immediate visual hook with a clear, concise headline.",
+  "Ensure each image or video clip directly illustrates its accompanying text. Replace all generic/stock images (e.g., Tiles 2, 3, 8, 9, 10, 12, 13) with specific, high-quality footage, and avoid repeating the exact same visual in consecutive tiles (e.g., Tiles 4-5, 6-7, 9-10, 12-13).",
+  "Improve pacing by ensuring a distinct visual change every 2-3 seconds. The sequence of news items should flow logically, and the final tile must be a strong visual that provides a natural, engaging loop back to the beginning of the Short."
  ]
 }
