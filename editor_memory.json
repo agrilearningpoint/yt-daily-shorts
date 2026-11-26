@@ -825,6 +825,27 @@
     "flash_color": "white"
    },
    "score": 2.0
+  },
+  {
+   "at": "2026-11-26T05:15+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "punch",
+     "whip"
+    ],
+    "motion": "kenburns_in",
+    "grade": "eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4",
+    "zoom": 1.18,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 3.0
   }
  ],
  "option_scores": {
@@ -849,20 +870,20 @@
    "n": 13
   },
   "vignette=true": {
-   "sum": 98.0,
-   "n": 19
+   "sum": 101.0,
+   "n": 20
   },
   "ticker=true": {
-   "sum": 187.0,
-   "n": 38
+   "sum": 190.0,
+   "n": 39
   },
   "flash_color=\"white\"": {
-   "sum": 169.0,
-   "n": 35
+   "sum": 172.0,
+   "n": 36
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 148.0,
-   "n": 32
+   "sum": 151.0,
+   "n": 33
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -893,16 +914,16 @@
    "n": 1
   },
   "zoom=1.18": {
-   "sum": 50.0,
-   "n": 10
+   "sum": 53.0,
+   "n": 11
   },
   "cut_fx=[\"flash\", \"punch\", \"glitch\"]": {
    "sum": 7.0,
    "n": 1
   },
   "motion=\"kenburns_in\"": {
-   "sum": 26.0,
-   "n": 6
+   "sum": 29.0,
+   "n": 7
   },
   "grade=\"cool_studio\"": {
    "sum": 48.0,
@@ -933,8 +954,8 @@
    "n": 1
   },
   "cut_fx=[\"punch\", \"whip\"]": {
-   "sum": 32.0,
-   "n": 6
+   "sum": 35.0,
+   "n": 7
   },
   "cut_fx=[\"whip\"]": {
    "sum": 37.0,
@@ -953,14 +974,11 @@
    "n": 1
   },
   "grade=\"eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4\"": {
-   "sum": 17.0,
-   "n": 6
+   "sum": 20.0,
+   "n": 7
   }
  },
  "notes": [
-  "Ensure every tile has a distinct, relevant visual; eliminate all repetition (visual changes needed every 2-3 seconds).",
-  "Strictly match each visual to its on-screen headline/topic; avoid generic or mismatched images (e.g., Amit Shah for 'Test Cricket').",
-  "Revamp the opening (Tile 0) with an immediate, strong visual hook and ensure the final tile provides a seamless visual loop, not a black screen.",
   "Ensure every tile features a distinct, high-quality, and relevant visual. Avoid repeating the same image for more than 3 seconds (one tile) and eliminate all black screens with text.",
   "The first frame (tile 0) must be an instant visual hook with a strong, engaging picture, not just text. The last tile needs to visually and thematically loop back to the start.",
   "Strictly match visuals to on-screen text. Do not use generic landmarks or stock images unless they are directly the subject of the news, and avoid text-picture mismatches.",
@@ -969,6 +987,9 @@
   "Enhance Motion Graphics & Pacing: Incorporate professional motion graphics and dynamic transitions to ensure a visual change occurs every 2-3 seconds, keeping the short engaging and preventing static, repetitive frames.",
   "Every tile must feature a strong, relevant visual. Eliminate all text-only screens (0, 1, 11, 14, 15) and ensure the first tile (0) provides an immediate visual hook with a clear, concise headline.",
   "Ensure each image or video clip directly illustrates its accompanying text. Replace all generic/stock images (e.g., Tiles 2, 3, 8, 9, 10, 12, 13) with specific, high-quality footage, and avoid repeating the exact same visual in consecutive tiles (e.g., Tiles 4-5, 6-7, 9-10, 12-13).",
-  "Improve pacing by ensuring a distinct visual change every 2-3 seconds. The sequence of news items should flow logically, and the final tile must be a strong visual that provides a natural, engaging loop back to the beginning of the Short."
+  "Improve pacing by ensuring a distinct visual change every 2-3 seconds. The sequence of news items should flow logically, and the final tile must be a strong visual that provides a natural, engaging loop back to the beginning of the Short.",
+  "Ensure every image is directly relevant to its headline; avoid generic stock photos or images that contradict the text.",
+  "Implement a distinct visual change every 2-3 seconds; no two neighboring tiles should have the same or very similar background image.",
+  "Strengthen the opening with a powerful, relevant image for Tile 0 and ensure the final tile provides a clear visual loop back to the start, not a blank screen."
  ]
 }
