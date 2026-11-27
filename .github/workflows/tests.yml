@@ -22,7 +22,7 @@ jobs:
           cache: 'pip'
 
       - name: Install FFmpeg
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libraqm0 libharfbuzz0b libfribidi0 > /dev/null
 
       - name: Install Dependencies
         run: |

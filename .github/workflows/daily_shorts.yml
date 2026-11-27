@@ -130,7 +130,7 @@ jobs:
         timeout-minutes: 15
         run: |
           for i in 1 2 3; do
-            timeout 240 sudo apt-get update -qq && timeout 300 sudo apt-get install -y -qq ffmpeg > /dev/null && break
+            timeout 240 sudo apt-get update -qq && timeout 300 sudo apt-get install -y -qq ffmpeg libraqm0 libharfbuzz0b libfribidi0 > /dev/null && break
             echo "apt attempt $i failed, retrying"; sleep 15
           done
           ffmpeg -version | head -1
