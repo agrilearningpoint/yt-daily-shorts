@@ -42,8 +42,14 @@ def group_words(
     groups: List[List[Dict[str, Any]]] = []
     cur: List[Dict[str, Any]] = []
     for w in words:
+        clip_changed = bool(
+            cur
+            and w.get("clip_idx") is not None
+            and cur[-1].get("clip_idx") is not None
+            and w.get("clip_idx") != cur[-1].get("clip_idx")
+        )
         candidate = " ".join(x["word"] for x in cur + [w])
-        if cur and (len(cur) >= max_words or len(candidate) > max_chars):
+        if cur and (clip_changed or len(cur) >= max_words or len(candidate) > max_chars):
             groups.append(cur)
             cur = []
         cur.append(w)
@@ -90,8 +96,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         groups = group_words(list(words))
         for gi, grp in enumerate(groups):
             g_end = grp[-1]["end"]
+            clip_end = grp[-1].get("clip_end")
             if gi + 1 < len(groups):
-                g_end = max(g_end, min(groups[gi + 1][0]["start"], g_end + 0.6))
+                same_clip = (
+                    grp[-1].get("clip_idx") is None
+                    or groups[gi + 1][0].get("clip_idx") is None
+                    or grp[-1].get("clip_idx") == groups[gi + 1][0].get("clip_idx")
+                )
+                if same_clip:
+                    g_end = max(g_end, min(groups[gi + 1][0]["start"], g_end + 0.6))
+            if clip_end is not None:
+                g_end = min(g_end, float(clip_end))
             for wi, w in enumerate(grp):
                 start = w["start"]
                 end = grp[wi + 1]["start"] if wi + 1 < len(grp) else g_end

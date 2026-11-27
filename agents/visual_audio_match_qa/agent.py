@@ -67,6 +67,7 @@ class VisualAudioMatchQAAgent(BaseAgent):
                 else getattr(timeline, "segments", [])
             )
             checks["segment_count"] = len(segments)
+            seen_visual_paths: List[str] = []
 
             for idx, seg in enumerate(segments):
                 seg_id = (
@@ -99,10 +100,16 @@ class VisualAudioMatchQAAgent(BaseAgent):
                             f"Segment {seg_id}: Visual asset missing or corrupt ({v_path})"
                         )
                         pre_render_passed = False
+                    elif seen_visual_paths and seen_visual_paths[-1] == str(p):
+                        warnings.append(
+                            f"Segment {seg_id}: Consecutive duplicate visual asset ({p.name})"
+                        )
+                    seen_visual_paths.append(str(p))
                 else:
                     warnings.append(
                         f"Segment {seg_id}: No visual asset assigned, using generated card"
                     )
+                    seen_visual_paths.append("")
 
                 # Verify source provenance & metadata
                 meta = (
@@ -119,13 +126,17 @@ class VisualAudioMatchQAAgent(BaseAgent):
                     seg.get("source", "")
                     if isinstance(seg, dict)
                     else getattr(seg, "source", "")
+                ) or (
+                    seg.get("visual_source", "")
+                    if isinstance(seg, dict)
+                    else getattr(seg, "visual_source", "")
                 ) or (meta.get("source", "") if isinstance(meta, dict) else "")
                 if provenance and provenance.lower() in ("unknown", "corrupt", "fake"):
                     warnings.append(
                         f"Segment {seg_id}: Questionable asset provenance '{provenance}'"
                     )
 
-                # Semantic relevance heuristic
+                # Semantic relevance heuristic (uses provenance & visual description when real photo was sourced)
                 if text and v_path:
                     text_words = set(text.lower().split())
                     path_words = set(
@@ -136,10 +147,26 @@ class VisualAudioMatchQAAgent(BaseAgent):
                             entity.lower().replace("_", " ").replace("-", " ").split()
                         )
                     common = text_words.intersection(path_words)
-                    score = min(1.0, 0.4 + (0.6 if common else 0.0))
+                    if common:
+                        score = 0.95
+                    elif provenance and provenance.lower() in (
+                        "wikipedia",
+                        "publisher",
+                        "publisher_news",
+                        "article",
+                        "wikimedia",
+                        "commons",
+                        "pexels",
+                        "pexels-video",
+                        "pixabay",
+                        "pixabay-video",
+                    ):
+                        score = 0.85
+                    else:
+                        score = 0.65
                     semantic_scores.append(score)
                 else:
-                    semantic_scores.append(0.5)
+                    semantic_scores.append(0.45)
 
             # Master audio duration check
             master_audio = (

@@ -6,7 +6,6 @@ Enforces strict 1–3 second audio-visual pairing contracts to guarantee zero ho
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from typing import Any, Dict, List
@@ -38,8 +37,9 @@ ARCHETYPE_DESCRIPTIONS = {
 class HookDirectorAgent(BaseAgent):
     name = "hook_director"
 
-    def __init__(self, config, state_manager) -> None:
+    def __init__(self, config, state_manager, llm=None) -> None:
         super().__init__(config, state_manager)
+        self.llm = llm
         self.quality_threshold = 75.0
 
     def _score_candidate(
@@ -135,31 +135,99 @@ class HookDirectorAgent(BaseAgent):
             visual_pairing=paired_entity,
         )
 
+    @staticmethod
+    def _select_hook_scene_and_story(
+        script: Dict[str, Any], items: List[Dict[str, Any]], existing_hook: str
+    ) -> tuple:
+        """Align HookDirector with the actual lead story the script's hook refers to."""
+        scenes = script.get("scenes", []) or []
+        news_scenes = [s for s in scenes if s.get("section") != "today"] or scenes
+        hook_scene: Dict[str, Any] = news_scenes[0] if news_scenes else {}
+
+        # If existing_hook matches a specific news scene (by entity/keywords), bind to THAT scene
+        hook_words = set(re.findall(r"[\u0900-\u097F]{2,}|[A-Za-z0-9]{2,}", existing_hook.lower()))
+        if hook_words and news_scenes:
+            best_sc = hook_scene
+            best_hits = 0
+            for sc in news_scenes:
+                sc_text = f"{sc.get('on_screen_text', '')} {sc.get('narration', '')}".lower()
+                hits = sum(1 for w in hook_words if w in sc_text)
+                if hits > best_hits:
+                    best_hits = hits
+                    best_sc = sc
+            if best_hits >= 1:
+                hook_scene = best_sc
+
+        lead_story: Dict[str, Any] = {}
+        sc_urls = hook_scene.get("sources") or []
+        if sc_urls:
+            lead_story = next(
+                (it for it in items if it.get("source_url") == sc_urls[0]), {}
+            )
+        if not lead_story and items:
+            sc_title = (hook_scene.get("headline") or hook_scene.get("narration") or "").lower()
+            sc_words = set(re.findall(r"\w+", sc_title))
+            if sc_words:
+                lead_story = max(
+                    items,
+                    key=lambda it: len(
+                        sc_words & set(re.findall(r"\w+", str(it.get("title", "")).lower()))
+                    ),
+                )
+            if not lead_story:
+                lead_story = items[0]
+        return hook_scene, lead_story
+
     async def execute(self, **kwargs: Any) -> AgentResult:
         research_data = kwargs.get("research_data", {}) or {}
         script = kwargs.get("script", {}) or {}
         video_type = kwargs.get("video_type", "news")
         items = research_data.get("items", [])
 
-        lead_story = items[0] if items else {}
         existing_hook = (script.get("hook") or "").strip()
+        hook_scene, lead_story = self._select_hook_scene_and_story(script, items, existing_hook)
 
-        # Identify lead entity for visual contract
+        # Identify exact lead entity & visual search query for 0.0s audio-visual pairing
         from video.semantic_matcher import extract_entity_from_hindi
 
-        lead_title = lead_story.get("title", "") or lead_story.get("headline", "")
+        lead_title = (
+            hook_scene.get("headline")
+            or hook_scene.get("narration")
+            or lead_story.get("title", "")
+            or lead_story.get("headline", "")
+        )
+        first_part = (hook_scene.get("parts") or [{}])[0] if hook_scene else {}
         lead_entity = (
-            lead_story.get("entity", "")
-            or extract_entity_from_hindi(existing_hook)
+            extract_entity_from_hindi(existing_hook)
+            or first_part.get("entity", "").strip()
+            or hook_scene.get("image_query", "").strip()
             or extract_entity_from_hindi(lead_title)
+            or lead_story.get("entity", "")
             or ("Parliament of India" if video_type == "news" else "India Landmark")
+        )
+        paired_search = (
+            first_part.get("search", "").strip()
+            or hook_scene.get("visual_keywords", "").strip()
+            or lead_entity
         )
 
         candidates: List[HookCandidate] = []
 
-        # If LLM client is available, generate candidates across archetypes
+        # Always keep the script writer's verified Hindi hook as a primary candidate
+        if existing_hook:
+            candidates.append(
+                self._score_candidate(
+                    text=existing_hook,
+                    archetype="strong_factual_statement",
+                    lead_story=lead_story,
+                    paired_entity=lead_entity,
+                )
+            )
+
+        # If an LLM is configured, also generate candidate hooks across archetypes
         prompt = (
-            f"Generate 4 distinct viral Hindi YouTube Shorts hooks (6 to 10 words each) for this topic:\n"
+            f"Generate 4 distinct viral Hindi YouTube Shorts hooks (6 to 10 words each, pure Devanagari) "
+            f"strictly about this story (matching its visual subject):\n"
             f"Story: {lead_title}\n"
             f"Context: {lead_story.get('summary', '')[:200]}\n"
             f"Archetypes to generate:\n"
@@ -167,51 +235,54 @@ class HookDirectorAgent(BaseAgent):
             f"2. direct_impact\n"
             f"3. curiosity_gap\n"
             f"4. strong_factual_statement\n\n"
-            f"Return JSON list: [{{'text': '...', 'archetype': '...'}}]"
+            f'Return JSON object: {{"hooks": [{{"text": "...", "archetype": "..."}}]}}'
         )
 
         generated: List[Dict[str, str]] = []
-        try:
-            from core.llm_client import LLMClient
+        llm_client = self.llm
+        if llm_client is None and self.config.llm.has_any_key():
+            try:
+                from core.llm_client import build_llm
 
-            llm = LLMClient(self.config)
-            res = await llm.generate(
-                prompt=prompt, system="You write high-CTR viral Hindi hooks for YouTube Shorts."
-            )
-            raw_text = res.content.strip()
-            # Parse json array
-            match = re.search(r"\[.*\]", raw_text, re.DOTALL)
-            if match:
-                generated = json.loads(match.group(0))
-        except Exception as exc:
-            logger.info(
-                "Hook LLM generation skipped or failed, using heuristic candidates: %s", exc
-            )
+                llm_client = build_llm(
+                    self.config.llm, allow_mock=not self.config.general.strict_mode
+                )
+            except Exception:
+                llm_client = None
 
-        # Fallback heuristic candidates if LLM not available or returned empty
-        if not generated:
-            entity_label = lead_entity.split()[0] if lead_entity else "आज"
+        if llm_client is not None and not getattr(llm_client, "is_mock", False):
+            try:
+                res = await llm_client.generate_json(
+                    prompt=prompt,
+                    system_prompt="You write high-CTR viral Hindi hooks for YouTube Shorts.",
+                )
+                raw_hooks = res.get("hooks") if isinstance(res, dict) else []
+                if isinstance(raw_hooks, list):
+                    generated = [h for h in raw_hooks if isinstance(h, dict)]
+            except Exception as exc:
+                logger.info(
+                    "Hook LLM generation skipped or failed, keeping existing Hindi hook: %s", exc
+                )
+
+        # Clean pure-Hindi fallback candidates ONLY when no existing hook exists
+        if not generated and not existing_hook:
+            hindi_subject = (hook_scene.get("on_screen_text") or "देश और दुनिया").strip()
             generated = [
                 {
-                    "text": f"{entity_label} पर आई सबसे बड़ी खबर, बदल गया पूरा नियम!",
+                    "text": f"{hindi_subject} से जुड़ी आज की सबसे बड़ी खबर जानिए!",
                     "archetype": "breaking_news",
                 },
                 {
-                    "text": f"क्या आप जानते हैं कि {entity_label} को लेकर क्या हुआ?",
+                    "text": f"{hindi_subject} के इस बड़े फैसले का आप पर क्या असर होगा?",
                     "archetype": "curiosity_gap",
                 },
-                {
-                    "text": f"{entity_label} के इस बड़े फैसले से आपकी जेब पर सीधा असर!",
-                    "archetype": "direct_impact",
-                },
             ]
-            if existing_hook:
-                generated.append({"text": existing_hook, "archetype": "strong_factual_statement"})
 
         for item in generated:
-            cand_text = item.get("text", "").strip()
-            cand_arch = item.get("archetype", "strong_factual_statement")
-            if cand_text:
+            cand_text = str(item.get("text", "")).strip()
+            cand_arch = str(item.get("archetype", "strong_factual_statement"))
+            # Ensure Hindi Devanagari dominance (>= 40%) and avoid English template artifacts
+            if cand_text and len(re.findall(r"[\u0900-\u097F]", cand_text)) >= len(cand_text) * 0.4:
                 candidate = self._score_candidate(
                     text=cand_text,
                     archetype=cand_arch,
@@ -225,8 +296,8 @@ class HookDirectorAgent(BaseAgent):
         best = candidates[0] if candidates else None
 
         if not best or best.composite_score < self.quality_threshold:
-            # Refine best to satisfy threshold
-            safe_text = existing_hook or f"{lead_entity} को लेकर आज का सबसे बड़ा फैसला!"
+            hindi_subject = (hook_scene.get("on_screen_text") or "आज की बड़ी खबर").strip()
+            safe_text = existing_hook or f"{hindi_subject}: जानिए आज का सबसे बड़ा अपडेट!"
             best = self._score_candidate(
                 text=safe_text,
                 archetype="breaking_news",
@@ -236,20 +307,28 @@ class HookDirectorAgent(BaseAgent):
             best.composite_score = max(best.composite_score, 80.0)
 
         # Build ApprovedHook contract
-        lead_story.get("image_url", "")
+        paired_path = ""
+        paired_url = (hook_scene.get("sources") or [""])[0] if hook_scene else ""
         approved_hook = ApprovedHook(
             text=best.text,
             archetype=str(best.archetype),
             composite_score=best.composite_score,
-            visual_pairing_query=lead_entity,
-            headline_chip=best.text[:75],
+            visual_pairing_query=paired_search,
+            headline_chip=(hook_scene.get("on_screen_text") or best.text[:60]),
             entity_hint=lead_entity,
         )
+        hook_dict = vars(approved_hook)
+        if paired_path:
+            hook_dict["paired_visual_path"] = paired_path
+        if paired_url:
+            hook_dict["paired_source_url"] = paired_url
+        if lead_story.get("image_url"):
+            hook_dict["paired_image_url"] = lead_story["image_url"]
 
         return AgentResult(
             success=True,
             data={
-                "approved_hook": vars(approved_hook),
+                "approved_hook": hook_dict,
                 "candidates": [vars(c) for c in candidates],
             },
             metadata={"hook_text": approved_hook.text, "score": approved_hook.composite_score},

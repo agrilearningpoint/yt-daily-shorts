@@ -24,6 +24,9 @@ _UA = {"User-Agent": "YTDailyShortsSemanticMatcher/2.0 (educational-automation)"
 # High-frequency Hindi entities mapped directly to exact English Wikipedia titles
 COMMON_ENTITY_MAP: Dict[str, str] = {
     # Temples & Places
+    "तिरुपति": "Tirumala Venkateswara Temple",
+    "तिरुमाला": "Tirumala Venkateswara Temple",
+    "वेंकटेश्वर": "Tirumala Venkateswara Temple",
     "बांकेबिहारी": "Banke Bihari Temple",
     "बांके बिहारी": "Banke Bihari Temple",
     "वृंदावन": "Vrindavan",
@@ -37,6 +40,16 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "केदारनाथ": "Kedarnath Temple",
     "बद्रीनाथ": "Badrinath Temple",
     "अक्षय नवमी": "Amla Navami",
+    "कुंभ मेला": "Kumbh Mela",
+    # Healthcare & Schemes
+    "आयुष्मान भारत": "Ayushman Bharat Yojana",
+    "आयुष्मान": "Ayushman Bharat Yojana",
+    "जन धन": "Pradhan Mantri Jan Dhan Yojana",
+    "डिजिटल इंडिया": "Digital India",
+    "पीएम किसान": "Pradhan Mantri Kisan Samman Nidhi",
+    "स्वच्छ भारत": "Swachh Bharat Mission",
+    "मेक इन इंडिया": "Make in India",
+    "जीएसटी": "Goods and Services Tax (India)",
     # Finance & Economy
     "सेंसेक्स": "BSE SENSEX",
     "निफ्टी": "NIFTY 50",
@@ -147,12 +160,22 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "डोनाल्ड ट्रंप": "Donald Trump",
     "बाइडन": "Joe Biden",
     "पुतिन": "Vladimir Putin",
+    "जिनपिंग": "Xi Jinping",
+    "जेलेंस्की": "Volodymyr Zelenskyy",
+    "नेतन्याहू": "Benjamin Netanyahu",
+    "किम जोंग": "Kim Jong Un",
+    "उत्तर कोरिया": "North Korea",
+    "कुवैत": "Kuwait",
+    "इटली": "Italy",
     "रूस": "Russia",
     "यूक्रेन": "Ukraine",
     "इजरायल": "Israel",
     "गाजा": "Gaza Strip",
     "चीन": "China",
     "पाकिस्तान": "Pakistan",
+    "बांग्लादेश": "Bangladesh",
+    "नेपाल": "Nepal",
+    "श्रीलंका": "Sri Lanka",
     "अमेरिका": "United States",
     "जापान": "Japan",
     "फ्रांस": "France",
@@ -163,6 +186,18 @@ COMMON_ENTITY_MAP: Dict[str, str] = {
     "संयुक्त राष्ट्र": "United Nations",
     "यूएन": "United Nations",
     "डब्ल्यूएचओ": "World Health Organization",
+    # World Economy / Sports / Calendar
+    "कच्चा तेल": "Petroleum",
+    "पेट्रोल": "Petrol",
+    "डीजल": "Diesel fuel",
+    "क्रिकेट": "Cricket",
+    "बीसीसीआई": "Board of Control for Cricket in India",
+    "आईपीएल": "Indian Premier League",
+    "राशिफल": "Hindu astrology",
+    "संकष्टी": "Ganesha",
+    "चतुर्थी": "Ganesha",
+    "एकादशी": "Ekadashi",
+    "पंचांग": "Hindu calendar",
     # Technology & Companies
     "एनवीडिया": "Nvidia",
     "गूगल": "Google",
@@ -254,6 +289,7 @@ class SemanticVisualMatcher:
     def __init__(self, timeout: int = 6):
         self.timeout = timeout
         self._cache: Dict[str, Optional[str]] = {}
+        self._used_urls: set = set()
 
     @staticmethod
     def _is_graphic_or_flag(url: str) -> bool:
@@ -387,11 +423,13 @@ class SemanticVisualMatcher:
                         height = infos[0].get("height", 0)
                         if (
                             img_url
+                            and img_url not in self._used_urls
                             and mime in ("image/jpeg", "image/png", "image/webp")
                             and not self._is_graphic_or_flag(img_url)
                         ):
                             if width >= 400 and height >= 400:
                                 if self._download_image(img_url, dest_path):
+                                    self._used_urls.add(img_url)
                                     logger.info(
                                         "Semantic Matcher: Found Wikimedia Commons image for '%s'",
                                         query,
@@ -447,7 +485,13 @@ class SemanticVisualMatcher:
             if commons_path:
                 return commons_path, f"Image: Wikimedia Commons / {entity}"
 
-        # 2. Try MediaCollector if available
+        # 2. Try Wikimedia Commons directly with explicit English search_hint before falling back
+        if search_hint and search_hint.strip():
+            commons_hint = self.search_wikimedia_commons(search_hint.strip(), dest_path)
+            if commons_hint:
+                return commons_hint, f"Image: Wikimedia Commons / {search_hint.strip()}"
+
+        # 3. Try MediaCollector if available
         if media_collector is not None:
             query = search_hint.strip() or entity or ""
             if not query:

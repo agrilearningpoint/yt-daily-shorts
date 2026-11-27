@@ -85,7 +85,7 @@ class DailyOrchestrator:
         self.script_agent = ScriptManagerAgent(config, self.state, llm=self.llm)
         self.verifier_agent = FactVerifierAgent(config, self.state, llm=self.llm)
         self.quality_agent = QualityManagerAgent(config, self.state)
-        self.hook_agent = HookDirectorAgent(config, self.state)
+        self.hook_agent = HookDirectorAgent(config, self.state, llm=self.llm)
         self.creative_agent = CreativeDirectorAgent(config, self.state, history=self.history)
         self.visual_sourcing_agent = NewsVisualSourcingAgent(config, self.state)
         self.motion_agent = MotionGraphicsAgent(config, self.state)
@@ -252,6 +252,7 @@ class DailyOrchestrator:
                 "news_visual_sourcing",
                 lambda: self.visual_sourcing_agent.execute(
                     script=script,
+                    hook_data=hook_res,
                     research_items=research.get("items", []),
                     out_dir=f"output/{vid}/visuals",
                 ),
@@ -316,17 +317,20 @@ class DailyOrchestrator:
                     vfx_data=vfx,
                     motion_data=motion,
                     hook_data=hook_res,
+                    opening_brief=opening_brief,
+                    visual_assets=visual_assets,
                     master_timeline=master_timeline,
                 ),
             )
 
-            # Visual Audio Match Quality Assurance
+            # Visual Audio Match Quality Assurance (inspects authoritative synced timeline!)
+            auth_timeline = production.get("master_timeline") or master_timeline
             qa_match = await self._stage(
                 vid,
                 "visual_audio_match_qa",
                 lambda: self.visual_audio_qa_agent.execute(
                     video_id=vid,
-                    timeline=master_timeline,
+                    timeline=auth_timeline,
                     video_path=production.get("video_path", ""),
                 ),
                 require_success=True,

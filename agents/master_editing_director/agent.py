@@ -179,14 +179,27 @@ class MasterEditingDirectorAgent(BaseAgent):
             is_video = False
 
             va = None
-            if isinstance(visual_assets, list) and idx < len(visual_assets):
-                va = visual_assets[idx]
+            sc_idx = (idx - 1) if hook_text else idx
+            if isinstance(visual_assets, list):
+                if idx < len(visual_assets):
+                    va = visual_assets[idx]
+                elif 0 <= sc_idx < len(visual_assets):
+                    va = visual_assets[sc_idx]
             elif isinstance(visual_assets, dict):
-                va = (
-                    visual_assets.get(idx)
-                    or visual_assets.get(str(idx))
-                    or visual_assets.get(scene_id)
-                )
+                if beat.get("is_hook"):
+                    va = (
+                        visual_assets.get("scene_000_hook")
+                        or visual_assets.get("hook")
+                        or visual_assets.get("scene_000")
+                        or next(iter(visual_assets.values()), None)
+                    )
+                else:
+                    va = (
+                        visual_assets.get(f"scene_{sc_idx:03d}")
+                        or visual_assets.get(scene_id)
+                        or visual_assets.get(str(sc_idx))
+                        or visual_assets.get(str(idx))
+                    )
 
             if va:
                 asset_path = getattr(va, "local_path", getattr(va, "path", ""))
@@ -318,12 +331,18 @@ class MasterEditingDirectorAgent(BaseAgent):
                 overlay=ov_path,
                 duration=dur,
                 chip=None,
-                chip_y=1230,
-                story_start=(idx == 0 or seg.transition_effect in ("flash", "punch")),
-                fx=seg.transition_effect,
+                chip_y=1390,
+                story_start=(idx == 0 or seg.transition_effect in ("flash", "punch", "whip")),
+                fx=seg.transition_effect or "flash",
                 ticker=True,
                 video=seg.visual_path if seg.is_video_asset else "",
                 depth=(not seg.is_video_asset),
+                motion_preset_id=seg.motion_preset_id,
+                camera_motion=seg.camera_motion,
+                transition_effect=seg.transition_effect,
+                video_trim_start=seg.video_trim_start,
+                video_trim_end=seg.video_trim_end,
+                sfx_cue=seg.sfx_cue,
             )
             clips.append(clip)
 

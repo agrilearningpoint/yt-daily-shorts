@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -21,6 +22,16 @@ logger = logging.getLogger("video.composer")
 FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 W, H = 1080, 1920
 ZOOM_PAD = 1.12  # background is rendered 12% larger for zoompan headroom
+
+
+_SHORT_I_RE = re.compile(r"((?:[\u0915-\u0939]\u093c?\u094d)*[\u0915-\u0939]\u093c?)\u093f")
+
+
+def shape_devanagari(text: str) -> str:
+    """Reorder chhoti-i matra visually when libraqm/HarfBuzz is absent in Pillow."""
+    if not text or features.check("raqm"):
+        return text
+    return _SHORT_I_RE.sub("\u093f\\1", text)
 
 
 def font(size: int, weight: str = "ExtraBold") -> ImageFont.FreeTypeFont:
@@ -75,7 +86,12 @@ class SceneComposer:
 
     # ------------------------------------------------------------------
     def compose_background(
-        self, image_path: Optional[str], out_path: str, seed: int = 0, card_text: str = ""
+        self,
+        image_path: Optional[str],
+        out_path: str,
+        seed: int = 0,
+        card_text: str = "",
+        crop_zoom: bool = False,
     ) -> str:
         bw, bh = int(W * ZOOM_PAD), int(H * ZOOM_PAD)
         box = ""
@@ -87,6 +103,13 @@ class SceneComposer:
             except Exception:
                 src = None
         if src is not None:
+            if crop_zoom:
+                # Tight editorial close-up crop (wide -> punch-in angle variation)
+                cw = max(120, int(src.width * 0.68))
+                ch = max(120, int(src.height * 0.68))
+                left_c = (src.width - cw) // 2
+                top_c = max(0, int((src.height - ch) * 0.35))
+                src = src.crop((left_c, top_c, left_c + cw, min(src.height, top_c + ch)))
             # blurred cover fill
             scale = max(bw / src.width, bh / src.height)
             fill = src.resize((int(src.width * scale) + 1, int(src.height * scale) + 1))
@@ -278,7 +301,7 @@ def compose_ticker(
     img = Image.new("RGBA", (tw, height), (12, 12, 18, 225))
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, tw, 4], fill=composer.primary + (255,))
-    d.text((20, 10), text, font=f, fill=(255, 255, 255, 255))
+    d.text((20, 10), shape_devanagari(text), font=f, fill=(255, 255, 255, 255))
     img.save(out_path, "PNG")
     return out_path
 

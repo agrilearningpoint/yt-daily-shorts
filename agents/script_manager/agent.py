@@ -65,6 +65,44 @@ class Script:
         }
 
 
+_DANGLING_HINDI = {
+    "में",
+    "की",
+    "के",
+    "को",
+    "से",
+    "पर",
+    "ने",
+    "का",
+    "और",
+    "तथा",
+    "एवं",
+    "या",
+    "कि",
+    "एक",
+    "यह",
+    "वह",
+    "इस",
+    "उस",
+}
+
+
+def _clean_complete_hindi_trim(words: List[str], limit: int) -> str:
+    """Trim Hindi words cleanly without leaving dangling postpositions/conjunctions."""
+    if len(words) <= limit:
+        text = " ".join(words).strip()
+        return text if text.endswith(("।", ".", "?", "!")) else text.rstrip(",;:") + "।"
+    # Prefer ending right at a full sentence delimiter within [max(5, limit-6) .. limit]
+    for idx in range(limit - 1, max(4, limit - 7), -1):
+        if words[idx].endswith(("।", ".", "?", "!")):
+            return " ".join(words[: idx + 1])
+    cut = list(words[:limit])
+    while len(cut) > 5 and cut[-1].rstrip("।,.?!") in _DANGLING_HINDI:
+        cut.pop()
+    text = " ".join(cut).rstrip(",;:.?!") + "।"
+    return text
+
+
 def resplit_parts(parts: List[Dict[str, str]], text: str) -> List[Dict[str, str]]:
     """Re-distribute corrected narration over the existing visual beats (by word share)."""
     words = text.split()
@@ -215,10 +253,10 @@ class ScriptManagerAgent(BaseAgent):
         }
 
     def _normalize_scenes(self, script: Script) -> None:
-        """Auto-split parts > 9 words and cap story length <= 20 words so LLM overshoots never fail."""
-        lim = 9
+        """Normalize story parts cleanly without severing Hindi verbs or duplicating visuals."""
+        lim = 10
         for s in script.scenes:
-            # 1. Split any part longer than 9 words into <= 9-word visual beats
+            # 1. Split overly long parts cleanly
             new_parts = []
             for pt in s.parts or []:
                 words = (pt.get("say") or "").split()
@@ -228,45 +266,56 @@ class ScriptManagerAgent(BaseAgent):
                 else:
                     for idx in range(0, len(words), lim):
                         chunk = words[idx : idx + lim]
-                        if len(chunk) < 3 and new_parts:
+                        if len(chunk) < 4 and new_parts:
                             new_parts[-1]["say"] = new_parts[-1]["say"] + " " + " ".join(chunk)
                         else:
                             new_parts.append(dict(pt, say=" ".join(chunk)))
-            # 2. For non-today news stories, cap total story words to <= 20 words
+            # 2. For non-today news stories, trim at sentence boundaries only if > 22 words
             if script.video_type == "news" and s.section != "today":
-                kept, total_w = [], 0
-                for pt in new_parts:
-                    w = pt["say"].split()
-                    if total_w + len(w) <= 20:
-                        kept.append(pt)
-                        total_w += len(w)
-                    else:
-                        rem = 20 - total_w
-                        if rem >= 4:
-                            s_end = " ".join(w[:rem]).rstrip("।,?.") + "।"
-                            kept.append(dict(pt, say=s_end))
-                        break
-                if kept:
-                    last_say = kept[-1]["say"].strip()
+                total_words_all = sum(len(pt["say"].split()) for pt in new_parts)
+                if total_words_all > 22:
+                    all_w = " ".join(pt["say"] for pt in new_parts).split()
+                    safe_text = _clean_complete_hindi_trim(all_w, 20)
+                    new_parts = resplit_parts(new_parts, safe_text)
+                if new_parts:
+                    last_say = new_parts[-1]["say"].strip()
                     if last_say and last_say[-1] not in "।?!.":
-                        kept[-1]["say"] = last_say.rstrip(",") + "।"
-                    new_parts = kept
-            # 3. Ensure at least 2 parts per scene for dynamic visual cuts
+                        new_parts[-1]["say"] = last_say.rstrip(",") + "।"
+            # 3. For multi-part scenes, diversify part 1 search/visual if identical to part 0
             if len(new_parts) == 1:
                 w = new_parts[0]["say"].split()
-                if len(w) >= 6:
+                if len(w) >= 8:
                     mid = len(w) // 2
                     base = new_parts[0]
+                    alt_search = (base.get("search") or "").strip()
                     new_parts = [
                         dict(base, say=" ".join(w[:mid])),
-                        dict(base, say=" ".join(w[mid:])),
+                        dict(
+                            base,
+                            say=" ".join(w[mid:]),
+                            entity="",  # force alternate context photo/video instead of repeating entity portrait
+                            search=(f"{alt_search} india news scene".strip() if alt_search else ""),
+                        ),
                     ]
+            elif len(new_parts) >= 2:
+                seen_s = {(new_parts[0].get("entity") or "").lower(), (new_parts[0].get("search") or "").lower()}
+                for k in range(1, len(new_parts)):
+                    ek = (new_parts[k].get("entity") or "").lower()
+                    sk = (new_parts[k].get("search") or "").lower()
+                    if ek and (ek, sk) == (
+                        (new_parts[0].get("entity") or "").lower(),
+                        (new_parts[0].get("search") or "").lower(),
+                    ):
+                        new_parts[k]["entity"] = ""
+                    if sk and sk in seen_s:
+                        new_parts[k]["search"] = f"{new_parts[k].get('search', '')} aftermath closeup".strip()
+                    seen_s.add((new_parts[k].get("entity", "").lower(), new_parts[k].get("search", "").lower()))
             if new_parts:
                 s.parts = new_parts
                 s.narration = " ".join(pt["say"] for pt in new_parts if pt.get("say"))
 
     def fit_news(self, script: Script, max_w: int) -> None:
-        """Ensure 20+ news stories fit within word limits by trimming per-story length before ever dropping stories."""
+        """Ensure news stories fit within word limits by dropping surplus stories cleanly before tightening lines."""
         self._normalize_scenes(script)
         t = self._targets()
         need = {"national": t["min_national"], "international": t["min_international"]}
@@ -274,18 +323,7 @@ class ScriptManagerAgent(BaseAgent):
         def sec(s):
             return "international" if s.section == "international" else "national"
 
-        # Stage 1: Tighten any story exceeding 12 words down to 10-12 words
-        if script.word_count() > max_w:
-            for s in script.scenes:
-                words = s.narration.split()
-                if len(words) > 12 and s.section != "today":
-                    trimmed = " ".join(words[:11]).rstrip("।,?.") + "।"
-                    s.narration = trimmed
-                    if s.parts:
-                        s.parts[0]["say"] = trimmed
-                        s.parts = s.parts[:1]
-
-        # Stage 2: Only drop surplus stories if count is strictly greater than minimum required
+        # Stage 1: Drop surplus stories if count > min_keep (keeps complete sentences intact!)
         min_keep = need["national"] + need["international"]
         total_stories = sum(1 for s in script.scenes if s.section != "today")
         while script.word_count() > max_w and total_stories > min_keep:
@@ -298,7 +336,7 @@ class ScriptManagerAgent(BaseAgent):
             victim = max(
                 cand,
                 key=lambda s: (
-                    len(s.narration.split()) > 14,
+                    len(s.narration.split()) > 16,
                     sec(s) == "national",
                     len(s.narration.split()),
                     s.scene_number,
@@ -306,6 +344,16 @@ class ScriptManagerAgent(BaseAgent):
             )
             script.scenes.remove(victim)
             total_stories -= 1
+
+        # Stage 2: Only tighten overly long non-today stories (> 14 words) if still over limit
+        if script.word_count() > max_w:
+            for s in script.scenes:
+                words = s.narration.split()
+                if len(words) > 14 and s.section != "today":
+                    trimmed = _clean_complete_hindi_trim(words, 13)
+                    s.narration = trimmed
+                    if s.parts:
+                        s.parts = resplit_parts(s.parts, trimmed)
         for i, s in enumerate(script.scenes, 1):
             s.scene_number = i
 

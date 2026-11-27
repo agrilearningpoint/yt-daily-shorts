@@ -49,35 +49,33 @@ Skip gore, crime/murder/rape, family disputes, gossip, astrology, rumours, healt
 
 STORY RULES (very important for rapid-fire news in 50-59 seconds):
 - NEVER say a topic label like "खेल में", "स्वास्थ्य:", "राजनीति में", "रक्षा मोर्चे पर". Just say the news.
-- Each story = 5–8 Hindi words in ONE crisp, punchy sentence:
-  State WHO/WHAT happened and the key outcome directly in rapid-fire TV headline style.
-  Good: "RBI ने रेपो रेट 5.5% पर बरकरार रखा।"
+- Each story = 9–14 Hindi words forming ONE complete grammatical sentence ending with a full Hindi verb (किया। / हुआ। / दी। / रखा।). NEVER leave incomplete fragments or trailing postpositions!
+  State WHO/WHAT happened and the key outcome clearly in brisk TV headline style.
+  Good: "RBI ने रेपो रेट 5.5% पर बरकरार रखने का बड़ा फैसला किया।"
   Good: "पीएम मोदी ने 12 हज़ार करोड़ की सड़क परियोजनाओं का उद्घाटन किया।"
-  Good: "बांकेबिहारी मंदिर कॉरिडोर का नया प्रस्ताव मंजूर हुआ।"
-  Good: "इसरो ने नया संचार उपग्रह सफलतापूर्वक लॉन्च किया।"
-- Each story has ONE clear part or at most two ultra-fast parts:
-  Each part = 4–7 spoken words, and its picture must show EXACTLY what THAT part says.
+  Good: "तिरुपति मंदिर में एक दंपति ने 121 किलो सोना दान किया।"
+  Good: "इसरो ने नया संचार उपग्रह सफलतापूर्वक अंतरिक्ष में लॉन्च किया।"
+- Each story has 1 or 2 rapid visual beats ("parts") covering its complete sentence cleanly (do NOT split a single noun phrase across broken pauses).
+  When using 2 parts, Part 1 ("entity"/"search") MUST show a DIFFERENT visual angle/subject than Part 0 so no image ever repeats back-to-back!
+  Example: Part 0 entity="Tirumala Venkateswara Temple", visual="Tirupati Venkateswara temple complex"; Part 1 entity="", visual="golden jewelry and gold coins offering closeup", search="gold coins temple offering".
   THE PICTURE TEST (this is the channel's #1 quality rule — a photo of the wrong thing is worse than no photo):
-  read your "say" line, then name the ONE object/person/place in it. "visual" and "entity" must describe that exact same thing.
-  If the line says "बांकेबिहारी मंदिर" the entity is "Banke Bihari Temple" — never a generic modern building or stock office.
+  read your "say" line, then name the ONE concrete visible object/person/place in it. "visual" and "entity" must match THAT line.
   * Each part has:
       "say":    the spoken words (Devanagari; ISRO, RBI, IPL, GDP in English letters OK; numbers as spoken)
-      "visual": one English sentence naming the ONE main subject of THIS "say" line and its action/setting
-                (e.g. "Banke Bihari temple in Vrindavan with traditional Indian architecture"), Indian setting for Indian news
-      "entity": exact English Wikipedia title ONLY for a real specific person/organisation/place/vehicle
-                ("Banke Bihari Temple", "Narendra Modi", "Reserve Bank of India", "Donald Trump", "Vande Bharat Express"), else ""
-      "search": 2–4 English stock-photo words taken FROM the "say" line's main noun
-                ("banke bihari temple vrindavan", "gold coins jewellery", "indian railway station")
+      "visual": one crisp English sentence naming the concrete visual scene for THIS part (never vague abstractions)
+      "entity": exact English Wikipedia title ONLY for a real specific person/organisation/place/landmark
+                ("Tirumala Venkateswara Temple", "Narendra Modi", "Reserve Bank of India", "Donald Trump", "ISRO"), else ""
+      "search": 2–4 distinct English stock-photo words taken FROM this part's visual scene (unique per part & per story)
+                ("tirupati temple darshan", "gold coins temple ritual", "stock market trading red graph")
       "source": "entity" | "stock" | "ai"
-  Never reuse the same "search" for two different stories; never leave "visual" or "search" empty.
-- "on_screen_text": 2–4 Hindi words headline chip for the story.
+  Never reuse the same "search" or "entity" for two consecutive parts or stories; never leave "visual" or "search" empty.
+- "on_screen_text": 2–5 crisp Hindi words for the headline strap.
 - "src": the candidate number [n].
 
 ALSO WRITE:
-- "hook": 6–10 Hindi words that stop the scroll in 2 seconds: the single BIGGEST story of the day as a punchy
-  claim or question naming its main person/place (e.g. "ट्रंप के एक फैसले से हिला शेयर बाजार!").
-  No greeting, no "नमस्कार", no channel name, no generic "आज की खबरें". Only facts from the candidates.
-- The FIRST national story must be the story the hook talks about.
+- "hook": 6–10 Hindi words that stop the scroll in 2 seconds: MUST be a complete Hindi sentence about National Story #1 (e.g. "तिरुपति मंदिर में एक दंपति ने 121 किलो सोना क्यों दान किया?").
+  No greeting, no "नमस्कार", no channel name, no generic "आज की खबरें", NO English words unless proper noun acronym (GDP/ISRO/RBI). Only verified facts from National Story #1.
+- The FIRST national story must be the exact story the hook talks about, so its image matches 0.0s audio!
 - "title": Hindi YouTube title under 70 characters naming the 2–3 biggest stories.
 
 TOTAL spoken words (hook + opening block + all parts) must be {{ min_words }}–{{ max_words }}

@@ -75,6 +75,45 @@ class NewsVisualSourcingAgent(BaseAgent):
         assets_by_scene: Dict[str, NewsVisualAsset] = {}
         all_candidates: List[NewsVisualAsset] = []
 
+        # 0. Source explicit visual for the opening Hook (scene_000_hook)
+        hook_text = (script.get("hook") or "").strip() if isinstance(script, dict) else ""
+        hook_data = kwargs.get("hook_data") or {}
+        approved_hook = hook_data.get("approved_hook", {}) if isinstance(hook_data, dict) else {}
+        if hook_text or approved_hook:
+            news_scenes = [s for s in scenes if isinstance(s, dict) and s.get("section") != "today"] or scenes
+            hook_sc = news_scenes[0] if news_scenes and isinstance(news_scenes[0], dict) else {}
+            h_entity = (
+                approved_hook.get("entity_hint", "")
+                or extract_entity_from_hindi(hook_text)
+                or hook_sc.get("image_query", "")
+                or extract_entity_from_hindi(hook_sc.get("narration", ""))
+            )
+            h_query = (
+                approved_hook.get("visual_pairing_query", "")
+                or hook_sc.get("visual_keywords", "")
+                or h_entity
+                or hook_text[:60]
+            )
+            h_url = approved_hook.get("paired_source_url") or (
+                (hook_sc.get("sources") or [""])[0] if hook_sc else ""
+            )
+            h_item = next(
+                (it for it in research_items if h_url and it.get("source_url") == h_url),
+                None,
+            ) or (research_items[0] if research_items else None)
+            hook_asset = self._source_scene_visual(
+                scene_id="scene_000_hook",
+                query=h_query,
+                entity=h_entity or "",
+                say_text=hook_text or hook_sc.get("narration", ""),
+                dest_path=out_dir / "scene_000_hook.jpg",
+                research_item=h_item,
+                prefer_video=False,
+            )
+            if hook_asset:
+                assets_by_scene["scene_000_hook"] = hook_asset
+                all_candidates.append(hook_asset)
+
         # 1. Process each scene
         for idx, sc in enumerate(scenes):
             scene_id = f"scene_{idx:03d}"
@@ -82,20 +121,27 @@ class NewsVisualSourcingAgent(BaseAgent):
             query = sc.get("visual_keywords") or sc.get("visual_query") or sc.get("image_query", "")
             entity = (
                 sc.get("entity")
+                or sc.get("image_query")
                 or extract_entity_from_hindi(say_text)
                 or extract_entity_from_hindi(query)
             )
 
-            # Try to match research item for authentic publisher photo
+            # Try to match research item by source_url first, then entity
+            sc_urls = sc.get("sources") or []
             matching_item = next(
-                (
-                    it
-                    for it in research_items
-                    if entity and entity.lower() in str(it.get("title", "")).lower()
-                ),
+                (it for it in research_items if sc_urls and it.get("source_url") == sc_urls[0]),
                 None,
             )
-            if not matching_item and idx < len(research_items):
+            if not matching_item and entity:
+                matching_item = next(
+                    (
+                        it
+                        for it in research_items
+                        if entity.lower() in str(it.get("title", "")).lower()
+                    ),
+                    None,
+                )
+            if not matching_item and idx < len(research_items) and sc.get("section") != "today":
                 matching_item = research_items[idx]
 
             dest_file = out_dir / f"{scene_id}.jpg"

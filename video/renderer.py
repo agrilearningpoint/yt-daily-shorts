@@ -87,9 +87,10 @@ def _run(cmd: List[str], timeout: int = 600) -> None:
 
 
 def ensure_sfx() -> dict:
-    """Synthesize small CC0-style sound effects with ffmpeg (no downloads)."""
+    """Provide broadcast sound effects (bundled assets first, ffmpeg lavfi synthesis fallback)."""
     SFX_DIR.mkdir(parents=True, exist_ok=True)
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    bundled_sfx = ROOT / "assets" / "sfx"
     specs = {
         "whoosh": (
             "anoisesrc=d=0.42:c=pink:a=0.9,highpass=f=500,lowpass=f=7000,"
@@ -97,9 +98,20 @@ def ensure_sfx() -> dict:
         ),
         "pop": "sine=f=880:d=0.09,afade=t=out:st=0:d=0.09:curve=exp,volume=0.35",
         "hit": ("sine=f=70:d=0.35,afade=t=out:st=0:d=0.35:curve=exp,volume=0.9"),
+        "click": "sine=f=1350:d=0.035,afade=t=out:st=0:d=0.035:curve=exp,volume=0.28",
+    }
+    bundled_map = {
+        "whoosh": bundled_sfx / "transition_whoosh.wav",
+        "pop": bundled_sfx / "headline_reveal.wav",
+        "hit": bundled_sfx / "sting_news_intro.wav",
+        "click": bundled_sfx / "ticker_blip.wav",
     }
     out = {}
     for name, flt in specs.items():
+        b_path = bundled_map.get(name)
+        if b_path and b_path.exists() and b_path.stat().st_size > 500:
+            out[name] = str(b_path)
+            continue
         path = SFX_DIR / f"{name}.wav"
         if not path.exists():
             _run(
@@ -117,7 +129,7 @@ class VideoRenderer:
         self._ffmpeg = shutil.which("ffmpeg")
         self.recipe: dict = {}
         self.ticker: Optional[str] = None
-        self.ticker_y = 1726
+        self.ticker_y = 1605
         self._t0 = 0.0
         self.depth_motion = True
         self._depth_clips: dict = {}
@@ -162,44 +174,69 @@ class VideoRenderer:
             time.time() - t0,
         )
 
-    def _motion(self, idx: int, frames: int) -> tuple:
-        zmax = float(self.recipe.get("zoom", 1.12))
-        inc = (zmax - 1.0) / frames
-        style = self.recipe.get("motion", "kenburns_mix")
-        if style == "kenburns_in":
+    def _motion(self, idx: int, frames: int, camera_motion: Optional[str] = None) -> tuple:
+        zmax = float(self.recipe.get("zoom", 1.14))
+        inc = (zmax - 1.0) / max(frames, 1)
+        if camera_motion == "push_in":
             mode = 0
-        elif style == "slow_push":
-            mode, inc = 0, inc * 0.6
-        elif style == "parallax_pan":
-            mode = 2 + idx % 2
+        elif camera_motion == "pull_out":
+            mode = 1
+        elif camera_motion == "pan":
+            mode = 2 + (idx % 3)
         else:
-            mode = idx % 4
-        if mode == 0:
+            style = self.recipe.get("motion", "kenburns_mix")
+            if style == "kenburns_in":
+                mode = 0 if idx % 3 != 2 else 4
+            elif style == "slow_push":
+                mode, inc = 0, inc * 0.65
+            elif style == "parallax_pan":
+                mode = 2 + (idx % 3)
+            else:
+                mode = idx % 5
+        if mode == 0:  # smooth center push-in
             return f"min(1+{inc:.6f}*on,{zmax})", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
-        if mode == 1:
+        if mode == 1:  # smooth pull-out
             return f"max({zmax}-{inc:.6f}*on,1)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
-        if mode == 2:
-            return f"{zmax:.2f}", f"(iw-iw/zoom)*on/{frames}", "ih/2-(ih/zoom/2)"
-        return f"{zmax:.2f}", "iw/2-(iw/zoom/2)", f"(ih-ih/zoom)*(1-on/{frames})"
+        if mode == 2:  # horizontal sweep L -> R
+            return f"{zmax:.2f}", f"(iw-iw/zoom)*on/{max(frames, 1)}", "ih/2-(ih/zoom/2)"
+        if mode == 3:  # horizontal sweep R -> L
+            return f"{zmax:.2f}", f"(iw-iw/zoom)*(1-on/{max(frames, 1)})", "ih/2-(ih/zoom/2)"
+        # diagonal top-left -> center sweep with zoom
+        return (
+            f"min(1+{inc:.6f}*on,{zmax})",
+            f"(iw-iw/zoom)*on/{max(frames, 1)}",
+            f"(ih-ih/zoom)*(1-on/{max(frames, 1)})",
+        )
 
     def _fx(self, fx: str) -> str:
         col = self.recipe.get("flash_color", "white")
         col = col.replace("#", "0x")
         return {
-            "flash": f",fade=t=in:st=0:d=0.14:color={col}",
-            "dip": ",fade=t=in:st=0:d=0.2:color=black",
-            "glitch": ",rgbashift=rh=-26:bh=26:gv=8:enable='lt(t,0.2)',fade=t=in:st=0:d=0.06:color=white",
-            "whip": ",gblur=sigma=45:steps=2:enable='lt(t,0.13)'",
-            "light": ",eq=brightness=0.28:saturation=1.3:enable='lt(t,0.16)'",
-            "punch": f",fade=t=in:st=0:d=0.08:color={col}",
+            "flash": (
+                f",fade=t=in:st=0:d=0.11:color={col},"
+                f"eq=brightness='0.18*max(0,1-t/0.18)':saturation=1.18:enable='lt(t,0.18)'"
+            ),
+            "dip": ",fade=t=in:st=0:d=0.18:color=black",
+            "glitch": ",rgbashift=rh=-26:bh=26:gv=8:enable='lt(t,0.18)',fade=t=in:st=0:d=0.06:color=white",
+            "whip": ",gblur=sigma=42:steps=2:enable='lt(t,0.14)',eq=brightness=0.12:enable='lt(t,0.12)'",
+            "wipe": ",gblur=sigma=24:steps=1:enable='lt(t,0.11)',eq=contrast=1.15:saturation=1.24:enable='lt(t,0.14)'",
+            "light": ",eq=brightness='0.28*exp(-pow(t-0.12,2)/0.008)':saturation=1.32:enable='lt(t,0.28)'",
+            "light_leak": ",eq=brightness='0.28*exp(-pow(t-0.12,2)/0.008)':saturation=1.32:enable='lt(t,0.28)'",
+            "punch": (
+                f",fade=t=in:st=0:d=0.08:color={col},"
+                f"eq=brightness='0.22*max(0,1-t/0.16)':saturation=1.26:enable='lt(t,0.16)'"
+            ),
+            "fade": ",fade=t=in:st=0:d=0.14:color=black",
             "cut": "",
-        }.get(fx, ",fade=t=in:st=0:d=0.12:color=white")
+        }.get(fx, f",fade=t=in:st=0:d=0.10:color={col}")
 
     def _beat_clip(
         self, clip: SceneClip, length: float, idx: int, out: str, t0: float = 0.0
     ) -> str:
+        import re as _re
+
         frames = max(int(round(length * self.fps)), 2)
-        z, x, y = self._motion(idx, frames)
+        z, x, y = self._motion(idx, frames, camera_motion=getattr(clip, "camera_motion", None))
         cut_fx = clip.transition_effect or clip.fx
         if cut_fx == "punch":  # quick zoom-punch into the new picture
             z = f"({z})+0.22*max(0,1-on/7)"
@@ -207,16 +244,47 @@ class VideoRenderer:
         try:
             from video.editor_director import GRADES
 
-            g = GRADES.get(self.recipe.get("grade", ""), "")
+            raw_grade = str(self.recipe.get("grade", "") or "broadcast_crisp").strip()
+            g = GRADES.get(raw_grade) or (
+                raw_grade
+                if ("=" in raw_grade and ("eq" in raw_grade or "colorbalance" in raw_grade))
+                else GRADES.get("broadcast_crisp", "")
+            )
             grade = f",{g}" if g else ""
         except Exception:
             pass
-        vig = ",vignette=PI/5" if self.recipe.get("vignette") else ""
+        vig = ",vignette=PI/5" if self.recipe.get("vignette", True) else ""
         preset_filter: Optional[str] = None
+        if clip.motion_preset_id:
+            try:
+                from video.motion_presets.catalog import get_preset
+
+                spec = get_preset(clip.motion_preset_id)
+                if spec and spec.ffmpeg_filter_template:
+                    preset_filter = spec.ffmpeg_filter_template.format(
+                        frames=frames,
+                        duration=length,
+                        fps=self.fps,
+                        width=self.width,
+                        height=self.height,
+                    )
+                    # Guard against hardcoded d=1 single-frame stall or hardcoded dimensions
+                    preset_filter = _re.sub(r":d=1(?=:|$)", f":d={frames}", preset_filter)
+                    preset_filter = preset_filter.replace(
+                        "1080x1920", f"{self.width}x{self.height}"
+                    ).replace("1080:1920", f"{self.width}:{self.height}")
+            except Exception as exc:
+                logger.debug(
+                    "Preset application skipped for %s: %s", clip.motion_preset_id, exc
+                )
+
         depth_clip = self._depth_clips.get(idx)
         if depth_clip and not clip.video:
             inputs = ["-i", depth_clip, "-i", clip.overlay]
-            fc = f"[0:v]fps={self.fps},setsar=1{grade}{vig}{self._fx(cut_fx)}[bg]"
+            extra_fx = ""
+            if preset_filter and not preset_filter.startswith(("zoompan=", "overlay=", "split", "scale=")):
+                extra_fx = f",{preset_filter}"
+            fc = f"[0:v]fps={self.fps},setsar=1{grade}{vig}{extra_fx}{self._fx(cut_fx)}[bg]"
         elif clip.video and Path(clip.video).exists():
             W, H = self.width, self.height
             trim_ss = clip.video_trim_start if clip.video_trim_start > 0 else 0.5
@@ -238,25 +306,6 @@ class VideoRenderer:
             )
         else:
             inputs = ["-i", clip.background, "-i", clip.overlay]
-            preset_filter = None
-            if clip.motion_preset_id:
-                try:
-                    from video.motion_presets.catalog import get_preset
-
-                    spec = get_preset(clip.motion_preset_id)
-                    if spec and spec.ffmpeg_filter_template:
-                        preset_filter = spec.ffmpeg_filter_template.format(
-                            frames=frames,
-                            duration=length,
-                            fps=self.fps,
-                            width=self.width,
-                            height=self.height,
-                        )
-                except Exception as exc:
-                    logger.debug(
-                        "Preset application skipped for %s: %s", clip.motion_preset_id, exc
-                    )
-
             if preset_filter:
                 if preset_filter.startswith("overlay="):
                     fc = (
@@ -264,7 +313,11 @@ class VideoRenderer:
                         f"s={self.width}x{self.height}:fps={self.fps},setsar=1{grade}{vig}{self._fx(cut_fx)}[bg]"
                     )
                 elif preset_filter.startswith("zoompan="):
-                    fc = f"[0:v]{preset_filter},setsar=1{grade}{vig}{self._fx(cut_fx)}[bg]"
+                    # Combine zoompan with smooth upscale headroom so output isn't blocky
+                    fc = (
+                        f"[0:v]scale={int(self.width * 1.5)}:-2,{preset_filter},"
+                        f"setsar=1{grade}{vig}{self._fx(cut_fx)}[bg]"
+                    )
                 else:
                     fc = (
                         f"[0:v]scale={int(self.width * 1.5)}:-2,zoompan=z='{z}':x='{x}':y='{y}':d={frames}:"
@@ -328,12 +381,14 @@ class VideoRenderer:
         return out
 
     def _pick_music(self) -> Optional[str]:
-        if not MUSIC_DIR.exists():
-            return None
-        tracks = [
-            p for p in MUSIC_DIR.iterdir() if p.suffix.lower() in (".mp3", ".m4a", ".wav", ".ogg")
-        ]
-        return str(random.choice(tracks)) if tracks else None
+        if MUSIC_DIR.exists():
+            tracks = [
+                p for p in MUSIC_DIR.iterdir() if p.suffix.lower() in (".mp3", ".m4a", ".wav", ".ogg")
+            ]
+            if tracks:
+                return str(random.choice(tracks))
+        sfx_bed = ROOT / "assets" / "sfx" / "news_bed_loop.wav"
+        return str(sfx_bed) if sfx_bed.exists() else None
 
     def render(
         self,
@@ -397,38 +452,53 @@ class VideoRenderer:
         inputs = ["-i", str(video_only), "-i", voice_audio]
         fc = []
         atempo = f",atempo={tempo:.4f}" if abs(tempo - 1.0) > 0.005 else ""
-        fc.append(f"[1:a]aresample=44100{atempo},apad=pad_dur={TAIL}[voice]")
+        # Broadcast anchor vocal presence chain: clean sub-85Hz rumble, warm body, crisp diction
+        vocal_eq = (
+            "highpass=f=85,equalizer=f=220:t=q:w=1.2:g=2.0,"
+            "equalizer=f=3200:t=q:w=1.4:g=2.5,acompressor=threshold=-18dB:ratio=2.8:attack=5:release=60"
+        )
+        fc.append(f"[1:a]aresample=44100{atempo},{vocal_eq},apad=pad_dur={TAIL}[voice]")
         mix = ["[voice]"]
         idx = 2
         music_path = self._pick_music() if music else None
         if music_path:
             inputs += ["-stream_loop", "-1", "-i", music_path]
             fc.append(
-                f"[{idx}:a]aresample=44100,volume={music_volume},"
-                f"afade=t=out:st={max(total - 1.5, 0):.2f}:d=1.5[bgm]"
+                f"[{idx}:a]aresample=44100,aformat=channel_layouts=stereo,volume={music_volume},"
+                f"afade=t=in:st=0:d=0.6,afade=t=out:st={max(total - 1.5, 0):.2f}:d=1.5[bgm]"
             )
             fc.append("[voice]asplit=2[vsc][vmix]")
             fc.append(
-                "[bgm][vsc]sidechaincompress=threshold=0.03:ratio=6:attack=20:release=400[duck]"
+                "[bgm][vsc]sidechaincompress=threshold=0.02:ratio=5:attack=15:release=320[duck]"
             )
             mix = ["[vmix]", "[duck]"]
             idx += 1
         if sfx:
             fx = ensure_sfx()
-            inputs += ["-i", fx["whoosh"], "-i", fx["pop"], "-i", fx["hit"]]
-            w_i, p_i, h_i = idx, idx + 1, idx + 2
-            cut_times, t = [], 0.0
+            inputs += ["-i", fx["whoosh"], "-i", fx["pop"], "-i", fx["hit"], "-i", fx["click"]]
+            w_i, p_i, h_i, c_i = idx, idx + 1, idx + 2, idx + 3
+            cut_times, sub_cut_times, t = [], [], 0.0
             for k, d in enumerate(durs[:-1]):
                 t += d
                 if clips[k + 1].story_start:
                     cut_times.append(t)
+                else:
+                    sub_cut_times.append(t)
             n = len(cut_times)
-            if n:
+            if n == 1:
+                ct = cut_times[0]
+                wd = max(int((ct - 0.16) * 1000), 0)
+                pd = int((ct + 0.18) * 1000)
+                fc.append(f"[{w_i}:a]adelay={wd}|{wd},volume=0.22[wd0]")
+                fc.append(f"[{p_i}:a]adelay={pd}|{pd},volume=0.16[pd0]")
+                fc.append("[wd0][pd0]amix=inputs=2:normalize=0:duration=longest[fxcuts]")
+                mix.append("[fxcuts]")
+            elif n > 1:
                 fc.append(f"[{w_i}:a]asplit={n}" + "".join(f"[w{k}]" for k in range(n)))
                 fc.append(f"[{p_i}:a]asplit={n}" + "".join(f"[p{k}]" for k in range(n)))
                 for k, ct in enumerate(cut_times):
-                    wd = max(int((ct - 0.18) * 1000), 0)
-                    pd = int((ct + 0.22) * 1000)
+                    wd = max(int((ct - 0.16) * 1000), 0)
+                    pd = int((ct + 0.18) * 1000)
                     fc.append(f"[w{k}]adelay={wd}|{wd},volume=0.22[wd{k}]")
                     fc.append(f"[p{k}]adelay={pd}|{pd},volume=0.16[pd{k}]")
                 fc.append(
@@ -436,7 +506,22 @@ class VideoRenderer:
                     + f"amix=inputs={2 * n}:normalize=0:duration=longest[fxcuts]"
                 )
                 mix.append("[fxcuts]")
-            fc.append(f"[{h_i}:a]volume=0.35[hit]")
+            m_sub = len(sub_cut_times)
+            if m_sub == 1:
+                cd = max(int(sub_cut_times[0] * 1000), 0)
+                fc.append(f"[{c_i}:a]adelay={cd}|{cd},volume=0.12[fxsub]")
+                mix.append("[fxsub]")
+            elif m_sub > 1:
+                fc.append(f"[{c_i}:a]asplit={m_sub}" + "".join(f"[ck{k}]" for k in range(m_sub)))
+                for k, ct in enumerate(sub_cut_times):
+                    cd = max(int(ct * 1000), 0)
+                    fc.append(f"[ck{k}]adelay={cd}|{cd},volume=0.12[ckd{k}]")
+                fc.append(
+                    "".join(f"[ckd{k}]" for k in range(m_sub))
+                    + f"amix=inputs={m_sub}:normalize=0:duration=longest[fxsub]"
+                )
+                mix.append("[fxsub]")
+            fc.append(f"[{h_i}:a]volume=0.25,afade=t=out:st=1.0:d=0.8[hit]")
             mix.append("[hit]")
         if len(mix) == 1:
             fc.append(

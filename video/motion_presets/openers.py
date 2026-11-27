@@ -51,7 +51,7 @@ OPENER_PRESETS: List[MotionPresetSpec] = [
         duration_min=0.6,
         duration_default=1.2,
         duration_max=2.5,
-        ffmpeg_filter_template="zoompan=z='if(lte(on,8),1.3-(on*0.0375),1.0)':d=1:s=1080x1920:fps=30",
+        ffmpeg_filter_template="zoompan=z='if(lte(on,8),1.3-(on*0.0375),1.0)':d={frames}:s={width}x{height}:fps={fps}",
         keyframes=[
             KeyframeAnimation(
                 time_offset=0.0,
@@ -189,7 +189,7 @@ OPENER_PRESETS: List[MotionPresetSpec] = [
         duration_min=0.5,
         duration_default=1.0,
         duration_max=2.0,
-        ffmpeg_filter_template="zoompan=z='if(lte(on,6),1.0+(on*0.04),if(lte(on,15),1.24-((on-6)*0.026),1.0))':d=1:s=1080x1920:fps=30",
+        ffmpeg_filter_template="zoompan=z='if(lte(on,6),1.0+(on*0.04),if(lte(on,15),1.24-((on-6)*0.026),1.0))':d={frames}:s={width}x{height}:fps={fps}",
         keyframes=[
             KeyframeAnimation(
                 time_offset=0.0, scale_x=1.0, scale_y=1.0, easing=EasingType.EXPONENTIAL_OUT

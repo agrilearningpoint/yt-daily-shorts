@@ -17,6 +17,8 @@ from typing import Dict, List, Tuple
 
 from PIL import Image, ImageDraw, ImageFont, features
 
+from video.scene_composer import shape_devanagari
+
 logger = logging.getLogger("video.motion_graphics")
 
 W, H = 1080, 1920
@@ -103,54 +105,64 @@ class MotionGraphicsEngine:
         # Channel name / Bulletin title
         fnt_title = _get_font(38, "Bold")
         bulletin_title = "सुपरफास्ट 20+ बड़ी खबरें" if not is_hook else f"{self.channel_name} | BREAKING"
-        d.text((195, 76), bulletin_title, font=fnt_title, fill=(255, 255, 255, 240))
+        d.text((195, 76), shape_devanagari(bulletin_title), font=fnt_title, fill=(255, 255, 255, 240))
 
         # Date & Time label (right aligned)
         if date_str:
             fnt_date = _get_font(30, "Medium")
-            dw = d.textlength(date_str, font=fnt_date)
-            d.text((W - 70 - dw, 82), date_str, font=fnt_date, fill=(203, 213, 225, 230))
+            sd_date = shape_devanagari(date_str)
+            dw = d.textlength(sd_date, font=fnt_date)
+            d.text((W - 70 - dw, 82), sd_date, font=fnt_date, fill=(203, 213, 225, 230))
 
         # -------------------------------------------------------------
         # 2. STORY COUNTER & CATEGORY BADGE
         # -------------------------------------------------------------
         if not is_hook and story_index > 0:
-            # Story Counter Pill: 'खबर 01 / 20'
-            counter_text = f"खबर {story_index:02d} / {total_stories:02d}"
+            # Story Counter Pill: 'खबर 01 / 08'
+            counter_text = shape_devanagari(
+                f"खबर {story_index:02d} / {max(total_stories, 1):02d}"
+            )
             fnt_counter = _get_font(34, "Bold")
             cw = d.textlength(counter_text, font=fnt_counter)
-            d.rounded_rectangle([40, 160, 40 + cw + 40, 224], radius=16, fill=(255, 214, 10, 255))
-            d.text((60, 169), counter_text, font=fnt_counter, fill=(10, 10, 10, 255))
+            d.rounded_rectangle([40, 152, 40 + cw + 40, 214], radius=16, fill=(255, 214, 10, 255))
+            d.text((60, 160), counter_text, font=fnt_counter, fill=(10, 10, 10, 255))
 
             # Category Badge
-            cat_name = category.strip() or "राष्ट्रीय"
-            cat_color, cat_bg = CATEGORY_COLORS.get(cat_name, CATEGORY_COLORS["default"])
+            cat_name = shape_devanagari(category.strip() or "राष्ट्रीय")
+            cat_color, cat_bg = CATEGORY_COLORS.get(category.strip() or "राष्ट्रीय", CATEGORY_COLORS["default"])
             fnt_cat = _get_font(34, "Bold")
             cat_w = d.textlength(cat_name, font=fnt_cat)
             cat_x = 40 + cw + 55
             d.rounded_rectangle(
-                [cat_x, 160, cat_x + cat_w + 40, 224], radius=16, fill=cat_color + (240,)
+                [cat_x, 152, cat_x + cat_w + 40, 214], radius=16, fill=cat_color + (240,)
             )
-            d.text((cat_x + 20, 169), cat_name, font=fnt_cat, fill=(255, 255, 255, 255))
+            d.text((cat_x + 20, 160), cat_name, font=fnt_cat, fill=(255, 255, 255, 255))
+        elif is_hook:
+            hook_pill = shape_devanagari(category.strip() or "बड़ी खबर")
+            fnt_hook = _get_font(34, "ExtraBold")
+            hw = d.textlength(hook_pill, font=fnt_hook)
+            d.rounded_rectangle([40, 152, 40 + hw + 44, 214], radius=16, fill=(225, 29, 72, 245))
+            d.text((62, 160), hook_pill, font=fnt_hook, fill=(255, 255, 255, 255))
 
         # -------------------------------------------------------------
-        # 3. LOWER THIRD HEADLINE STRAP
+        # 3. LOWER THIRD HEADLINE STRAP (cleanly below captions, above ticker)
         # -------------------------------------------------------------
         if headline.strip():
-            fnt_head = _get_font(72, "ExtraBold") if is_hook else _get_font(60, "Bold")
+            fnt_head = _get_font(62, "ExtraBold") if is_hook else _get_font(54, "Bold")
             lines = _wrap_headline(
-                d, headline.strip(), fnt_head, W - 140, max_lines=3 if is_hook else 2
+                d, headline.strip(), fnt_head, W - 140, max_lines=2
             )
 
-            box_h = len(lines) * 88 + 48
-            box_y = 1380 - box_h  # positioned cleanly above YouTube UI controls
+            line_h = 74 if is_hook else 66
+            box_h = len(lines) * line_h + 38
+            box_y = 1565 - box_h  # sits cleanly below y~1350 captions and above y=1605 ticker
 
             # Translucent dark backdrop
             d.rounded_rectangle(
-                [40, box_y, W - 40, box_y + box_h], radius=24, fill=(10, 15, 28, 230)
+                [40, box_y, W - 40, box_y + box_h], radius=22, fill=(10, 15, 28, 232)
             )
             d.rounded_rectangle(
-                [40, box_y, W - 40, box_y + box_h], radius=24, outline=(255, 255, 255, 30), width=2
+                [40, box_y, W - 40, box_y + box_h], radius=22, outline=(255, 255, 255, 45), width=2
             )
 
             # Left accent highlight bar
@@ -158,17 +170,17 @@ class MotionGraphicsEngine:
             d.rounded_rectangle([42, box_y + 8, 54, box_y + box_h - 8], radius=6, fill=accent_col)
 
             # Headline text
-            ty = box_y + 22
+            ty = box_y + 18
             for line in lines:
                 d.text(
-                    (70, ty),
-                    line,
+                    (72, ty),
+                    shape_devanagari(line),
                     font=fnt_head,
                     fill=(255, 255, 255, 255),
                     stroke_width=2,
-                    stroke_fill=(0, 0, 0, 180),
+                    stroke_fill=(0, 0, 0, 190),
                 )
-                ty += 84
+                ty += line_h
 
         # -------------------------------------------------------------
         # 4. SEGMENTED PROGRESS TIMELINE (At Bottom)

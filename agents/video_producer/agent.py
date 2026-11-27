@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pytz
 
@@ -18,7 +18,7 @@ from agents.base_agent import AgentResult, BaseAgent
 from core.duration import SHORTS_SAFE_MAX
 from video.vision_check import make_vision_check
 from video.media_collector import MediaCollector, MediaAsset
-from video.renderer import SceneClip, VideoRenderer
+from video.renderer import TAIL, SceneClip, VideoRenderer, quantize_durations
 from video.scene_composer import (
     SceneComposer,
     compose_chip,
@@ -29,6 +29,7 @@ from video.scene_composer import (
 from video.editor_director import EditorDirector
 from video.tts import GeminiTTS, TTSEngine, probe_duration
 from video.semantic_matcher import (
+    TOPIC_THEMES,
     SemanticVisualMatcher,
     extract_entity_from_hindi,
     detect_topic_theme,
@@ -142,8 +143,9 @@ class VideoProducerAgent(BaseAgent):
         theme: Dict[str, Any] = kwargs.get("creative_brief", {}) or {}
         research: Dict[str, Any] = kwargs.get("research_data", {}) or {}
         vfx_data: Dict[str, Any] = kwargs.get("vfx_data", {}) or {}
-        kwargs.get("motion_data", {}) or {}
         hook_data: Dict[str, Any] = kwargs.get("hook_data", {}) or {}
+        opening_brief = kwargs.get("opening_brief")
+        pre_sourced_assets = kwargs.get("visual_assets") or {}
         video_id = kwargs.get("video_id", "daily_short")
         video_type = script.get("video_type", "news")
         is_news = video_type == "news"
@@ -151,17 +153,27 @@ class VideoProducerAgent(BaseAgent):
         out_dir.mkdir(parents=True, exist_ok=True)
         vcfg = self.config.video
 
-        # Check for approved hook contract
+        # Check for approved hook contract (never overwrite it later!)
         approved_hook = hook_data.get("approved_hook", {})
         if approved_hook and isinstance(approved_hook, dict):
             hook = approved_hook.get("text", "").strip() or script.get("hook", "").strip()
-            hook_lead_entity = approved_hook.get("paired_visual_entity", "")
+            hook_lead_entity = (
+                approved_hook.get("entity_hint", "")
+                or approved_hook.get("paired_visual_entity", "")
+            )
+            hook_lead_search = approved_hook.get("visual_pairing_query", "")
             hook_lead_path = approved_hook.get("paired_visual_path", "")
-            approved_hook.get("headline_overlay", "")
+            hook_lead_url = approved_hook.get("paired_source_url", "")
+            hook_lead_img = approved_hook.get("paired_image_url", "")
+            hook_chip = approved_hook.get("headline_chip", "")
         else:
             hook = script.get("hook", "").strip()
             hook_lead_entity = ""
+            hook_lead_search = ""
             hook_lead_path = ""
+            hook_lead_url = ""
+            hook_lead_img = ""
+            hook_chip = ""
 
         # Map VFX plan items by scene_id / index
         vfx_plan_items = vfx_data.get("vfx_plan", [])
@@ -171,7 +183,6 @@ class VideoProducerAgent(BaseAgent):
                 vfx_map[item["scene_id"]] = item
 
         scenes: List[Dict[str, Any]] = script.get("scenes", [])
-        hook = script.get("hook", "").strip()
         spoken = (
             getattr(self.config.general, "channel_name_spoken", "")
             or self.config.general.channel_name
@@ -193,41 +204,69 @@ class VideoProducerAgent(BaseAgent):
         by_url = {i.get("source_url"): i for i in items}
         beats: List[Dict[str, Any]] = []
         fig: Dict[str, Any] = {"avg_match": -1, "picture_parts": 0, "no_picture_parts": 0}
-        # Opening Hook: always present at the start of the video, with 100% voice-matched visual
+        # Opening Hook: pair directly with the matching top news story (NOT 'today' date scene!)
         if hook:
-            first_scene = scenes[0] if scenes else {}
-            hook_entity = hook_lead_entity or extract_entity_from_hindi(hook) or ""
-            if not hook_entity and first_scene:
-                hook_entity = (
-                    first_scene.get("image_query", "")
-                    or extract_entity_from_hindi(first_scene.get("narration", ""))
-                    or ""
-                )
+            news_candidates = [s for s in scenes if s.get("section") != "today"] or scenes
+            hook_words = set(re.findall(r"[\u0900-\u097F]{2,}|[A-Za-z0-9]{2,}", hook.lower()))
+            first_scene = news_candidates[0] if news_candidates else {}
+            best_hits = 0
+            for cand_sc in news_candidates:
+                sc_str = f"{cand_sc.get('on_screen_text', '')} {cand_sc.get('narration', '')}".lower()
+                hits = sum(1 for w in hook_words if w in sc_str)
+                if hits > best_hits:
+                    best_hits = hits
+                    first_scene = cand_sc
+            first_part = (first_scene.get("parts") or [{}])[0] if first_scene else {}
+            hook_entity = (
+                extract_entity_from_hindi(hook)
+                or hook_lead_entity
+                or first_part.get("entity", "")
+                or first_scene.get("image_query", "")
+                or extract_entity_from_hindi(first_scene.get("narration", ""))
+                or ""
+            )
             hook_search = (
-                hook_entity
+                hook_lead_search
+                or first_part.get("search", "")
+                or hook_entity
                 or first_scene.get("visual_keywords", "")
                 or (topic_kw if not is_news else "Parliament of India building New Delhi")
             )
-            hook_pub = ""
-            if is_news and first_scene:
-                first_url = (first_scene.get("sources") or [""])[0]
-                hook_pub = by_url.get(first_url, {}).get("image_url", "")
+            hook_pub = hook_lead_img
+            hook_art_url = hook_lead_url or (
+                (first_scene.get("sources") or [""])[0] if first_scene else ""
+            )
+            if is_news and not hook_pub and hook_art_url:
+                hook_pub = by_url.get(hook_art_url, {}).get("image_url", "")
             hook_preferred = hook_lead_path or (lead_image if not is_news else hook_pub)
+            hook_nq = (
+                by_url.get(hook_art_url, {}).get("title")
+                or first_scene.get("headline")
+                or first_scene.get("on_screen_text", "")
+            )
             beats.append(
                 {
                     "kind": "hook",
                     "text": hook,
-                    "chip": first_scene.get("on_screen_text", "")
-                    or ("आज की बड़ी खबर" if is_news else "विशेष जानकारी"),
+                    "chip": (
+                        first_scene.get("on_screen_text", "")
+                        or hook_chip
+                        or ("आज की बड़ी खबर" if is_news else "विशेष जानकारी")
+                    ),
                     "category": "बड़ी खबर",
+                    "_scene_id": "scene_000_hook",
                     "parts": [
                         {
                             "say": hook,
-                            "visual": hook,
+                            "visual": first_part.get("visual") or hook,
                             "entity": hook_entity,
                             "search": hook_search,
                             "source": "",
                             "preferred": hook_preferred,
+                            "article": hook_art_url,
+                            "article_page": hook_art_url,
+                            "publisher": hook_pub,
+                            "news_query": hook_nq,
                         }
                     ],
                 }
@@ -243,15 +282,15 @@ class VideoProducerAgent(BaseAgent):
                 }
             ]
             if is_news and s.get("section") != "today":
-                # date / rashifal / trading beats carry their own visual description (no article page)
+                # Attach article URL/publisher/news_query to ALL parts so part 1 can fetch alt photos
                 url = (s.get("sources") or [""])[0]
-                parts[0]["article"] = url
                 it = by_url.get(url, {})
-                parts[0]["publisher"] = it.get("image_url", "")
-                parts[0]["publisher_name"] = it.get("source_name", "")
-                parts[0]["article_page"] = url
                 nq = it.get("title") or s.get("headline") or s.get("on_screen_text", "")
-                for p in parts:
+                for k_pt, p in enumerate(parts):
+                    p["article"] = url
+                    p["article_page"] = url
+                    p["publisher"] = it.get("image_url", "") if k_pt == 0 else ""
+                    p["publisher_name"] = it.get("source_name", "")
                     p["news_query"] = nq
                     if p.get("search") and p.get("search") != nq:
                         p["news_query_en"] = p["search"]
@@ -267,6 +306,8 @@ class VideoProducerAgent(BaseAgent):
                     "category": s.get("category", ""),
                     "parts": parts,
                     "n": i + 1,
+                    "_scene_idx": i,
+                    "_scene_id": f"scene_{i:03d}",
                 }
             )
         if is_news and any(s.get("section") for s in scenes):
@@ -317,17 +358,15 @@ class VideoProducerAgent(BaseAgent):
             b["chip"] = (b.get("chip") or "").translate(_dash)
             b["category"] = (b.get("category") or "").translate(_dash)
         # _clean_dash
-        # ---- 1. voice (human-like, one pass) ----------------------------------
+        # ---- 1. voice (human-like, one coherent pass with WordBoundary cut alignment) ----------
         style = self.config.tts.news_style if is_news else self.config.tts.knowledge_style
         if is_news:
             self.tts.voice = getattr(self.config.tts, "news_voice", "hi-IN-SwaraNeural")
-            self.tts.fallback_voice = getattr(
-                self.config.tts, "fallback_voice", "hi-IN-KavyaNeural"
-            )
-            if self.tts.fallback_voice == "hi-IN-MadhurNeural":
-                self.tts.fallback_voice = "hi-IN-KavyaNeural"
-        # Voice is made per small PART (the line each picture belongs to), so every picture changes
-        # exactly when its own line starts: no more "voice about X over a photo of Y".
+            fb_v = getattr(self.config.tts, "fallback_voice", "hi-IN-MadhurNeural")
+            if fb_v == "hi-IN-KavyaNeural":
+                fb_v = "hi-IN-MadhurNeural"
+            self.tts.fallback_voice = fb_v
+        # Synthesize coherently across sentences while snapping visual cut points to WordBoundaries
         seg_texts: List[str] = []
         seg_owner: List[tuple] = []
         for i, b in enumerate(beats):
@@ -339,7 +378,9 @@ class VideoProducerAgent(BaseAgent):
             else:
                 seg_texts.append(b["text"])
                 seg_owner.append((i, 0))
-        voice = await self.tts.voice_beats(seg_texts, str(out_dir), style=style)
+        voice = await self.tts.voice_beats(
+            seg_texts, str(out_dir), style=style, owner_ids=[b_id for b_id, _ in seg_owner]
+        )
         self.tts.dump_timings(
             seg_texts, voice.durations, voice.provider, str(out_dir / "timings.json")
         )
@@ -353,9 +394,12 @@ class VideoProducerAgent(BaseAgent):
         max_d = min(
             float(vcfg.news_max_duration if is_news else vcfg.max_duration), SHORTS_SAFE_MAX
         )
-        if total_audio > max_d:
-            tempo = min(total_audio / max_d, 1.06)  # never chipmunk the anchor
-            self.logger.warning("Voice %.1fs > %ss — tempo %.3f", total_audio, max_d, tempo)
+        voiced_budget = max(10.0, max_d - 0.6)  # leave headroom for renderer TAIL
+        if total_audio > voiced_budget:
+            tempo = min(total_audio / voiced_budget, 1.35)  # WSOLA atempo preserves pitch
+            self.logger.warning(
+                "Voice %.1fs > %.1fs budget — tempo %.3f", total_audio, voiced_budget, tempo
+            )
 
         # ---- 2. semantic visual sourcing (Wikipedia / Wikimedia / MediaCollector) ----
         specs = []
@@ -454,21 +498,84 @@ class VideoProducerAgent(BaseAgent):
                         match=0.85,
                     )
 
-        # 4. Strict intra-story resolution only: NEVER borrow from another story
+        # 4. Reuse pre-sourced assets if missing, eliminate duplicate adjacent hashes,
+        #    and mark same-story reuses for distinct close-up zoom framing
+        import hashlib as _hashlib
+
+        def _img_sha1(path_str: Optional[str]) -> str:
+            if not path_str or not Path(path_str).exists():
+                return ""
+            try:
+                return _hashlib.sha1(Path(path_str).read_bytes()).hexdigest()
+            except Exception:
+                return ""
+
         missing = 0
+        cropped_parts: set = set()
+        seen_hashes: Dict[str, tuple] = {}
+        prev_hash = ""
         for i, b in enumerate(beats):
             n = len(b["parts"])
+            sc_key = b.get("_scene_id", "")
             for k in range(n):
+                cur_a = assets.get((i, k))
+                if not cur_a and isinstance(pre_sourced_assets, dict) and sc_key in pre_sourced_assets:
+                    pre = pre_sourced_assets[sc_key]
+                    pre_p = getattr(pre, "local_path", getattr(pre, "path", ""))
+                    if pre and pre_p and Path(pre_p).exists() and k == 0:
+                        assets[(i, k)] = MediaAsset(
+                            path=pre_p,
+                            source=getattr(pre, "source_provider", "pre_sourced"),
+                            credit=getattr(pre, "attribution_text", ""),
+                            labels=getattr(pre, "visual_description", ""),
+                            match=getattr(pre, "event_match_score", 0.85),
+                        )
+                        cur_a = assets[(i, k)]
                 if not assets.get((i, k)):
-                    # Only borrow from other parts of the EXACT SAME beat
+                    # Borrow from other parts of the EXACT SAME beat and crop-zoom so frames differ
                     same_story = [
                         assets.get((i, j)) for j in range(n) if j != k and assets.get((i, j))
                     ]
                     if same_story:
                         assets[(i, k)] = same_story[0]
+                        cropped_parts.add((i, k))
                     else:
                         assets[(i, k)] = None
                         missing += 1
+                a_obj = assets.get((i, k))
+                if a_obj and getattr(a_obj, "path", "") and b.get("kind") != "outro":
+                    h = _img_sha1(a_obj.path)
+                    if h and (h == prev_hash or h in seen_hashes):
+                        # Replace cross-story duplicate visuals with a fresh Wikimedia Commons photo
+                        say_txt = (b["parts"][k].get("say", "") if k < len(b["parts"]) else "")
+                        ent_q = extract_entity_from_hindi(say_txt)
+                        theme_k = detect_topic_theme(say_txt)
+                        alt_q = (
+                            ent_q
+                            or b["parts"][k].get("search", "")
+                            or TOPIC_THEMES.get(theme_k, {}).get("en", "")
+                        )
+                        if alt_q and self.semantic_matcher:
+                            alt_dest = out_dir / f"src_uniq_{i:03d}_{k}.jpg"
+                            fresh_path = self.semantic_matcher.search_wikimedia_commons(
+                                f"{alt_q} news photo" if k > 0 else alt_q, alt_dest
+                            )
+                            fresh_h = _img_sha1(fresh_path) if fresh_path else ""
+                            if fresh_path and fresh_h and fresh_h not in seen_hashes:
+                                a_obj = MediaAsset(
+                                    path=str(fresh_path),
+                                    source="commons",
+                                    credit=f"Image: Wikimedia Commons / {alt_q}",
+                                    labels=alt_q,
+                                    match=0.85,
+                                )
+                                assets[(i, k)] = a_obj
+                                h = fresh_h
+                        if h in seen_hashes or h == prev_hash:
+                            cropped_parts.add((i, k))
+                    if h:
+                        seen_hashes[h] = (i, k)
+                        prev_hash = h
         scored = [a.match for a in assets.values() if a and getattr(a, "match", -1) >= 0]
         avg_match = sum(scored) / len(scored) if scored else -1
         fig = {
@@ -513,14 +620,20 @@ class VideoProducerAgent(BaseAgent):
         theme = EditorDirector.theme(recipe, theme)
         composer = SceneComposer(theme, channel_name=self.config.general.channel_name)
         master_timeline = kwargs.get("master_timeline")
-        if master_timeline and getattr(master_timeline, "color_grade_filter", None):
-            recipe["grade"] = getattr(master_timeline, "color_grade_filter", "") or recipe.get(
-                "grade", "broadcast_crisp"
+        opening_presets = (
+            getattr(opening_brief, "motion_preset_ids", []) if opening_brief else []
+        ) or []
+        from video.editor_director import GRADES as _GRADES
+
+        vfx_grade = (vfx_data or {}).get("color_grade", "")
+        if vfx_grade in _GRADES:
+            recipe["grade"] = vfx_grade
+        elif not recipe.get("grade") or recipe.get("grade") not in _GRADES:
+            recipe["grade"] = (
+                self.vfx_engine.color_grade
+                if self.vfx_engine.color_grade in _GRADES
+                else "broadcast_crisp"
             )
-        elif vfx_data and vfx_data.get("color_grade"):
-            recipe["grade"] = vfx_data["color_grade"]
-        elif "grade" not in recipe or not recipe.get("grade"):
-            recipe["grade"] = self.vfx_engine.color_grade
         self.renderer.recipe = recipe
         ticker_y = 0
         self.renderer.ticker = None
@@ -529,7 +642,15 @@ class VideoProducerAgent(BaseAgent):
             if heads:
                 self.renderer.ticker = compose_ticker(composer, str(out_dir / "ticker.png"), heads)
                 ticker_y = self.renderer.ticker_y
-        fx_cycle = ["punch", "whip", "flash", "glitch", "light"]
+        fx_cycle = ["punch", "whip", "flash", "light", "wipe", "glitch"]
+        photo_preset_cycle = [
+            "photo_slow_push_in",
+            "photo_diagonal_pan",
+            "photo_smooth_pull_out",
+            "photo_horizontal_parallax",
+            "photo_focus_crop",
+            "photo_vertical_parallax",
+        ]
         default_badge = (
             "आज की बड़ी खबरें"
             if is_news
@@ -646,6 +767,7 @@ class VideoProducerAgent(BaseAgent):
                         bg,
                         seed=ci,
                         card_text="" if asset else b["chip"],
+                        crop_zoom=((i, k) in cropped_parts),
                     )
                     if asset and asset.source == "ai":
                         _stamp(bg, "सांकेतिक चित्र (AI)")
@@ -691,23 +813,50 @@ class VideoProducerAgent(BaseAgent):
                             ticker_y=ticker_y if b["kind"] == "item" else 0,
                             stat=_stat(p.get("say", "")) if b["kind"] == "item" and k > 0 else "",
                         )
+                sc_vfx: Dict[str, Any] = {}
                 if b["kind"] in ("section", "outro"):
                     fx = "dip"
+                    m_preset = (
+                        "brand_international_bumper"
+                        if b.get("section") == "international"
+                        else (
+                            "brand_national_bumper"
+                            if b["kind"] == "section"
+                            else "brand_outro_subscribe"
+                        )
+                    )
                 elif b["kind"] == "hook":
                     hook_vfx = vfx_map.get("scene_000_hook", {})
+                    sc_vfx = hook_vfx
                     fx = hook_vfx.get("transition_effect", "punch")
-                elif k == 0:  # a new story: snappy broadcast transition
+                    m_preset = (
+                        hook_vfx.get("motion_preset_id")
+                        or (opening_presets[0] if opening_presets else None)
+                        or "opener_breaking_red_flash"
+                    )
+                elif k == 0:  # a new story: snappy VFX transition & category motion preset
                     scene_key = f"scene_{b.get('n', ci):03d}"
                     sc_vfx = vfx_map.get(scene_key, {})
                     fx = sc_vfx.get("transition_effect") or fx_cycle[b.get("n", ci) % len(fx_cycle)]
-                else:  # next line of the same story: straight cut, like TV news
-                    fx = "cut"
+                    cand_preset = sc_vfx.get("motion_preset_id", "")
+                    m_preset = (
+                        cand_preset
+                        if cand_preset and cand_preset.startswith("photo_")
+                        else photo_preset_cycle[ci % len(photo_preset_cycle)]
+                    )
+                else:  # sub-part cut inside same story: alternate zoom/pan & punch/wipe micro-fx
+                    fx = "wipe" if k % 2 == 1 else "cut"
+                    m_preset = photo_preset_cycle[(ci + 1) % len(photo_preset_cycle)]
+                cam_motion = sc_vfx.get("camera_motion") or (
+                    "push_in" if ci % 2 == 0 else ("pan" if ci % 3 == 0 else "pull_out")
+                )
                 clips.append(
                     SceneClip(
                         bg,
                         frame,
                         pdur,
                         chip=chip,
+                        chip_y=1390,
                         story_start=(k == 0),
                         fx=fx,
                         ticker=bool(ticker_y) and b["kind"] == "item",
@@ -717,6 +866,10 @@ class VideoProducerAgent(BaseAgent):
                             else ""
                         ),
                         depth=bool(asset and b["kind"] == "item" and asset.source != "ai"),
+                        motion_preset_id=m_preset,
+                        camera_motion=cam_motion,
+                        transition_effect=fx,
+                        sfx_cue=sc_vfx.get("sfx_type"),
                     )
                 )
                 clip_meta.append(
@@ -737,24 +890,35 @@ class VideoProducerAgent(BaseAgent):
         captions = srt_path = None
         audio_to_render = voice.audio_path
 
-        # If master_timeline is provided by MasterEditingDirector, adopt its authoritative clips & audio
-        if master_timeline and getattr(master_timeline, "segments", None):
-            try:
-                from agents.master_editing_director.agent import MasterEditingDirectorAgent
-
-                med = MasterEditingDirectorAgent(self.config, self.state_manager)
-                tl_clips, _ = med.build_renderer_clips(master_timeline, out_dir)
-                if tl_clips:
-                    clips = tl_clips
-                    if (
-                        master_timeline.master_audio_path
-                        and Path(master_timeline.master_audio_path).exists()
-                    ):
-                        audio_to_render = master_timeline.master_audio_path
-            except Exception as exc:
-                self.logger.warning(
-                    "Adopting master_timeline clips failed (%s), keeping standard clips", exc
+        # Keep authoritative synced clips (1:1 locked to measured TTS voice durations!)
+        # Populate MasterEditingTimeline from real audio & synced clips rather than overwriting
+        # synced clips with pre-TTS word-count guesses.
+        if timeline and getattr(timeline, "segments", None):
+            timeline.video_id = video_id
+            timeline.master_audio_path = audio_to_render
+            q_tl_durs = quantize_durations(
+                [c.duration / (tempo or 1.0) for c in clips],
+                fps=self.renderer.fps,
+                tail=TAIL,
+            )
+            cur_t = 0.0
+            for seg, sc_clip, qd in zip(timeline.segments, clips, q_tl_durs):
+                seg.visual_path = sc_clip.background or seg.visual_path
+                seg.overlay_path = sc_clip.overlay
+                seg.measured_duration = round(qd, 4)
+                seg.audio_start = round(cur_t, 4)
+                seg.audio_end = round(cur_t + qd, 4)
+                seg.visual_start = seg.audio_start
+                seg.visual_end = seg.audio_end
+                seg.motion_preset_id = sc_clip.motion_preset_id or seg.motion_preset_id
+                seg.transition_effect = (
+                    sc_clip.transition_effect or sc_clip.fx or seg.transition_effect
                 )
+                seg.camera_motion = sc_clip.camera_motion or seg.camera_motion
+                seg.sfx_cue = sc_clip.sfx_cue or seg.sfx_cue
+                cur_t += qd
+            timeline.total_duration = round(cur_t, 4)
+            master_timeline = timeline
 
         beat_words = getattr(voice, "beat_words", None) or []
         if getattr(vcfg, "burn_captions", True):
@@ -926,6 +1090,7 @@ class VideoProducerAgent(BaseAgent):
                 "ai_images": sum(1 for a in assets.values() if a and a.source == "ai"),
                 "visual_match": fig,
                 "storage_urls": storage_urls,
+                "master_timeline": master_timeline,
             },
             errors=[] if ok else ["rendered video missing or too small"],
         )
@@ -988,6 +1153,8 @@ class VideoProducerAgent(BaseAgent):
             if not alt:
                 continue
             composer.compose_background(alt.path, m["bg"], seed=idx)
+            if hasattr(self.renderer, "_depth_clips"):
+                self.renderer._depth_clips.clear()
             if alt.source == "ai":
                 _stamp(m["bg"], "सांकेतिक चित्र (AI)")
             replaced += 1
@@ -1028,10 +1195,11 @@ class VideoProducerAgent(BaseAgent):
             for own, bw in zip(seg_owner, beat_words):
                 owner_words[own] = bw
         words, t = [], 0.0
-        for qd, m in zip(q_durs, clip_meta):
-            if m.get("kind") == "item":
+        for ci, (qd, m) in enumerate(zip(q_durs, clip_meta)):
+            if m.get("kind") in ("hook", "item"):
                 own = (m["beat"], m["part"])
                 real_bw = owner_words.get(own) or []
+                clip_end = round(t + qd, 3)
                 if real_bw:
                     base0 = real_bw[0].start
                     orig_span = max((real_bw[-1].end - base0), 0.1)
@@ -1041,7 +1209,15 @@ class VideoProducerAgent(BaseAgent):
                         en = round(
                             min(t + qd - 0.02, max(st + 0.04, t + (w.end - base0) * wscale)), 3
                         )
-                        words.append({"word": w.word, "start": st, "end": en})
+                        words.append(
+                            {
+                                "word": w.word,
+                                "start": st,
+                                "end": en,
+                                "clip_idx": ci,
+                                "clip_end": clip_end,
+                            }
+                        )
                 else:
                     say = (m["spec"].get("say") or "").strip()
                     toks = say.split()
@@ -1053,7 +1229,13 @@ class VideoProducerAgent(BaseAgent):
                         for w, wt in zip(toks, weights):
                             d = span * wt / tot
                             words.append(
-                                {"word": w, "start": round(cur, 3), "end": round(cur + d, 3)}
+                                {
+                                    "word": w,
+                                    "start": round(cur, 3),
+                                    "end": round(cur + d, 3),
+                                    "clip_idx": ci,
+                                    "clip_end": clip_end,
+                                }
                             )
                             cur += d
             t += qd
@@ -1064,8 +1246,8 @@ class VideoProducerAgent(BaseAgent):
             words,
             str(Path(out_dir) / "captions.ass"),
             highlight_color="#FFD60A",
-            font_size=112,
-            margin_v=730,
+            font_size=90,
+            margin_v=560,
         )
         srt = gen.generate_srt_from_words(words, str(Path(out_dir) / "captions.srt"))
         return ass, srt
