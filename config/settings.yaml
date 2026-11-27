@@ -51,7 +51,7 @@ video:
   news_international_count: 2
   output_format: "mp4"
   background_music: true
-  music_volume: 0.10
+  music_volume: 0.14
   news_headline_count: 8
   depth_motion: true
   show_headline_chips: true
@@ -82,11 +82,11 @@ tts:
   knowledge_style: "warm, curious Hindi storyteller, natural conversational pace, expressive and unhurried"
   provider: "edge-tts"
   voice: "hi-IN-SwaraNeural"
-  fallback_voice: "hi-IN-KavyaNeural"
+  fallback_voice: "hi-IN-MadhurNeural"
   news_voice: "hi-IN-SwaraNeural"
   knowledge_voice: "hi-IN-MadhurNeural"
-  rate: "+5%"
-  pitch: "+0Hz"
+  rate: "+7%"
+  pitch: "+1Hz"
 
 profiles:
   daily_news_bulletin:

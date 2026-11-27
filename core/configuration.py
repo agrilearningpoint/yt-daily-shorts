@@ -102,11 +102,11 @@ class LLMConfig:
 class TTSConfig:
     provider: str = "edge-tts"
     voice: str = "hi-IN-SwaraNeural"
-    fallback_voice: str = "hi-IN-KavyaNeural"
+    fallback_voice: str = "hi-IN-MadhurNeural"
     news_voice: str = "hi-IN-SwaraNeural"
     knowledge_voice: str = "hi-IN-MadhurNeural"
-    rate: str = "+5%"
-    pitch: str = "+0Hz"
+    rate: str = "+7%"
+    pitch: str = "+1Hz"
     provider_order: List[str] = field(default_factory=lambda: ["gemini", "edge"])
     gemini_models: List[str] = field(
         default_factory=lambda: [
@@ -136,7 +136,7 @@ class VideoConfig:
     output_format: str = "mp4"
     quality: str = "high"
     background_music: bool = True
-    music_volume: float = 0.10
+    music_volume: float = 0.14
     news_headline_count: int = 8
     show_headline_chips: bool = True
     burn_captions: bool = True  # word-synced Hindi captions (audit 2026-11-08)

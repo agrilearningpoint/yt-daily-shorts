@@ -504,8 +504,12 @@ class TTSEngine:
         return words
 
     @staticmethod
-    def _trim_segment_silence(path: Path) -> None:
-        """Trim long encoder silence padding at start/end to a crisp 0.08s breath pause."""
+    def _trim_segment_silence(path: Path) -> Tuple[float, float]:
+        """Trim long encoder silence padding at start/end to a crisp 0.08s breath pause.
+
+        Returns (orig_duration, new_duration) so callers can rescale WordBoundary timings.
+        """
+        orig_dur = probe_duration(str(path))
         ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
         tmp = path.with_suffix(".tmp.mp3")
         af = (
@@ -532,8 +536,34 @@ class TTSEngine:
         )
         if res.returncode == 0 and tmp.exists() and tmp.stat().st_size > 1000:
             tmp.replace(path)
-        elif tmp.exists():
+            new_dur = probe_duration(str(path)) or orig_dur
+            return orig_dur, new_dur
+        if tmp.exists():
             tmp.unlink(missing_ok=True)
+        return orig_dur, orig_dur
+
+    @staticmethod
+    def _rescale_trimmed_words(
+        words: List[WordTiming], orig_dur: float, new_dur: float
+    ) -> List[WordTiming]:
+        """Shift/align captured WordBoundary timings cleanly after edge silence trim."""
+        if not words or new_dur <= 0:
+            return []
+        lead = words[0].start
+        # If leading silence (~lead) was trimmed down to near 0, shift left by ~lead
+        trimmed_head = max(0.0, orig_dur - max(0.0, new_dur - 0.08))
+        shift = min(lead, trimmed_head * 0.6) if orig_dur > new_dur else 0.0
+        span = max((words[-1].end - words[0].start), 0.1)
+        avail = max(new_dur - 0.08 - max(0.0, lead - shift), 0.1)
+        ratio = min(1.15, avail / span) if span > avail else 1.0
+        out: List[WordTiming] = []
+        base = words[0].start
+        start_anchor = max(0.0, base - shift)
+        for w in words:
+            st = round(start_anchor + (w.start - base) * ratio, 3)
+            en = round(min(new_dur, max(st + 0.03, start_anchor + (w.end - base) * ratio)), 3)
+            out.append(WordTiming(w.word, st, en, confidence=w.confidence, source=w.source))
+        return out
 
     async def synthesize_segment(self, text: str, output_path: str) -> Segment:
         out_file = Path(output_path)
@@ -543,13 +573,18 @@ class TTSEngine:
         for attempt, voice in enumerate([self.voice, self.voice, self.fallback_voice]):
             try:
                 words = await self._synth(clean, out_file, voice)
-                self._trim_segment_silence(out_file)
-                duration = probe_duration(str(out_file)) or (words[-1].end + 0.1 if words else 0.0)
+                orig_dur, duration = self._trim_segment_silence(out_file)
+                duration = duration or (words[-1].end + 0.1 if words else 0.0)
+                aligned_words = (
+                    self._rescale_trimmed_words(words, orig_dur, duration)
+                    if words
+                    else distribute_words(clean, duration)
+                )
                 return Segment(
                     text=clean,
                     audio_path=str(out_file),
                     duration=duration,
-                    words=distribute_words(clean, duration),
+                    words=aligned_words,
                 )
             except Exception as exc:
                 last_exc = exc
@@ -574,7 +609,7 @@ class TTSEngine:
                 logger.warning("Segment Gemini fallback failed: %s", g_exc)
         if self.strict:
             raise TTSError(f"TTS failed after retries: {last_exc}")
-        duration = max(1.5, len(clean.split()) / 2.35)
+        duration = max(0.85, len(clean.split()) / 2.65)
         self._silence(str(out_file), duration)
         logger.warning("Using SILENT placeholder audio (dry-run only) for: %s", clean[:40])
         return Segment(
@@ -593,8 +628,162 @@ class TTSEngine:
                 await asyncio.sleep(0.12)
         return segments
 
+    @staticmethod
+    def _join_continuous_beats(texts: List[str], owner_ids: Optional[List[Any]] = None) -> str:
+        """Join beats cleanly: space within a sentence/story, newline across distinct beats."""
+        out: List[str] = []
+        for idx, raw in enumerate(texts):
+            s = re.sub(r"<[^>]+>", " ", (raw or "")).strip()
+            if not s:
+                s = "।"
+            same_owner_next = (
+                owner_ids is not None
+                and idx + 1 < len(texts)
+                and owner_ids[idx] == owner_ids[idx + 1]
+            )
+            if not same_owner_next and s[-1] not in "।.?!":
+                s += "।"
+            out.append(s)
+            if idx + 1 < len(texts):
+                out.append(" " if same_owner_next else "\n")
+        return "".join(out)
+
+    @staticmethod
+    def _align_continuous_boundaries(
+        texts: List[str], boundary_words: List[WordTiming], total_duration: float
+    ) -> Tuple[List[float], List[List[WordTiming]]]:
+        """Map single-pass WordBoundary events to each beat and extract exact segment spans."""
+        if not texts:
+            return [], []
+
+        def _norm(tok: str) -> str:
+            return re.sub(r"[^\w\u0900-\u097F]", "", (tok or "").lower())
+
+        # Expand multi-word boundary tokens (e.g. '27 नवंबर 2026') so cursor matches word-by-word
+        expanded: List[WordTiming] = []
+        for bw in boundary_words:
+            parts = (bw.word or "").split()
+            if len(parts) <= 1:
+                if bw.word.strip():
+                    expanded.append(bw)
+            else:
+                weights = [max(len(p), 1) for p in parts]
+                wsum = float(sum(weights))
+                cur_t = bw.start
+                span = max(0.04, bw.end - bw.start)
+                for p, wt in zip(parts, weights):
+                    pd = span * wt / wsum
+                    expanded.append(
+                        WordTiming(
+                            word=p,
+                            start=round(cur_t, 3),
+                            end=round(cur_t + pd, 3),
+                            confidence=bw.confidence,
+                            source=bw.source,
+                        )
+                    )
+                    cur_t += pd
+
+        if not expanded:
+            durs = split_by_pauses(texts, total_duration, [])
+            bwords, cur = [], 0.0
+            for t, d in zip(texts, durs):
+                bwords.append(distribute_words(re.sub(r"<[^>]+>", " ", t).strip(), d, offset=cur))
+                cur += d
+            return durs, bwords
+
+        exp_norms = [_norm(w.word) for w in expanded]
+        cursor = 0
+        seg_ranges: List[Tuple[int, int]] = []
+        total_exp = len(expanded)
+
+        for idx, t in enumerate(texts):
+            clean_t = re.sub(r"<[^>]+>", " ", (t or "")).strip()
+            toks = [_norm(x) for x in clean_t.split() if _norm(x)]
+            if not toks:
+                seg_ranges.append((min(cursor, total_exp - 1), min(cursor, total_exp - 1)))
+                continue
+
+            # Snap start if small token drift occurred on numbers/symbols
+            if cursor < total_exp and exp_norms[cursor] != toks[0]:
+                for look in range(cursor, min(total_exp, cursor + 5)):
+                    if exp_norms[look] == toks[0]:
+                        cursor = look
+                        break
+
+            start_i = cursor
+            # Consume expected number of tokens, bounded cleanly by next beat's anchor word
+            next_anchor = ""
+            if idx + 1 < len(texts):
+                next_toks = [
+                    _norm(x) for x in re.sub(r"<[^>]+>", " ", texts[idx + 1]).split() if _norm(x)
+                ]
+                next_anchor = next_toks[0] if next_toks else ""
+
+            matched = 0
+            while cursor < total_exp and matched < len(toks):
+                # Look ahead briefly if normalized word doesn't match directly (e.g. expanded digit)
+                target_tok = toks[matched]
+                if exp_norms[cursor] == target_tok:
+                    cursor += 1
+                    matched += 1
+                    continue
+                if next_anchor and matched > 0 and exp_norms[cursor] == next_anchor and (len(toks) - matched) <= 2:
+                    break
+                cursor += 1
+                matched += 1
+
+            end_i = max(start_i + 1, cursor) if start_i < total_exp else total_exp
+            seg_ranges.append((min(start_i, total_exp - 1), min(end_i, total_exp)))
+
+        # Convert aligned word indices into contiguous segment start/end times
+        seg_starts: List[float] = [0.0]
+        for idx in range(1, len(texts)):
+            s_i, e_i = seg_ranges[idx]
+            prev_s, prev_e = seg_ranges[idx - 1]
+            if s_i < total_exp and expanded[s_i].start > seg_starts[-1] + 0.05:
+                st = expanded[s_i].start
+            elif prev_e < total_exp:
+                st = max(seg_starts[-1] + 0.15, expanded[prev_e - 1].end)
+            else:
+                st = seg_starts[-1] + 0.2
+            seg_starts.append(min(st, max(0.0, total_duration - 0.15 * (len(texts) - idx))))
+
+        durs: List[float] = []
+        beat_words: List[List[WordTiming]] = []
+        for idx, (s_i, e_i) in enumerate(seg_ranges):
+            st = seg_starts[idx]
+            en = seg_starts[idx + 1] if idx + 1 < len(seg_starts) else total_duration
+            d = round(max(0.15, en - st), 3)
+            durs.append(d)
+            bw_slice = [
+                WordTiming(
+                    w.word,
+                    round(max(st, min(en, w.start)), 3),
+                    round(max(st + 0.03, min(en, w.end)), 3),
+                    confidence=w.confidence,
+                    source=w.source,
+                )
+                for w in expanded[s_i:e_i]
+            ]
+            if not bw_slice:
+                clean_t = re.sub(r"<[^>]+>", " ", (texts[idx] or "")).strip()
+                bw_slice = distribute_words(clean_t, d, offset=st, source="edge-tts", confidence=0.8)
+            beat_words.append(bw_slice)
+
+        if durs and total_duration > 0:
+            diff = round(total_duration - sum(durs), 3)
+            durs[-1] = round(max(0.15, durs[-1] + diff), 3)
+        return durs, beat_words
+
     # -- main API ------------------------------------------------------------
-    async def voice_beats(self, texts: List[str], out_dir: str, style: str = "") -> VoiceResult:
+    async def voice_beats(
+        self,
+        texts: List[str],
+        out_dir: str,
+        style: str = "",
+        owner_ids: Optional[List[Any]] = None,
+    ) -> VoiceResult:
         """Voice all beats; returns the full track and per-beat durations."""
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
@@ -602,13 +791,7 @@ class TTSEngine:
         for provider in self.provider_order:
             if provider == "gemini" and self.gemini:
                 try:
-                    parts_joined = []
-                    for t in texts:
-                        s = (t or "").strip()
-                        if s and s[-1] not in "।.?!":
-                            s += "।"
-                        parts_joined.append(s)
-                    joined = " ".join(parts_joined)
+                    joined = self._join_continuous_beats(texts, owner_ids=owner_ids)
                     raw = str(out / "voice_gemini.wav")
                     model = await asyncio.to_thread(self.gemini.synthesize, joined, style, raw)
                     self._normalise(raw, final)
@@ -638,6 +821,60 @@ class TTSEngine:
                 except Exception as exc:
                     logger.warning("Gemini TTS unavailable, falling back: %s", str(exc)[:200])
             elif provider == "edge":
+                # Prefer coherent single-pass synthesis so anchor prosody flows naturally
+                # across sentences instead of restarting pitch every 3-5 words.
+                joined = self._join_continuous_beats(texts, owner_ids=owner_ids)
+                raw_mp3 = out / "voice_full.mp3"
+                words_full: Optional[List[WordTiming]] = None
+                for attempt, voice in enumerate([self.voice, self.voice, self.fallback_voice]):
+                    try:
+                        words_full = await self._synth(joined, raw_mp3, voice)
+                        break
+                    except Exception as exc:
+                        logger.warning(
+                            "continuous edge-tts attempt %d (%s) failed: %s",
+                            attempt + 1,
+                            voice,
+                            exc,
+                        )
+                        if attempt < 2:
+                            await asyncio.sleep(2 * (attempt + 1))
+
+                if raw_mp3.exists() and raw_mp3.stat().st_size > 1000:
+                    ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+                    res = subprocess.run(
+                        [
+                            ffmpeg,
+                            "-y",
+                            "-i",
+                            str(raw_mp3),
+                            "-af",
+                            "aresample=44100,aformat=channel_layouts=stereo",
+                            "-c:a",
+                            "aac",
+                            "-b:a",
+                            "192k",
+                            final,
+                        ],
+                        capture_output=True,
+                        timeout=120,
+                    )
+                    if res.returncode == 0 and Path(final).exists():
+                        actual_total = probe_duration(final)
+                        if actual_total > 0 and words_full:
+                            durs, beat_words = self._align_continuous_boundaries(
+                                texts, words_full, actual_total
+                            )
+                            return VoiceResult(final, durs, "edge-tts", beat_words=beat_words)
+                        if actual_total > 0:
+                            durs = split_by_pauses(texts, actual_total, detect_silences(final))
+                            beat_words, cursor = [], 0.0
+                            for t, d in zip(texts, durs):
+                                beat_words.append(distribute_words(t, d, offset=cursor))
+                                cursor += d
+                            return VoiceResult(final, durs, "edge-tts", beat_words=beat_words)
+
+                # Safe fallback: per-segment synthesis (also covers offline dry-run silence path)
                 segs = await self.synthesize_segments(texts, out_dir)
                 self.concat_audio(segs, final)
                 raw_durs = [max(s.duration, 0.2) for s in segs]
