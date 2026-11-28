@@ -104,10 +104,38 @@ def _clean_complete_hindi_trim(words: List[str], limit: int) -> str:
 
 
 def resplit_parts(parts: List[Dict[str, str]], text: str) -> List[Dict[str, str]]:
-    """Re-distribute corrected narration over the existing visual beats (by word share)."""
-    words = text.split()
-    if not parts or not words:
+    """Re-distribute corrected narration over the existing visual beats.
+
+    The old version cut the text by WORD COUNT ("take 4 words, then 5 words"), which is how a
+    story ended up as "बिसलेरी के" on one picture and "पानी के सैंपल में कोलीफॉर्म" on the next:
+    no image can illustrate half a noun phrase. When the number of beats is unchanged the text is
+    now split at sentence boundaries (danda), falling back to word share only if the sentences do
+    not fit; a beat is never cut in the middle of a phrase if a boundary is available.
+    """
+    if not parts or not text.strip():
         return parts
+    if len(parts) == 1:
+        return [{**parts[0], "say": text.strip()}]
+
+    sentences = [x.strip() for x in _SENT_SPLIT.split(text.strip()) if x.strip()]
+    if len(sentences) == len(parts):
+        # the common case: one sentence per beat, exactly as written
+        return [{**p, "say": sent} for p, sent in zip(parts, sentences)]
+
+    # more sentences than beats: pack consecutive sentences into the existing beat count
+    if len(sentences) > len(parts):
+        buckets: List[List[str]] = [[] for _ in parts]
+        per = len(sentences) / len(parts)
+        for i, sent in enumerate(sentences):
+            buckets[min(int(i / per), len(parts) - 1)].append(sent)
+        return [
+            {**p, "say": " ".join(b).strip()}
+            for p, b in zip(parts, buckets)
+            if " ".join(b).strip()
+        ]
+
+    # fewer sentences than beats: fall back to word share, but never start a beat on a function word
+    words = text.split()
     sizes = [max(1, len(p.get("say", "").split())) for p in parts]
     total, out, i = sum(sizes), [], 0
     for k, (p, sz) in enumerate(zip(parts, sizes)):
@@ -116,7 +144,60 @@ def resplit_parts(parts: List[Dict[str, str]], text: str) -> List[Dict[str, str]
         i += take
         if chunk:
             out.append({**p, "say": " ".join(chunk)})
-    return out or parts
+    return merge_fragment_parts(out or parts)
+
+
+# A visual beat must be a complete thought. These are the Hindi function words that can never
+# START or END a separate on-screen beat: "बिसलेरी के" / "ने संयुक्त कार्रवाई" are not pictures,
+# they are fragments of the sentence on either side.
+from core.duration import PART_MAX_WORDS
+
+_SENT_SPLIT = re.compile(r"(?<=[।!?])\s+")
+_HI_TAIL_STARTERS = {
+    "के", "का", "की", "को", "में", "से", "ने", "पर", "और", "या", "तथा", "है", "हैं", "था", "थी",
+    "थे", "गया", "गई", "गए", "किया", "कर", "करते", "करता", "हुआ", "हुई", "हुए", "जबकि", "लेकिन",
+    "कि", "जो", "वो", "वह", "यह", "इस", "उस", "एक", "दो",
+}
+
+
+def _dangling(word: str) -> bool:
+    return (word or "").strip().strip("।,!?;:").lower() in _HI_TAIL_STARTERS
+
+
+def merge_fragment_parts(parts: list[dict[str, str]], min_words: int = 3) -> list[dict[str, str]]:
+    """Join visual beats that cannot stand on their own, so one picture = one complete idea.
+
+    The template asks the writer to keep every beat self-contained, but a model that splits a
+    two-sentence story into four fragments ("पश्चिम बंगाल के जलपाईगुड़ी में" / "बिसलेरी के" /
+    "पानी के सैंपल में कोलीफॉर्म" / "बैक्टीरिया मिला है।") produces beats no image can match:
+    "बिसलेरी के" has no subject and no verb. Those are merged into the neighbour that completes
+    them — the words are preserved, only the beat boundaries change.
+
+    Two beats of four-plus words are left alone even if one ends on a function word: a beat may
+    legitimately end mid-phrase when the NEXT beat's picture continues the same scene.
+    """
+    if len(parts) < 2:
+        return parts
+    out: list[dict[str, str]] = []
+    for part in parts:
+        say = (part.get("say") or "").strip()
+        words = say.split()
+        if not words:
+            continue
+        # A true fragment has one of two shapes:
+        #   * it OPENS on a function word — "ने संयुक्त कार्रवाई" continues the previous sentence;
+        #   * it is a bare phrase ending on one — "बिसलेरी के" / "पानी के सैंपल में" — with no verb,
+        #     no danda and not more than a couple of words.
+        # A short but complete clause ("सीरीज़ जीती।") is NOT a fragment and must stay its own beat.
+        opens_dangling = _dangling(words[0])
+        closes_dangling = _dangling(words[-1]) and not say.rstrip().endswith(("।", "!", "?"))
+        fragment = opens_dangling or (closes_dangling and len(words) <= 3)
+        if out and fragment:
+            out[-1]["say"] = f"{out[-1]['say'].rstrip()} {say}".strip()
+            # a fragment never has the better picture: keep the beat it joined
+        else:
+            out.append(dict(part))
+    return out
 
 
 def parse_script(
@@ -167,6 +248,24 @@ def parse_script(
                         for k in ("say", "visual", "entity", "search", "source")
                     }
                 )
+        parts = merge_fragment_parts(parts)
+        # merging can produce a beat that is too long for a single picture: split it back, but
+        # at a sentence boundary this time, so both halves are complete thoughts
+        too_long = [p for p in parts if len(p.get("say", "").split()) > PART_MAX_WORDS]
+        if too_long:
+            rebuilt = []
+            for part in parts:
+                say = (part.get("say") or "").strip()
+                if len(say.split()) <= PART_MAX_WORDS:
+                    rebuilt.append(part)
+                    continue
+                sents = [x.strip() for x in _SENT_SPLIT.split(say) if x.strip()]
+                if len(sents) > 1:
+                    for chunk in sents:
+                        rebuilt.append({**part, "say": chunk})
+                else:  # one long sentence: keep it whole rather than cut a noun phrase
+                    rebuilt.append(part)
+            parts = rebuilt
         narration = (
             " ".join(p["say"] for p in parts) if parts else str(sc.get("narration", "")).strip()
         )

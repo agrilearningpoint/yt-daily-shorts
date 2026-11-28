@@ -32,6 +32,8 @@ VOICE_SPEED = 1.2
 WORDS_PER_SEC = {k: round(v * VOICE_SPEED, 3) for k, v in _BASE_WORDS_PER_SEC.items()}
 
 # Minimum stories for a rapid-fire news bulletin (5-8 stories for 56s Short)
+# One visual beat = one picture. Longer lines cannot be matched by a single image.
+PART_MAX_WORDS = 10
 MIN_NEWS_STORIES = 5
 
 

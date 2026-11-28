@@ -74,3 +74,35 @@ def test_blank_and_logo_images_rejected():
     assert MediaCollector._looks_blank(white)
     assert MediaCollector._looks_blank(logo)
     assert not MediaCollector._looks_blank(photo)
+
+
+def test_resplit_never_cuts_a_phrase_in_half():
+    """Regression: cuts used to be made by word count, so one picture got 'बिसलेरी के' and the
+    next 'पानी के सैंपल में कोलीफॉर्म' — an image cannot illustrate half a noun phrase."""
+    from agents.script_manager.agent import resplit_parts
+
+    parts = [{"say": "old", "visual": "a"}, {"say": "old", "visual": "b"}]
+    text = "जलपाईगुड़ी में बिसलेरी के पानी के सैंपल में बैक्टीरिया पाए गए। जाँच शुरू हो गई है।"
+    out = resplit_parts(parts, text)
+    assert len(out) == 2
+    assert " ".join(p["say"] for p in out) == text  # not one word lost
+    # each beat is a complete sentence, and none starts on a dangling function word
+    assert out[0]["say"].endswith("।") and out[1]["say"].endswith("।")
+    assert not out[1]["say"].split()[0] in {"के", "का", "की", "में", "से", "ने"}
+
+
+def test_fragment_parts_are_merged_not_dropped():
+    from agents.script_manager.agent import merge_fragment_parts
+
+    fragments = [
+        {"say": "रांची में पुलिस और एनसीबी", "visual": "ncB"},
+        {"say": "ने संयुक्त कार्रवाई", "visual": "x"},
+        {"say": "करते हुए दो क्विंटल गांजा", "visual": "y"},
+        {"say": "जब्त किया है।", "visual": "z"},
+    ]
+    merged = merge_fragment_parts([dict(f) for f in fragments])
+    assert len(merged) < len(fragments)
+    assert " ".join(m["say"] for m in merged) == " ".join(f["say"] for f in fragments)
+    # a complete two-beat story must survive untouched
+    fine = [{"say": "खेल में, भारत ने", "visual": "a"}, {"say": "सीरीज़ जीती।", "visual": "b"}]
+    assert len(merge_fragment_parts([dict(f) for f in fine])) == 2
