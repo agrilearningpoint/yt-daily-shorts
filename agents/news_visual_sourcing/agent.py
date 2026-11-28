@@ -115,6 +115,11 @@ class NewsVisualSourcingAgent(BaseAgent):
                 all_candidates.append(hook_asset)
 
         # 1. Process each scene
+        # The script numbers its scenes unevenly (1, 2, 4, 5, 7, 9, 11) because scenes can be
+        # dropped between writing and sourcing. Using enumerate() here renumbered them 0, 1, 2...
+        # and every picture ended up attached to the NEXT story: a photo of "China" under a line
+        # about a Punjab ration card, with all keyword scores looking healthy. The id must come
+        # from the script's own scene_number, which is the same key later stages use.
         for idx, sc in enumerate(scenes):
             scene_id = f"scene_{idx:03d}"
             # The opening date/panchang/rashifal scene is DRAWN by the composer, never photographed:

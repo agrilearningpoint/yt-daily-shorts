@@ -272,6 +272,11 @@ class VideoProducerAgent(BaseAgent):
                     ],
                 }
             )
+        # The scene id MUST match the one news_visual_sourcing used as its dict key
+        # (scene_<position in the script's scene list>). The script's own `scene_number` field is
+        # NOT that key: a scene with no usable visual is dropped by the script writer, so the
+        # numbers run 1, 2, 4, 5... while positions stay 0, 1, 2, 3... Deriving the id from
+        # scene_number silently attached every picture to the wrong story.
         for i, s in enumerate(scenes):
             parts = [dict(p) for p in (s.get("parts") or [])] or [
                 {
@@ -943,17 +948,18 @@ class VideoProducerAgent(BaseAgent):
 
         ownership_rows = build_ownership(beats, assets)
         # Compare against the ACTUAL rendered assets. `assets` still points at the downloaded
-        # source files (src_*.jpg); the renderer uses its own composed backgrounds (bg_*.jpg), so
-        # the hook "reusing" a source file says nothing about what the viewer sees.
-        rendered = {}
-        for seg_data in (master_timeline.get("segments", []) if isinstance(master_timeline, dict) else []):
-            sid = str(seg_data.get("segment_id", ""))
-            if sid.startswith("scene_") and seg_data.get("visual_path"):
-                rendered[sid] = str(seg_data["visual_path"])
+        # source files (src_*.jpg); the renderer composes its own backgrounds (bg_*.jpg) per
+        # part. Two parts of the same story legitimately share ONE downloaded source photo and
+        # are then composed into different backgrounds — judging reuse on source files reports
+        # a duplicate where the viewer sees two different frames.
+        rendered: dict[str, str] = {}
+        for seg in getattr(master_timeline, "segments", None) or []:
+            sid = str(getattr(seg, "scene_id", "") or "")
+            vis = getattr(seg, "visual_path", "") or ""
+            if sid.startswith("scene_") and vis:
+                rendered.setdefault(sid, str(vis))
         if rendered:
             for row in ownership_rows:
-                if row.scene_id.startswith("section") or row.scene_id == "outro":
-                    continue
                 row.asset_path = rendered.get(row.scene_id, row.asset_path)
         ownership_problems = validate_ownership(ownership_rows)
         if ownership_problems:
