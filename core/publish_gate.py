@@ -438,6 +438,11 @@ class PublishGate:
         the only one backed by an actual look at the rendered output.
         """
         audit = (production or {}).get("vision_audit") or {}
+        if self.t.get("require_vision_audit") is False:
+            # Only a run with no model at all (offline tests) may switch this off, and then it is
+            # recorded as unmeasured rather than passed.
+            report.facts["vision_audit"] = {"checked": 0, "rejected": 0, "reason": "disabled"}
+            return
         checked = int(audit.get("checked") or 0)
         rejected = audit.get("rejected") or []
         report.facts["vision_audit"] = {

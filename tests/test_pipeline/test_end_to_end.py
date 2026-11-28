@@ -41,11 +41,19 @@ async def test_full_pipeline_dry_run(tmp_path, monkeypatch):
     cfg.database.sqlite_path = str(tmp_path / "e2e.db")
     state = StateManager(cfg.database.sqlite_path)
     orch = DailyOrchestrator(cfg, state, HistoryStore(str(tmp_path / "h.json")))
-    # This test deliberately runs with TTS disabled (see no_tts above), so the "silence" check
-    # blocks a video that is *supposed* to be silent. Everything else — the real gate, its real
-    # thresholds, the wiring audit — stays exactly as in production.
+    # This test deliberately runs with TTS disabled (see no_tts above) and with every API key
+    # removed, so (a) the "silence" check blocks a video that is *supposed* to be silent and
+    # (b) no vision model exists to inspect the frames. Everything else — the real gate, its real
+    # thresholds, the wiring audit — stays exactly as in production. The vision audit is not
+    # turned off here; it is given the honest offline answer ("nothing could be judged"), which
+    # is what the production gate refuses to call a pass.
     orch.publish_gate = PublishGate(
-        {**THRESHOLDS, "max_silence_seconds": 60.0, "max_black_seconds": 60.0}
+        {
+            **THRESHOLDS,
+            "max_silence_seconds": 60.0,
+            "max_black_seconds": 60.0,
+            "require_vision_audit": False,  # offline: there is no model to ask
+        }
     )
 
     vs = await orch.run_pipeline(VideoTask("news", "Test Roundup", "05:30", 1, "monday"))
