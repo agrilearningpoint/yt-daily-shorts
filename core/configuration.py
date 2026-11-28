@@ -105,7 +105,7 @@ class TTSConfig:
     fallback_voice: str = "hi-IN-MadhurNeural"
     news_voice: str = "hi-IN-SwaraNeural"
     knowledge_voice: str = "hi-IN-MadhurNeural"
-    rate: str = "+7%"
+    rate: str = "+20%"  # channel owner voice speed 1.2x — keep in sync with core.duration.VOICE_SPEED
     pitch: str = "+1Hz"
     provider_order: List[str] = field(default_factory=lambda: ["gemini", "edge"])
     gemini_models: List[str] = field(

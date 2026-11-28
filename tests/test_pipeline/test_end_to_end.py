@@ -10,6 +10,7 @@ import pytest
 from core.configuration import load_config
 from core.history import HistoryStore
 from core.orchestrator import DailyOrchestrator, VideoTask
+from core.publish_gate import THRESHOLDS, PublishGate
 from core.state_manager import PipelineState, StateManager
 from research.news_collector import NewsCollector
 from video.media_collector import MediaCollector
@@ -40,6 +41,12 @@ async def test_full_pipeline_dry_run(tmp_path, monkeypatch):
     cfg.database.sqlite_path = str(tmp_path / "e2e.db")
     state = StateManager(cfg.database.sqlite_path)
     orch = DailyOrchestrator(cfg, state, HistoryStore(str(tmp_path / "h.json")))
+    # This test deliberately runs with TTS disabled (see no_tts above), so the "silence" check
+    # blocks a video that is *supposed* to be silent. Everything else — the real gate, its real
+    # thresholds, the wiring audit — stays exactly as in production.
+    orch.publish_gate = PublishGate(
+        {**THRESHOLDS, "max_silence_seconds": 60.0, "max_black_seconds": 60.0}
+    )
 
     vs = await orch.run_pipeline(VideoTask("news", "Test Roundup", "05:30", 1, "monday"))
     assert vs.state == PipelineState.COMPLETED, vs.error_message

@@ -38,6 +38,8 @@ from agents.video_producer import VideoProducerAgent
 from agents.vfx_agent import VFXAgent
 from agents.visual_audio_match_qa import VisualAudioMatchQAAgent
 from core.configuration import AppConfig
+from core.agent_registry import REGISTRY
+from core.publish_gate import Check, GateBlocked, PublishGate
 from core.history import HistoryStore
 from core.llm_client import build_llm
 from core.state_manager import PipelineState, StateManager, VideoState
@@ -103,6 +105,8 @@ class DailyOrchestrator:
         self.seo_agent = SEOManagerAgent(config, self.state, llm=self.llm)
         self.thumbnail_agent = ThumbnailDesignerAgent(config, self.state)
         self.publisher_agent = PublisherAgent(config, self.state)
+        # Fail-closed gate: nothing reaches the publisher without a full evidence report.
+        self.publish_gate = PublishGate()
         self.analytics_agent = AnalyticsManagerAgent(config, self.state, history=self.history)
         self.learning_agent = SelfLearningAgent(config, self.state, history=self.history)
         self.failures: List[str] = []
@@ -132,6 +136,20 @@ class DailyOrchestrator:
     async def _stage(
         self, video_id: str, stage: str, coro_factory, require_success: bool = True
     ) -> Dict[str, Any]:
+        """Run one pipeline stage and record what happened.
+
+        ``require_success=False`` used to mean "if it fails, carry on silently with {}" — five
+        critical stages were marked that way and a real run produced a video with no sourced
+        visuals, no motion plan and no master timeline while looking perfectly healthy. A soft
+        failure must still be visible: it is logged, recorded for the wiring audit and included in
+        the publish-gate report, so a degraded episode is never indistinguishable from a good one.
+        """
+        if not hasattr(self, "_executed_stages"):
+            self._executed_stages: List[str] = []
+        if not hasattr(self, "_stage_failures"):
+            self._stage_failures: Dict[str, List[str]] = {}
+        if stage not in self._executed_stages:
+            self._executed_stages.append(stage)
         cached = self.state.load_checkpoint(video_id, stage)
         if cached:
             return cached
@@ -143,8 +161,13 @@ class DailyOrchestrator:
             result.data if isinstance(result.data, dict) else {},
             "; ".join(result.errors),
         )
-        if require_success and not result.success:
-            raise StageError(stage, "; ".join(result.errors) or f"{stage} failed")
+        if not result.success:
+            self._stage_failures[stage] = list(result.errors) or [f"{stage} failed"]
+            logger.warning(
+                "⚠️ stage %s failed softly: %s", stage, "; ".join(self._stage_failures[stage])
+            )
+            if require_success:
+                raise StageError(stage, "; ".join(result.errors) or f"{stage} failed")
         self.state.save_checkpoint(video_id, stage, result.data)
         return result.data
 
@@ -391,6 +414,72 @@ class DailyOrchestrator:
                 require_success=False,
             )
             self._upload_artifact_to_hf(vid, thumb.get("thumbnail_path"), "thumbnail.jpg")
+
+            # ---- fail-closed publication gate -------------------------------------
+            # Every check above lives inside the stage that produced the artefact, so a skipped
+            # stage could still reach the uploader. This is the one place that decides whether
+            # the episode may be published; missing evidence counts as failure.
+            try:
+                gate_report = self.publish_gate.run(
+                    vid,
+                    video_path=video_path,
+                    production=production,
+                    timeline=auth_timeline,
+                    script=script,
+                    quality=quality,
+                    qa_payload=qa_match if isinstance(qa_match, dict) else {},
+                    extra_checks=[
+                        Check(
+                            name=f"stage:{stage}",
+                            passed=False,
+                            detail="; ".join(errs)[:300],
+                            critical=True,
+                        )
+                        for stage, errs in getattr(self, "_stage_failures", {}).items()
+                    ],
+                    output_dir=Path("output") / vid,
+                )
+                logger.info(
+                    "Publish gate: %s (%d checks, %d warnings) -> %s",
+                    gate_report.verdict(),
+                    len(gate_report.checks),
+                    len(gate_report.warnings),
+                    gate_report.report_path,
+                )
+            except GateBlocked as exc:
+                logger.error("🛑 Publish gate blocked %s: %s", vid, "; ".join(exc.reasons))
+                if self.config.general.dry_run:
+                    logger.error("dry run: stopping here instead of uploading (this is the gate working)")
+                raise StageError("publish_gate", "; ".join(exc.reasons)) from exc
+
+            # ---- wiring audit -----------------------------------------------------
+            # The registry declares what each stage must publish. Compare that with what this run
+            # actually executed; a critical stage that never ran is a bug, not a style issue.
+            # The audit runs just before publishing, so the stages that can only happen AFTER
+            # publication (publishing itself, analytics, self-learning) are excluded here; their
+            # wiring is verified by the post-publish audit at the end of the run.
+            executed_now = [
+                st for st in getattr(self, "_executed_stages", []) if st in REGISTRY.stages()
+            ]
+            wiring = REGISTRY.validate(
+                executed=executed_now,
+                produced={
+                    "video_production": production,
+                    "script_generation": {"script": script},
+                },
+                # these run after publication; the post-run audit is responsible for them
+                pending=("publishing", "analytics", "self_learning"),
+            )
+            if not wiring.ok:
+                logger.error("Agent wiring audit failed: %s", wiring.blocking_problems())
+                raise StageError("wiring_audit", "; ".join(wiring.blocking_problems()))
+            logger.info(
+                "Agent wiring: %d/%d registered stages ran, %d optional skipped (%s)",
+                len(REGISTRY) - len(wiring.missing),
+                len(REGISTRY),
+                len(wiring.skipped_optional),
+                ", ".join(wiring.skipped_optional) or "none",
+            )
 
             self.state.update_state(vid, state=PipelineState.PUBLISHING, title=seo.get("title", ""))
             pub = await self._stage(

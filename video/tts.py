@@ -31,7 +31,10 @@ logger = logging.getLogger("video.tts")
 HINDI_VOICES = {
     "female": "hi-IN-SwaraNeural",
     "male": "hi-IN-MadhurNeural",
-    "female_fallback": "hi-IN-KavyaNeural",
+    # edge-tts ships exactly two Hindi voices (verified live, 2026-11-28): SwaraNeural (F)
+    # and MadhurNeural (M). KavyaNeural is not in the catalogue, so the old value could
+    # only ever fall back to a voice that does not exist.
+    "female_fallback": "hi-IN-MadhurNeural",
 }
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -455,7 +458,7 @@ class GeminiTTS:
 class TTSEngine:
     def __init__(
         self,
-        voice: str = "hi-IN-MadhurNeural",
+        voice: str = "hi-IN-SwaraNeural",
         rate: str = "+5%",
         pitch: str = "+0Hz",
         fallback_voice: str = "hi-IN-SwaraNeural",

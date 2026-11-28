@@ -85,7 +85,7 @@ tts:
   fallback_voice: "hi-IN-MadhurNeural"
   news_voice: "hi-IN-SwaraNeural"
   knowledge_voice: "hi-IN-MadhurNeural"
-  rate: "+7%"
+  rate: "+20%"   # channel owner voice speed 1.2x (2026-11)
   pitch: "+1Hz"
 
 profiles:

@@ -363,7 +363,7 @@ class VideoProducerAgent(BaseAgent):
         if is_news:
             self.tts.voice = getattr(self.config.tts, "news_voice", "hi-IN-SwaraNeural")
             fb_v = getattr(self.config.tts, "fallback_voice", "hi-IN-MadhurNeural")
-            if fb_v == "hi-IN-KavyaNeural":
+            if fb_v == "hi-IN-KavyaNeural":  # legacy state only: this voice does not exist
                 fb_v = "hi-IN-MadhurNeural"
             self.tts.fallback_voice = fb_v
         # Synthesize coherently across sentences while snapping visual cut points to WordBoundaries

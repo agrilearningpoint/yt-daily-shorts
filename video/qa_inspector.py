@@ -66,7 +66,10 @@ class VideoQAInspector:
         info = MediaStreamInfo(file_size_bytes=p.stat().st_size)
 
         if not self._ffprobe:
-            return info
+            # ffprobe is not shipped with imageio-ffmpeg (ffmpeg only). Returning empty stream
+            # info here made the inspector claim "No video stream found" about a perfectly valid
+            # MP4 and killed the whole pipeline — the render was fine, the measurement was broken.
+            return self._inspect_streams_with_ffmpeg(file_path, info)
 
         cmd = [
             self._ffprobe,
@@ -110,6 +113,48 @@ class VideoQAInspector:
         except Exception as exc:
             logger.warning("ffprobe stream inspection failed: %s", exc)
 
+        return info
+
+
+    def _inspect_streams_with_ffmpeg(self, file_path: str, info: MediaStreamInfo) -> MediaStreamInfo:
+        """Fallback stream inspection by parsing ffmpeg's banner (no ffprobe needed).
+
+        The printed banner is stable across ffmpeg 4-9 and carries everything the gate needs:
+        duration, container, codec, resolution, fps and the presence of audio.
+        """
+        if not self._ffmpeg:
+            return info
+        try:
+            res = subprocess.run(
+                [self._ffmpeg, "-hide_banner", "-i", str(file_path)],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        except Exception as exc:  # noqa: BLE001 - unmeasurable input is reported by the caller
+            logger.warning("ffmpeg stream inspection failed: %s", exc)
+            return info
+
+        banner = res.stderr or ""
+        m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", banner)
+        if m:
+            info.duration = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+        for line in banner.splitlines():
+            if "Video:" in line and "Stream" in line and not info.has_video:
+                info.has_video = True
+                codec = re.search(r"Video:\s*([a-zA-Z0-9_]+)", line)
+                info.video_codec = codec.group(1) if codec else ""
+                dims = re.search(r"(\d{2,5})x(\d{2,5})", line)
+                if dims:
+                    info.width, info.height = int(dims.group(1)), int(dims.group(2))
+                fps = re.search(r"([\d.]+)\s*fps", line)
+                info.fps = float(fps.group(1)) if fps else self.target_fps
+                info.video_duration = info.duration
+            elif "Audio:" in line and "Stream" in line and not info.has_audio:
+                info.has_audio = True
+                codec = re.search(r"Audio:\s*([a-zA-Z0-9_]+)", line)
+                info.audio_codec = codec.group(1) if codec else ""
+                info.audio_duration = info.duration
         return info
 
     def detect_black_frames(

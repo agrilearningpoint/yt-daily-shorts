@@ -23,8 +23,10 @@ NEWS_TARGET_DURATION = 56.0  # Target duration for news bulletins (seconds)
 # Base speaking speed measured on Hindi neural voices at tts.rate = +0%
 _BASE_WORDS_PER_SEC = {"news": 2.3, "knowledge": 2.4, "repurposed_news": 2.3}
 
-# Natural voice tempo (1.05x brisk broadcast delivery)
-VOICE_SPEED = 1.05
+# Voice tempo. MUST match config/settings.yaml tts.rate: "+20%" (the channel owner's 1.2x).
+# Every length decision (script budget, quality gate, render check) multiplies by this, so a
+# mismatch here silently shows up as "the video is longer than planned".
+VOICE_SPEED = 1.2
 
 # Words per second for length estimation
 WORDS_PER_SEC = {k: round(v * VOICE_SPEED, 3) for k, v in _BASE_WORDS_PER_SEC.items()}

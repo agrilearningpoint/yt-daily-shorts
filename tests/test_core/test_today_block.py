@@ -104,13 +104,24 @@ def test_fallback_intro_always_has_the_date():
     assert out["beats"][-1]["kind"] == "trading" and "सेंसेक्स" in says
 
 
-def test_voice_speed_is_the_configured_1_05x():
-    assert 2.35 <= WORDS_PER_SEC["news"] <= 2.50  # 2.3 * 1.05 = 2.415
-    assert 2.45 <= WORDS_PER_SEC["knowledge"] <= 2.60  # 2.4 * 1.05 = 2.52
+def test_voice_speed_matches_the_configured_tts_rate():
+    """1.2x is the channel owner's setting; the estimator must use the same number as the voice.
+
+    These two used to disagree (VOICE_SPEED was 1.05 while tts.rate said +7%), so every length
+    decision was ~15% off and scripts were accepted that rendered far too long.
+    """
+    from core.configuration import TTSConfig
+    from core.duration import VOICE_SPEED
+
+    assert VOICE_SPEED == 1.2
+    assert 2.70 <= WORDS_PER_SEC["news"] <= 2.85  # 2.3 * 1.2 = 2.76
+    assert 2.80 <= WORDS_PER_SEC["knowledge"] <= 2.95  # 2.4 * 1.2 = 2.88
+    rate_pct = int(str(TTSConfig().rate).strip("%+"))
+    assert abs(rate_pct / 100 + 1 - VOICE_SPEED) < 0.05
 
 
-def test_news_duration_budget_counts_the_natural_voice():
-    """2.415 words/s at 1.05x: matches natural unhurried news bulletin pacing."""
+def test_news_duration_budget_counts_the_configured_voice():
+    """2.76 words/s at 1.2x: the same rate the TTS actually speaks at."""
     from core.duration import estimate_seconds
 
     script = {
@@ -120,7 +131,7 @@ def test_news_duration_budget_counts_the_natural_voice():
         "scenes": [{"narration": " ".join(["शब्द"] * 260)}, {"narration": " ".join(["शब्द"] * 30)}],
     }
     est = estimate_seconds(script)
-    assert 118 <= est <= 122  # 290 / 2.415
+    assert 102 <= est <= 108  # 290 / 2.76
 
 
 def test_visual_quality_is_reported_for_every_render():
