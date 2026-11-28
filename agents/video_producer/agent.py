@@ -920,6 +920,15 @@ class VideoProducerAgent(BaseAgent):
             timeline.total_duration = round(cur_t, 4)
             master_timeline = timeline
 
+        # ---- story -> picture ownership (IDs, not indexes) --------------------------------
+        from core.visual_ownership import build as build_ownership
+        from core.visual_ownership import validate as validate_ownership
+
+        ownership_rows = build_ownership(beats, assets)
+        ownership_problems = validate_ownership(ownership_rows)
+        if ownership_problems:
+            self.logger.warning("Visual ownership problems: %s", ownership_problems)
+
         beat_words = getattr(voice, "beat_words", None) or []
         if getattr(vcfg, "burn_captions", True):
             try:
@@ -1089,6 +1098,10 @@ class VideoProducerAgent(BaseAgent):
                 "images_found": sum(1 for a in assets.values() if a),
                 "ai_images": sum(1 for a in assets.values() if a and a.source == "ai"),
                 "visual_match": fig,
+                # who owns which picture, by stable scene ID (never array index) — the report and
+                # the publish gate both read this instead of re-deriving it from the render order
+                "visual_ownership": [r.to_dict() for r in ownership_rows],
+                "ownership_problems": ownership_problems,
                 "storage_urls": storage_urls,
                 "master_timeline": master_timeline,
             },

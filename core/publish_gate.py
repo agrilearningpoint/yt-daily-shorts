@@ -430,6 +430,33 @@ class PublishGate:
             )
         )
 
+    def check_ownership(self, report: QualityReport, production: dict[str, Any] | None) -> None:
+        """Every story must own exactly one picture, identified by scene ID (not array index)."""
+        prod = production or {}
+        rows = prod.get("visual_ownership") or []
+        problems = prod.get("ownership_problems") or []
+        report.facts["visual_ownership"] = {"rows": len(rows), "problems": problems[:5]}
+        if not rows:
+            report.add(
+                Check(
+                    name="visual_ownership",
+                    passed=False,
+                    detail="producer published no ownership table (evidence missing)",
+                )
+            )
+            return
+        report.add(
+            Check(
+                name="visual_ownership",
+                passed=not problems,
+                detail="every story owns one picture"
+                if not problems
+                else f"{len(problems)} problem(s): {'; '.join(problems[:4])}",
+                measured=len(problems),
+                limit=0,
+            )
+        )
+
     def check_voice(
         self,
         report: QualityReport,
@@ -489,6 +516,7 @@ class PublishGate:
         self.check_visual_match(report, qa_payload)
         self.check_black_and_silence(report, video_path, qa_payload)
         self.check_story_slides(report, timeline, script)
+        self.check_ownership(report, production)
         self.check_voice(report, production, timeline)
         self.check_captions(report, production)
         self.check_editorial(report, quality)
