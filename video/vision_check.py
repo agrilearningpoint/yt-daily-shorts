@@ -21,7 +21,7 @@ import io
 import logging
 import re
 import threading
-from typing import Callable, Iterable, List, Optional
+from collections.abc import Callable, Iterable
 
 import requests
 from PIL import Image
@@ -30,16 +30,87 @@ logger = logging.getLogger("video.vision")
 URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 # Words that carry no visual meaning: matching on them proves nothing.
-_STOP = set(
-    """
-के की का में से को और पर ने है हैं था थी थे होगा हुई हुआ लिए एक यह वह ये वो भी तो ही नहीं बहुत कुछ
-the a an of in on at to for from with by is are was were be been being this that these those it its
-and or but not no very much more most some any all as if then than so such also into over under
-""".split()
-)
+_STOP = {
+    "के",
+    "की",
+    "का",
+    "में",
+    "से",
+    "को",
+    "और",
+    "पर",
+    "ने",
+    "है",
+    "हैं",
+    "था",
+    "थी",
+    "थे",
+    "होगा",
+    "हुई",
+    "हुआ",
+    "लिए",
+    "एक",
+    "यह",
+    "वह",
+    "ये",
+    "वो",
+    "भी",
+    "तो",
+    "ही",
+    "नहीं",
+    "बहुत",
+    "कुछ",
+    "the",
+    "a",
+    "an",
+    "of",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "from",
+    "with",
+    "by",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "this",
+    "that",
+    "these",
+    "those",
+    "it",
+    "its",
+    "and",
+    "or",
+    "but",
+    "not",
+    "no",
+    "very",
+    "much",
+    "more",
+    "most",
+    "some",
+    "any",
+    "all",
+    "as",
+    "if",
+    "then",
+    "than",
+    "so",
+    "such",
+    "also",
+    "into",
+    "over",
+    "under",
+}
 
 
-def content_words(text: str, min_len: int = 3) -> List[str]:
+def content_words(text: str, min_len: int = 3) -> list[str]:
     """Meaningful words in a Hindi/English line (Devanagari + latin), stops removed."""
     words = re.findall(r"[\u0900-\u097F]{2,}|[A-Za-z]{3,}", (text or "").lower())
     return [w for w in words if w not in _STOP and len(w) >= min_len]
@@ -58,15 +129,21 @@ def keyword_match(spoken: str, picture_words: Iterable[str]) -> float:
 
 
 def make_vision_check(
-    api_key: str, models: Optional[List[str]] = None, max_calls: int = 150
-) -> Optional[Callable[[str, str], Optional[bool]]]:
+    api_key: str | Iterable[str],
+    models: list[str] | None = None,
+    max_calls: int = 150,
+) -> Callable[[str, str], bool | None] | None:
     """Returns check(path, description) -> True / False / None (None = no opinion, key dead).
 
     None is the important change: the old version returned False when Gemini was out of
     quota, which made MediaCollector throw away every real photo and fall back to a
     generic AI card — the "photo doesn't match the voice" bug.
     """
-    if not api_key:
+    # Accept a key RING. The channel configures three Gemini keys; the old signature took a
+    # single string, so one exhausted key silently disabled every vision check in the run while
+    # two perfectly good keys sat unused.
+    keys = [k for k in ([api_key] if isinstance(api_key, str) else list(api_key)) if k]
+    if not keys:
         return None
     models = models or [
         "gemini-2.5-flash-lite",
@@ -74,20 +151,20 @@ def make_vision_check(
         "gemini-3.5-flash-lite",
         "gemini-3.8-flash",
     ]
-    state = {"calls": 0, "dead": set()}
+    state = {"calls": 0, "dead": set(), "key": 0}
     lock = threading.Lock()
 
-    def check(path: str, description: str) -> Optional[bool]:
+    def check(path: str, description: str) -> bool | None:
         with lock:
             if state["calls"] >= max_calls:
                 return None  # budget spent: no opinion, caller uses the word-check
-            if all(m in state["dead"] for m in models):
-                return None
+            if len(state["dead"]) >= len(models) * len(keys):
+                return None  # every model on every key is exhausted
             state["calls"] += 1
         try:
             with Image.open(path) as raw_im:
                 img = raw_im.convert("RGB")
-        except Exception:
+        except Exception:  # noqa: BLE001 - an unreadable image cannot be judged
             return False
         img.thumbnail((512, 512))
         buf = io.BytesIO()
@@ -115,38 +192,46 @@ def make_vision_check(
             ],
             "generationConfig": {"temperature": 0, "maxOutputTokens": 10},
         }
-        for m in models:
+        for _slot in range(len(keys)):
             with lock:
-                if m in state["dead"]:
-                    continue
-            try:
-                r = requests.post(
-                    URL.format(model=m), params={"key": api_key}, json=body, timeout=30
-                )
-                if r.status_code in (404, 400, 403):
-                    with lock:
-                        state["dead"].add(m)
-                    continue
-                if r.status_code == 429:
-                    logger.warning("vision quota exhausted on %s — trying fallback model", m)
-                    with lock:
-                        state["dead"].add(m)
-                    continue
-                if r.status_code != 200:
-                    continue
-                cands = r.json().get("candidates") or []
-                parts = (cands[0].get("content") or {}).get("parts") or [] if cands else []
-                txt = "".join(p.get("text", "") for p in parts).strip().upper()
-                if not txt:
-                    continue
-                toks = re.findall(r"[A-Z]+", txt)
-                if toks and toks[0] == "NO":
-                    return False
-                if "NO" in toks and "YES" not in toks:
-                    return False
-                return True
-            except Exception as exc:
-                logger.debug("vision %s failed: %s", m, exc)
-        return None  # every model failed: no opinion, not a rejection
+                slot = state["key"] % len(keys)
+                current_key = keys[slot]
+            for m in models:
+                with lock:
+                    if (m, slot) in state["dead"]:
+                        continue
+                try:
+                    r = requests.post(
+                        URL.format(model=m), params={"key": current_key}, json=body, timeout=30
+                    )
+                    if r.status_code in (404, 400, 403):
+                        with lock:
+                            state["dead"].add((m, slot))
+                        continue
+                    if r.status_code == 429:
+                        with lock:
+                            state["dead"].add((m, slot))
+                            state["key"] += 1  # rotate to the next key in the pool
+                        logger.warning(
+                            "vision quota exhausted on %s (key %d/%d) — rotating",
+                            m,
+                            state["key"],
+                            len(keys),
+                        )
+                        break  # next key: restart the model list
+                    if r.status_code != 200:
+                        continue
+                    cands = r.json().get("candidates") or []
+                    parts = (cands[0].get("content") or {}).get("parts") or [] if cands else []
+                    txt = "".join(p.get("text", "") for p in parts).strip().upper()
+                    if not txt:
+                        continue
+                    toks = re.findall(r"[A-Z]+", txt)
+                    if toks and toks[0] == "NO":
+                        return False
+                    return not ("NO" in toks and "YES" not in toks)
+                except Exception as exc:  # noqa: BLE001 - one model failing is not the end
+                    logger.debug("vision %s failed: %s", m, exc)
+        return None  # every model on every key failed: no opinion, not a rejection
 
     return check

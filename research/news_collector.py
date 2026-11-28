@@ -3,18 +3,51 @@
 from __future__ import annotations
 
 import logging
+import re
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Iterable, List, Optional
+from datetime import UTC, datetime, timedelta
 
 from research.deduplication import deduplicate_articles, jaccard_similarity
-from research.rss_reader import RSSReader, RawArticle
+from research.rss_reader import RawArticle, RSSReader
 from research.source_registry import SourceRegistry
 
 logger = logging.getLogger("research.collector")
 
 # Stories that make poor 60-second explainers / are risky for a news channel.
+# An accident/death story is only published if it is a MAJOR one; a small local road accident
+# (the kind that fills the wires every night) is skipped. The owner's rule: big accidents may
+# run, minor ones may not ("badi hi aane do").
+_MINOR_ACCIDENT = (
+    "सड़क हादसा",
+    "सड़क दुर्घटना",
+    "road accident",
+    "road mishap",
+    "hit and run",
+    "ट्रैक्टर पलट",
+    "बाइक सवार",
+    "कार पलट",
+)
+_DEATH = ("मौत", "मृतक", "मरे", "killed", "died", "death", "dead")
+# how a MAJOR accident reads: many dead, or a systemic failure (train/bridge/boiler/gas leak)
+_MAJOR_MARKERS = (
+    "ट्रेन",
+    "रेल",
+    "पुल",
+    "बांध",
+    "बॉयलर",
+    "गैस रिसाव",
+    "train",
+    "bridge",
+    "boiler",
+    "gas leak",
+    "दर्जनों",
+    "dozens",
+    "बड़ा हादसा",
+)
+_MAJOR_NUMBERS = 10  # a death toll at or above this is a major story
+
 _SKIP_KEYWORDS = (
     "live updates",
     "live:",
@@ -33,6 +66,24 @@ _SKIP_KEYWORDS = (
 )
 
 
+def is_minor_accident(title: str) -> bool:
+    """True when a death/accident story is small enough to skip (owner rule, 2026-11).
+
+    A road accident with a few deaths is not bulletin material for this channel; a train derailment
+    or a bridge collapse is. The check is deliberately conservative: if the text mentions a
+    systemic failure or a toll of ten or more, it is treated as major and allowed.
+    """
+    low = (title or "").lower()
+    if not any(k in low for k in _DEATH):
+        return False
+    if any(k in low for k in _MAJOR_MARKERS):
+        return False
+    numbers = [int(n) for n in re.findall(r"\d{1,4}", low)]
+    if numbers and max(numbers) >= _MAJOR_NUMBERS:
+        return False
+    return any(k in low for k in _MINOR_ACCIDENT) or True  # death + no major marker == minor
+
+
 @dataclass
 class ProcessedNewsItem:
     title: str
@@ -47,8 +98,8 @@ class ProcessedNewsItem:
     coverage: int = 0  # other outlets reporting the same story (independent corroboration)
 
 
-def _fallback_items(n: int = 30) -> List[ProcessedNewsItem]:
-    now = datetime.now(timezone.utc).isoformat()
+def _fallback_items(n: int = 30) -> list[ProcessedNewsItem]:
+    now = datetime.now(UTC).isoformat()
     base = [
         ProcessedNewsItem(
             "भारत के डिजिटल इंफ्रास्ट्रक्चर और UPI का वैश्विक विस्तार",
@@ -128,7 +179,7 @@ class NewsCollector:
 
     def __init__(
         self,
-        source_registry: Optional[SourceRegistry] = None,
+        source_registry: SourceRegistry | None = None,
         max_hours_old: int = 24,
         allow_offline_fallback: bool = True,
     ):
@@ -137,9 +188,9 @@ class NewsCollector:
         self.max_hours_old = max_hours_old
         self.allow_offline_fallback = allow_offline_fallback
 
-    def _fetch_all(self) -> List[RawArticle]:
+    def _fetch_all(self) -> list[RawArticle]:
         sources = self.registry.get_all_sources()
-        articles: List[RawArticle] = []
+        articles: list[RawArticle] = []
         with ThreadPoolExecutor(max_workers=8) as pool:
             for fetched in pool.map(
                 lambda s: self.reader.fetch_feed(s.feed_url, s.name, s.language), sources
@@ -161,14 +212,14 @@ class NewsCollector:
         return articles
 
     def collect_and_rank_news(
-        self, target_count: int = 3, exclude: Optional[Iterable[dict]] = None
-    ) -> List[ProcessedNewsItem]:
+        self, target_count: int = 3, exclude: Iterable[dict] | None = None
+    ) -> list[ProcessedNewsItem]:
         all_articles = self._fetch_all()
         exclude = list(exclude or [])
         used_urls = {e.get("url") for e in exclude}
         used_titles = [e.get("title", "") for e in exclude]
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now - timedelta(hours=self.max_hours_old)
         # Freshness gate: only stories with a VERIFIED publish time inside the window.
         # Undated, old or future-dated items are dropped; never fall back to old news.
@@ -192,6 +243,8 @@ class NewsCollector:
             low = (a.title or "").lower()
             if any(k in low for k in _SKIP_KEYWORDS):
                 continue
+            if is_minor_accident(low):
+                continue
             if a.link in used_urls:
                 continue
             if any(jaccard_similarity(a.title, t) >= 0.5 for t in used_titles if t):
@@ -200,7 +253,7 @@ class NewsCollector:
 
         unique = deduplicate_articles(filtered)
 
-        processed: List[ProcessedNewsItem] = []
+        processed: list[ProcessedNewsItem] = []
         for a in unique:
             reliability = self.registry.get_reliability_weight(a.source_name)
             hours_old = (now - a.published_at).total_seconds() / 3600.0

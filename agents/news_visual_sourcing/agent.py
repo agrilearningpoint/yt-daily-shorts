@@ -117,6 +117,10 @@ class NewsVisualSourcingAgent(BaseAgent):
         # 1. Process each scene
         for idx, sc in enumerate(scenes):
             scene_id = f"scene_{idx:03d}"
+            # The opening date/panchang/rashifal scene is DRAWN by the composer, never photographed:
+            # a stock search for a date line returns an old calendar page or an unrelated poster.
+            if str(sc.get("section", "")).strip() == "today":
+                continue
             say_text = sc.get("narration") or sc.get("narration_hi") or sc.get("text", "")
             query = sc.get("visual_keywords") or sc.get("visual_query") or sc.get("image_query", "")
             entity = (

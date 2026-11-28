@@ -18,6 +18,7 @@ class VisualOwnership:
     scene_id: str  # story_hook | story_001 | story_002 | section_national | outro
     story_id: str  # same as scene_id for stories, "" for cards/outro
     kind: str  # hook | item | section | outro
+    section: str = ""  # today | national | international
     spoken: str = ""  # the narration this picture plays under
     asset_path: str = ""
     asset_source: str = ""
@@ -71,6 +72,7 @@ def build(beats: list[dict[str, Any]], assets: dict[Any, Any]) -> list[VisualOwn
                 scene_id=sid,
                 story_id=sid if beat.get("kind") == "item" else "",
                 kind=str(beat.get("kind") or ""),
+                section=str(beat.get("section") or ""),
                 spoken=str(beat.get("text") or ""),
                 asset_path=getattr(assets.get((i, 0)), "path", "") if assets.get((i, 0)) else "",
                 asset_source=getattr(assets.get((i, 0)), "source", "")
@@ -97,7 +99,10 @@ def validate(rows: list[VisualOwnership]) -> list[str]:
     if dupes:
         problems.append(f"duplicate scene IDs: {sorted(dupes)}")
     for r in rows:
-        if r.kind == "item" and not r.asset_path:
+        # The date/panchang/rashifal opening is DRAWN as a designed card on purpose — that is a
+        # deliberate treatment, not a missing picture. Every other story must own a real asset.
+        drawn_card = r.section == "today" or r.kind in ("section", "outro")
+        if r.kind == "item" and not r.asset_path and not drawn_card:
             problems.append(f"{r.scene_id} has no picture")
         if (
             r.kind == "hook"

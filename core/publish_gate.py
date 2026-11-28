@@ -430,6 +430,53 @@ class PublishGate:
             )
         )
 
+    def check_vision_audit(self, report: QualityReport, production: dict[str, Any] | None) -> None:
+        """A vision model must have looked at real frames of the finished video.
+
+        The keyword score (visual_match) compares words to words. It cannot see that a frame shows
+        an unrelated poster, because the poster's text is not in the asset's labels. This check is
+        the only one backed by an actual look at the rendered output.
+        """
+        audit = (production or {}).get("vision_audit") or {}
+        checked = int(audit.get("checked") or 0)
+        rejected = audit.get("rejected") or []
+        report.facts["vision_audit"] = {
+            "checked": checked,
+            "rejected": len(rejected),
+            "reason": audit.get("reason", ""),
+        }
+        if not audit:
+            report.add(
+                Check(
+                    name="vision_audit",
+                    passed=False,
+                    detail="no vision audit of the rendered video (evidence missing)",
+                )
+            )
+            return
+        report.add(
+            Check(
+                name="vision_audit_rejections",
+                passed=not rejected,
+                detail="every judged frame fits its line"
+                if not rejected
+                else f"{len(rejected)} frame(s) do not match the narration: "
+                + "; ".join(f"{r.get('time')}s '{str(r.get('text'))[:32]}'" for r in rejected[:3]),
+                measured=len(rejected),
+                limit=0,
+            )
+        )
+        # a run where the model could not judge anything is not a pass — it is a gap
+        report.add(
+            Check(
+                name="vision_audit_coverage",
+                passed=checked > 0,
+                detail=f"{checked} frame(s) judged" if checked else str(audit.get("reason") or "0"),
+                measured=checked,
+                limit=">= 1",
+            )
+        )
+
     def check_ownership(self, report: QualityReport, production: dict[str, Any] | None) -> None:
         """Every story must own exactly one picture, identified by scene ID (not array index)."""
         prod = production or {}
@@ -517,6 +564,7 @@ class PublishGate:
         self.check_black_and_silence(report, video_path, qa_payload)
         self.check_story_slides(report, timeline, script)
         self.check_ownership(report, production)
+        self.check_vision_audit(report, production)
         self.check_voice(report, production, timeline)
         self.check_captions(report, production)
         self.check_editorial(report, quality)

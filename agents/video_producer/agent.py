@@ -7,17 +7,19 @@ No subtitles are burned in.
 
 from __future__ import annotations
 
+import re
+import shutil
 from datetime import datetime
 from pathlib import Path
-import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pytz
 
 from agents.base_agent import AgentResult, BaseAgent
 from core.duration import SHORTS_SAFE_MAX
-from video.vision_check import make_vision_check
-from video.media_collector import MediaCollector, MediaAsset
+from video.editor_director import EditorDirector
+from video.media_collector import MediaAsset, MediaCollector
+from video.motion_graphics import MotionGraphicsEngine
 from video.renderer import TAIL, SceneClip, VideoRenderer, quantize_durations
 from video.scene_composer import (
     SceneComposer,
@@ -26,17 +28,16 @@ from video.scene_composer import (
     compose_ticker,
     compose_title_card,
 )
-from video.editor_director import EditorDirector
-from video.tts import GeminiTTS, TTSEngine, probe_duration
 from video.semantic_matcher import (
     TOPIC_THEMES,
     SemanticVisualMatcher,
-    extract_entity_from_hindi,
     detect_topic_theme,
+    extract_entity_from_hindi,
 )
-from video.motion_graphics import MotionGraphicsEngine
-from video.vfx_engine import VFXEngine
 from video.synchronization_engine import SynchronizationEngine
+from video.tts import GeminiTTS, TTSEngine, probe_duration
+from video.vfx_engine import VFXEngine
+from video.vision_check import make_vision_check
 
 HINDI_MONTHS = [
     "जनवरी",
@@ -119,7 +120,7 @@ class VideoProducerAgent(BaseAgent):
             cf_account=getattr(config.media, "cf_account_id", ""),
             hf_token=getattr(config.media, "hf_token", ""),
             vision=(
-                make_vision_check(config.llm.gemini_api_key)
+                make_vision_check(config.llm.key_pool().get("gemini") or [])
                 if getattr(config.media, "vision_check", True)
                 else None
             ),
@@ -139,11 +140,11 @@ class VideoProducerAgent(BaseAgent):
         return f"{now.day} {HINDI_MONTHS[now.month - 1]} {now.year}"
 
     async def execute(self, **kwargs: Any) -> AgentResult:
-        script: Dict[str, Any] = kwargs.get("script", {}) or {}
-        theme: Dict[str, Any] = kwargs.get("creative_brief", {}) or {}
-        research: Dict[str, Any] = kwargs.get("research_data", {}) or {}
-        vfx_data: Dict[str, Any] = kwargs.get("vfx_data", {}) or {}
-        hook_data: Dict[str, Any] = kwargs.get("hook_data", {}) or {}
+        script: dict[str, Any] = kwargs.get("script", {}) or {}
+        theme: dict[str, Any] = kwargs.get("creative_brief", {}) or {}
+        research: dict[str, Any] = kwargs.get("research_data", {}) or {}
+        vfx_data: dict[str, Any] = kwargs.get("vfx_data", {}) or {}
+        hook_data: dict[str, Any] = kwargs.get("hook_data", {}) or {}
         opening_brief = kwargs.get("opening_brief")
         pre_sourced_assets = kwargs.get("visual_assets") or {}
         video_id = kwargs.get("video_id", "daily_short")
@@ -177,12 +178,12 @@ class VideoProducerAgent(BaseAgent):
 
         # Map VFX plan items by scene_id / index
         vfx_plan_items = vfx_data.get("vfx_plan", [])
-        vfx_map: Dict[str, Dict[str, Any]] = {}
+        vfx_map: dict[str, dict[str, Any]] = {}
         for item in vfx_plan_items:
             if isinstance(item, dict) and item.get("scene_id"):
                 vfx_map[item["scene_id"]] = item
 
-        scenes: List[Dict[str, Any]] = script.get("scenes", [])
+        scenes: list[dict[str, Any]] = script.get("scenes", [])
         spoken = (
             getattr(self.config.general, "channel_name_spoken", "")
             or self.config.general.channel_name
@@ -202,8 +203,8 @@ class VideoProducerAgent(BaseAgent):
             (items[0].get("seed") or items[0].get("title", "")) if (not is_news and items) else ""
         )
         by_url = {i.get("source_url"): i for i in items}
-        beats: List[Dict[str, Any]] = []
-        fig: Dict[str, Any] = {"avg_match": -1, "picture_parts": 0, "no_picture_parts": 0}
+        beats: list[dict[str, Any]] = []
+        fig: dict[str, Any] = {"avg_match": -1, "picture_parts": 0, "no_picture_parts": 0}
         # Opening Hook: pair directly with the matching top news story (NOT 'today' date scene!)
         if hook:
             news_candidates = [s for s in scenes if s.get("section") != "today"] or scenes
@@ -301,6 +302,7 @@ class VideoProducerAgent(BaseAgent):
             beats.append(
                 {
                     "kind": "item",
+                    "section": s.get("section", ""),
                     "text": s["narration"],
                     "chip": s.get("on_screen_text", ""),
                     "category": s.get("category", ""),
@@ -342,7 +344,7 @@ class VideoProducerAgent(BaseAgent):
                     b["section"] = sec
                 withsec.append(b)
             beats = withsec
-            sec_total: Dict[str, int] = {}
+            sec_total: dict[str, int] = {}
             for b in beats:
                 if b["kind"] == "item":
                     sec_total[b["section"]] = sec_total.get(b["section"], 0) + 1
@@ -367,8 +369,8 @@ class VideoProducerAgent(BaseAgent):
                 fb_v = "hi-IN-MadhurNeural"
             self.tts.fallback_voice = fb_v
         # Synthesize coherently across sentences while snapping visual cut points to WordBoundaries
-        seg_texts: List[str] = []
-        seg_owner: List[tuple] = []
+        seg_texts: list[str] = []
+        seg_owner: list[tuple] = []
         for i, b in enumerate(beats):
             says = [p.get("say", "").strip() for p in b["parts"]] if b["parts"] else []
             if len(says) > 1 and all(says):
@@ -384,7 +386,7 @@ class VideoProducerAgent(BaseAgent):
         self.tts.dump_timings(
             seg_texts, voice.durations, voice.provider, str(out_dir / "timings.json")
         )
-        part_dur: Dict[tuple, float] = {}
+        part_dur: dict[tuple, float] = {}
         beat_dur = [0.0] * len(beats)
         for (i, k), d in zip(seg_owner, voice.durations):
             part_dur[(i, k)] = d
@@ -409,7 +411,7 @@ class VideoProducerAgent(BaseAgent):
                     {**p, "dest": str(out_dir / f"src_{i:03d}_{k}.jpg"), "_beat": i, "_part": k}
                 )
 
-        assets: Dict[tuple, Any] = {}
+        assets: dict[tuple, Any] = {}
         unresolved_specs = []
 
         for sp in specs:
@@ -417,6 +419,12 @@ class VideoProducerAgent(BaseAgent):
             say_text = sp.get("say", "")
             entity = sp.get("entity", "") or extract_entity_from_hindi(say_text)
             dest = Path(sp["dest"])
+
+            # A "card" beat (the date/panchang/rashifal opening) must be DRAWN, not photographed.
+            # Searching stock for a date line returns an old calendar page from the wrong year,
+            # which is exactly the kind of wrong picture this channel cannot afford.
+            if str(sp.get("source", "")).strip().lower() == "card":
+                continue
 
             # 1. High-precision Semantic Match via Wikipedia / Wikimedia
             if entity:
@@ -455,12 +463,15 @@ class VideoProducerAgent(BaseAgent):
 
             unresolved_specs.append(sp)
 
-        # 3. For any remaining specs, query MediaCollector
-        if unresolved_specs:
-            found = self.media.find_visuals(
-                unresolved_specs, mode="news" if is_news else "knowledge"
-            )
-            for sp, a in zip(unresolved_specs, found):
+        # 3. For any remaining specs, query MediaCollector — but never for a "card" beat: the
+        # scene composer draws those (date/panchang/rashifal), and a stock search for a date line
+        # returns an unrelated poster.
+        visual_specs = [
+            sp for sp in unresolved_specs if str(sp.get("source", "")).strip().lower() != "card"
+        ]
+        if visual_specs:
+            found = self.media.find_visuals(visual_specs, mode="news" if is_news else "knowledge")
+            for sp, a in zip(visual_specs, found):
                 if a and getattr(a, "path", None) and Path(a.path).exists():
                     assets[(sp["_beat"], sp["_part"])] = a
 
@@ -479,6 +490,10 @@ class VideoProducerAgent(BaseAgent):
         }
         for sp in unresolved_specs:
             key = (sp["_beat"], sp["_part"])
+            if str(sp.get("source", "")).strip().lower() == "card":
+                # a card beat stays a card: a generic "Parliament of India" photo under a date
+                # line is exactly the mismatch this channel is trying to kill
+                continue
             if not assets.get(key):
                 dest = Path(sp["dest"])
                 sec = sp.get("section") or "national"
@@ -502,7 +517,7 @@ class VideoProducerAgent(BaseAgent):
         #    and mark same-story reuses for distinct close-up zoom framing
         import hashlib as _hashlib
 
-        def _img_sha1(path_str: Optional[str]) -> str:
+        def _img_sha1(path_str: str | None) -> str:
             if not path_str or not Path(path_str).exists():
                 return ""
             try:
@@ -512,7 +527,7 @@ class VideoProducerAgent(BaseAgent):
 
         missing = 0
         cropped_parts: set = set()
-        seen_hashes: Dict[str, tuple] = {}
+        seen_hashes: dict[str, tuple] = {}
         prev_hash = ""
         for i, b in enumerate(beats):
             n = len(b["parts"])
@@ -659,9 +674,9 @@ class VideoProducerAgent(BaseAgent):
         date_label = self._date_label()
         n_items = sum(1 for b in beats if b["kind"] == "item")
         total_clips = len(seg_owner)
-        clips: List[SceneClip] = []
-        clip_meta: List[Dict[str, Any]] = []
-        credits: List[str] = []
+        clips: list[SceneClip] = []
+        clip_meta: list[dict[str, Any]] = []
+        credits: list[str] = []
         first_image = None
         ci = 0
         for i, (b, dur) in enumerate(zip(beats, beat_dur)):
@@ -813,7 +828,7 @@ class VideoProducerAgent(BaseAgent):
                             ticker_y=ticker_y if b["kind"] == "item" else 0,
                             stat=_stat(p.get("say", "")) if b["kind"] == "item" and k > 0 else "",
                         )
-                sc_vfx: Dict[str, Any] = {}
+                sc_vfx: dict[str, Any] = {}
                 if b["kind"] in ("section", "outro"):
                     fx = "dip"
                     m_preset = (
@@ -924,7 +939,22 @@ class VideoProducerAgent(BaseAgent):
         from core.visual_ownership import build as build_ownership
         from core.visual_ownership import validate as validate_ownership
 
+        vision_report: dict[str, Any] = {"approved": True, "checked": 0, "rejected": [], "reason": "skipped"}
+
         ownership_rows = build_ownership(beats, assets)
+        # Compare against the ACTUAL rendered assets. `assets` still points at the downloaded
+        # source files (src_*.jpg); the renderer uses its own composed backgrounds (bg_*.jpg), so
+        # the hook "reusing" a source file says nothing about what the viewer sees.
+        rendered = {}
+        for seg_data in (master_timeline.get("segments", []) if isinstance(master_timeline, dict) else []):
+            sid = str(seg_data.get("segment_id", ""))
+            if sid.startswith("scene_") and seg_data.get("visual_path"):
+                rendered[sid] = str(seg_data["visual_path"])
+        if rendered:
+            for row in ownership_rows:
+                if row.scene_id.startswith("section") or row.scene_id == "outro":
+                    continue
+                row.asset_path = rendered.get(row.scene_id, row.asset_path)
         ownership_problems = validate_ownership(ownership_rows)
         if ownership_problems:
             self.logger.warning("Visual ownership problems: %s", ownership_problems)
@@ -1045,6 +1075,41 @@ class VideoProducerAgent(BaseAgent):
             editor._learn(recipe, review)
         except Exception:
             pass
+        # ---- post-render vision audit: does the finished video show the right pictures? ----
+        # Must run here: earlier the file does not exist yet, and _reedit() may already have
+        # produced final_short_v2.mp4 instead of final_short.mp4.
+        vision_report: dict[str, Any] = {
+            "approved": True,
+            "checked": 0,
+            "rejected": [],
+            "reason": "vision check disabled",
+        }
+        if getattr(self.config.media, "vision_check", True):
+            try:
+                from video.vision_audit import VisionAuditor
+                from video.vision_check import make_vision_check as _mk
+
+                judge = _mk(self.config.llm.key_pool().get("gemini") or [], max_calls=24)
+                auditor = VisionAuditor(judge=judge, ffmpeg=shutil.which("ffmpeg"))
+                vision_report = auditor.audit(
+                    final_path,
+                    master_timeline,  # MasterEditingTimeline dataclass or its dict form
+                    out_dir / "vision_frames",
+                )
+                if vision_report.get("rejected"):
+                    self.logger.warning(
+                        "Vision audit rejected %d frame(s): %s",
+                        len(vision_report["rejected"]),
+                        vision_report["rejected"][:2],
+                    )
+                else:
+                    self.logger.info(
+                        "Vision audit: %s frame(s) judged, none rejected",
+                        vision_report.get("checked"),
+                    )
+            except Exception as exc:  # noqa: BLE001 - an audit crash must not kill the render
+                self.logger.warning("vision audit skipped: %s", exc)
+
         duration = probe_duration(final_path)
         qa = _render_qa(final_path)
         self.logger.info("Render QA: %s", qa)
@@ -1053,7 +1118,7 @@ class VideoProducerAgent(BaseAgent):
             and Path(final_path).stat().st_size > 200_000
             and duration >= 10
         )
-        storage_urls: Dict[str, str] = {}
+        storage_urls: dict[str, str] = {}
         try:  # free HF dataset storage (long videos outgrow GitHub artifacts)
             from core.hf_storage import store_from_config
 
@@ -1102,6 +1167,8 @@ class VideoProducerAgent(BaseAgent):
                 # the publish gate both read this instead of re-deriving it from the render order
                 "visual_ownership": [r.to_dict() for r in ownership_rows],
                 "ownership_problems": ownership_problems,
+                # proof that a model actually looked at the finished frames
+                "vision_audit": vision_report,
                 "storage_urls": storage_urls,
                 "master_timeline": master_timeline,
             },
@@ -1196,8 +1263,8 @@ class VideoProducerAgent(BaseAgent):
 
     def _captions(self, clips, clip_meta, tempo, out_dir, beat_words=None, seg_owner=None):
         """Word-synced Hindi captions aligned to real TTS WordBoundary timings when available."""
-        from video.subtitle_generator import SubtitleGenerator
         from video.renderer import quantize_durations
+        from video.subtitle_generator import SubtitleGenerator
 
         scale = 1.0 / (tempo or 1.0)
         q_durs = quantize_durations(

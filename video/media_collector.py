@@ -501,6 +501,10 @@ class MediaCollector:
     ) -> Optional[MediaAsset]:
         dest = Path(dest_path)
         dest.parent.mkdir(parents=True, exist_ok=True)
+        # "card" means: draw it, do not search for it. A stock search for a date line returns an
+        # old calendar photo from the wrong year, which looks broken on screen.
+        if str(entity or "").strip().lower() == "card" or str(keywords or "").strip().lower() == "card":
+            return None
         query = " ".join((keywords or "india").split()[:5])
         if preferred_url and self._download(preferred_url, dest):
             return MediaAsset(
@@ -904,11 +908,14 @@ class MediaCollector:
             except Exception:
                 a.match = -1.0
             weak = a.match >= 0 and a.match < min_match
-            # High-confidence authentic sources: Wikipedia, news publisher article photos, and Wikimedia Commons
-            # are inherently authentic real images and should never be discarded by vision false-positives.
-            if a.source in ("wikipedia", "publisher", "commons"):
+            # Authentic sources are trusted more, but "authentic" is not the same as "relevant":
+            # a real Wikimedia photo of the wrong subject is still the wrong picture. They keep a
+            # floor on the WORD score (so a generic real photo beats a broken one) but they are no
+            # longer allowed to skip the vision judge entirely — that bypass is how a "2026 World
+            # Press Photo" poster ended up under a date line.
+            trusted = a.source in ("wikipedia", "publisher", "commons")
+            if trusted:
                 a.match = max(a.match, 0.85)
-                return a
             if self.vision:
                 try:
                     verdict = self.vision(a.path, description)
@@ -922,6 +929,9 @@ class MediaCollector:
                     return None
                 if verdict is True:
                     a.match = max(a.match, 0.8)
+                    return a
+                if trusted and verdict is None:
+                    # no opinion available (quota dead): keep the authentic image, as before
                     return a
             # no vision opinion: trust the picture only if its own words name the same thing
             if weak and min_match > 0:
