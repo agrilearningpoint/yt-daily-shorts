@@ -866,6 +866,27 @@
     "flash_color": "white"
    },
    "score": 2.0
+  },
+  {
+   "at": "2026-11-28T04:52+00:00",
+   "recipe": {
+    "palette": [
+     "#E50914",
+     "#0B0F1A",
+     "#FFD60A"
+    ],
+    "cut_fx": [
+     "punch",
+     "whip"
+    ],
+    "motion": "kenburns_in",
+    "grade": "broadcast_crisp",
+    "zoom": 1.18,
+    "vignette": true,
+    "ticker": true,
+    "flash_color": "white"
+   },
+   "score": 4.0
   }
  ],
  "option_scores": {
@@ -890,20 +911,20 @@
    "n": 13
   },
   "vignette=true": {
-   "sum": 101.0,
-   "n": 20
+   "sum": 105.0,
+   "n": 21
   },
   "ticker=true": {
-   "sum": 192.0,
-   "n": 40
+   "sum": 196.0,
+   "n": 41
   },
   "flash_color=\"white\"": {
-   "sum": 174.0,
-   "n": 37
+   "sum": 178.0,
+   "n": 38
   },
   "palette=[\"#E50914\", \"#0B0F1A\", \"#FFD60A\"]": {
-   "sum": 153.0,
-   "n": 34
+   "sum": 157.0,
+   "n": 35
   },
   "cut_fx=[\"whip\", \"flash\", \"punch\"]": {
    "sum": 5.0,
@@ -934,16 +955,16 @@
    "n": 1
   },
   "zoom=1.18": {
-   "sum": 53.0,
-   "n": 11
+   "sum": 57.0,
+   "n": 12
   },
   "cut_fx=[\"flash\", \"punch\", \"glitch\"]": {
    "sum": 7.0,
    "n": 1
   },
   "motion=\"kenburns_in\"": {
-   "sum": 29.0,
-   "n": 7
+   "sum": 33.0,
+   "n": 8
   },
   "grade=\"cool_studio\"": {
    "sum": 48.0,
@@ -974,8 +995,8 @@
    "n": 1
   },
   "cut_fx=[\"punch\", \"whip\"]": {
-   "sum": 35.0,
-   "n": 7
+   "sum": 39.0,
+   "n": 8
   },
   "cut_fx=[\"whip\"]": {
    "sum": 39.0,
@@ -996,12 +1017,13 @@
   "grade=\"eq=contrast=1.12:saturation=1.20:brightness=0.02,unsharp=5:5:0.8:5:5:0.4\"": {
    "sum": 22.0,
    "n": 8
+  },
+  "grade=\"broadcast_crisp\"": {
+   "sum": 4.0,
+   "n": 1
   }
  },
  "notes": [
-  "Prioritize Visual Relevance & Uniqueness: Every frame (tile) must feature a distinct, high-quality visual directly relevant to its headline. Avoid generic stock images and never repeat a visual in adjacent frames.",
-  "Craft a Powerful Opening & Seamless Loop: Tile 0 needs an immediate, strong visual hook, not just text. The final tile must be visually identical to Tile 0 to ensure a smooth, engaging loop for viewers.",
-  "Enhance Motion Graphics & Pacing: Incorporate professional motion graphics and dynamic transitions to ensure a visual change occurs every 2-3 seconds, keeping the short engaging and preventing static, repetitive frames.",
   "Every tile must feature a strong, relevant visual. Eliminate all text-only screens (0, 1, 11, 14, 15) and ensure the first tile (0) provides an immediate visual hook with a clear, concise headline.",
   "Ensure each image or video clip directly illustrates its accompanying text. Replace all generic/stock images (e.g., Tiles 2, 3, 8, 9, 10, 12, 13) with specific, high-quality footage, and avoid repeating the exact same visual in consecutive tiles (e.g., Tiles 4-5, 6-7, 9-10, 12-13).",
   "Improve pacing by ensuring a distinct visual change every 2-3 seconds. The sequence of news items should flow logically, and the final tile must be a strong visual that provides a natural, engaging loop back to the beginning of the Short.",
@@ -1010,6 +1032,9 @@
   "Strengthen the opening with a powerful, relevant image for Tile 0 and ensure the final tile provides a clear visual loop back to the start, not a blank screen.",
   "Improve the opening hook: Tile 0 must feature a compelling, high-resolution image directly related to the top story, with a large, clear headline. Avoid dark screens or logos as the first visual.",
   "Ensure visual variety and relevance: Every 2-3 seconds, introduce a new, high-quality, and directly relevant visual. Eliminate generic stock images, repeated frames, and video screenshots (with play buttons).",
-  "Eliminate dark screens and repetitive visuals: Replace all dark screens with relevant visuals and ensure no two adjacent tiles are identical. If a story requires multiple frames, use different angles, close-ups, or related B-roll footage."
+  "Eliminate dark screens and repetitive visuals: Replace all dark screens with relevant visuals and ensure no two adjacent tiles are identical. If a story requires multiple frames, use different angles, close-ups, or related B-roll footage.",
+  "Eliminate all visual repetition: Ensure every tile (every 2-3 seconds) presents a new, distinct visual. This is crucial for Shorts engagement.",
+  "Enhance motion graphics and transitions: Incorporate subtle animations for text, dynamic transitions between scenes, and potentially animated elements to make the news more engaging.",
+  "Refine outro and looping: Design a concise, single-frame outro for call-to-action, and ensure the final frame either smoothly transitions back to the start or provides a clear conclusion without lingering."
  ]
 }
